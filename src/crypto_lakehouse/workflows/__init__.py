@@ -1,7 +1,13 @@
 """Workflow orchestration for the crypto data lakehouse."""
 
-from .base import BaseWorkflow
-from .ingestion_flow import IngestionFlow
-from .processing_flow import ProcessingFlow
+from .prefect_workflows import (
+    data_ingestion_pipeline,
+    multi_symbol_ingestion_pipeline,
+    daily_data_refresh_pipeline
+)
 
-__all__ = ["BaseWorkflow", "IngestionFlow", "ProcessingFlow"]
+__all__ = [
+    "data_ingestion_pipeline",
+    "multi_symbol_ingestion_pipeline", 
+    "daily_data_refresh_pipeline"
+]
