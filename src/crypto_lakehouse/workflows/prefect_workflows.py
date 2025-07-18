@@ -17,7 +17,7 @@ from prefect.artifacts import create_markdown_artifact
 
 from ..core.config import Settings
 from ..core.models import Exchange, DataType, KlineData, FundingRateData
-from ..ingestion.binance import BinanceIngestionClient
+from ..ingestion.binance import BinanceIngestor
 from ..storage.s3_storage import S3LakehouseStorage
 from ..processing.kline_processor import KlineProcessor
 from ..utils.gap_detection import GapDetector
@@ -35,7 +35,7 @@ async def setup_clients(settings: Settings) -> Dict[str, Any]:
     
     try:
         # Initialize clients
-        ingestion_client = BinanceIngestionClient(settings)
+        ingestion_client = BinanceIngestor(settings)
         storage_client = S3LakehouseStorage(settings)
         
         logger.info("Clients initialized successfully")
@@ -64,20 +64,25 @@ async def ingest_bulk_data(
         ingestion_client = clients["ingestion"]
         
         if data_type == DataType.KLINE:
-            data = await ingestion_client.ingest_kline_data(
-                symbol=symbol,
+            # Use bulk ingestor for K-line data
+            data = []
+            async for kline in ingestion_client.ingest_klines(
+                symbols=[symbol],
                 interval="1m",
-                start_time=start_date,
-                end_time=end_date,
-                use_bulk=True
-            )
+                trade_type="spot",
+                start_date=start_date,
+                end_date=end_date
+            ):
+                data.append(kline)
         elif data_type == DataType.FUNDING_RATE:
-            data = await ingestion_client.ingest_funding_rate_data(
-                symbol=symbol,
-                start_time=start_date,
-                end_time=end_date,
-                use_bulk=True
-            )
+            # Use bulk ingestor for funding rates
+            data = []
+            async for rate in ingestion_client.ingest_funding_rates(
+                symbols=[symbol],
+                start_date=start_date,
+                end_date=end_date
+            ):
+                data.append(rate)
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
         
@@ -104,20 +109,25 @@ async def ingest_incremental_data(
         ingestion_client = clients["ingestion"]
         
         if data_type == DataType.KLINE:
-            data = await ingestion_client.ingest_kline_data(
-                symbol=symbol,
+            # Use incremental ingestor for K-line data
+            data = []
+            async for kline in ingestion_client.ingest_klines(
+                symbols=[symbol],
                 interval="1m",
-                start_time=start_date,
-                end_time=end_date,
-                use_bulk=False
-            )
+                trade_type="spot",
+                start_date=start_date,
+                end_date=end_date
+            ):
+                data.append(kline)
         elif data_type == DataType.FUNDING_RATE:
-            data = await ingestion_client.ingest_funding_rate_data(
-                symbol=symbol,
-                start_time=start_date,
-                end_time=end_date,
-                use_bulk=False
-            )
+            # Use incremental ingestor for funding rates
+            data = []
+            async for rate in ingestion_client.ingest_funding_rates(
+                symbols=[symbol],
+                start_date=start_date,
+                end_date=end_date
+            ):
+                data.append(rate)
         else:
             raise ValueError(f"Unsupported data type: {data_type}")
         
