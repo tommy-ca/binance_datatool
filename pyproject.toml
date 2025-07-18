@@ -1,26 +1,27 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "crypto-data-lakehouse"
 version = "2.0.0"
-description = "A scalable crypto data lakehouse platform for quantitative research"
+description = "A scalable data platform for cryptocurrency market data"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Crypto Data Lakehouse Team"}
+    {name = "Crypto Data Lakehouse Team", email = "team@crypto-lakehouse.com"}
 ]
-keywords = ["crypto", "data", "lakehouse", "binance", "quantitative"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Financial and Insurance Industry",
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Office/Business :: Financial :: Investment",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = [
     "polars>=1.0.0",
     "typer>=0.15.0",
@@ -33,15 +34,37 @@ dependencies = [
     "tqdm>=4.66.0",
     "python-dateutil>=2.9.0",
     "rich>=13.0.0",
+    "ccxt>=4.0.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.24.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
     "black>=24.0.0",
-    "ruff>=0.7.0",
-    "mypy>=1.11.0",
+    "isort>=5.12.0",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.5.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+performance = [
+    "memory-profiler>=0.60.0",
+    "line-profiler>=4.0.0",
+    "py-spy>=0.3.14",
 ]
 aws = [
     "boto3>=1.35.0",
@@ -54,28 +77,162 @@ orchestration = [
 ]
 
 [project.scripts]
-crypto-lakehouse = "crypto_lakehouse.cli:main"
+crypto-lakehouse = "crypto_lakehouse.cli:app"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.urls]
+Homepage = "https://github.com/crypto-lakehouse/crypto-data-lakehouse"
+Documentation = "https://crypto-lakehouse.readthedocs.io"
+Repository = "https://github.com/crypto-lakehouse/crypto-data-lakehouse"
+Issues = "https://github.com/crypto-lakehouse/crypto-data-lakehouse/issues"
 
-[tool.setuptools.package-dir]
-"" = "src"
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "black>=24.0.0",
+    "isort>=5.12.0",
+    "flake8>=7.0.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.5.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crypto_lakehouse"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+exclude = [
+    "/.git",
+    "/.pytest_cache",
+    "/.mypy_cache",
+    "/legacy",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+    "__pycache__",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=crypto_lakehouse",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "performance: marks tests as performance tests",
+]
+
+[tool.coverage.run]
+source = ["crypto_lakehouse"]
+omit = [
+    "tests/*",
+    "legacy/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.black]
 line-length = 100
-target-version = ['py312']
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | legacy
+)/
+'''
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "S", "B", "A", "C4", "T20"]
-ignore = ["S101", "S603", "S607"]
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["crypto_lakehouse"]
+skip_glob = ["legacy/*"]
 
 [tool.mypy]
-python_version = "3.12"
-strict = true
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+exclude = [
+    "legacy/",
+    "tests/",
+    "build/",
+    "dist/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "polars.*",
+    "prefect.*",
+    "s3fs.*",
+    "duckdb.*",
+]
+ignore_missing_imports = true
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "legacy",
+    ".venv",
+    ".eggs",
+    "*.egg",
+]

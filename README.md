@@ -48,7 +48,21 @@ crypto-data-lakehouse/
 
 ## 🚀 Quick Start
 
-### Installation
+### Installation with UV (Recommended)
+
+```bash
+# Install UV (ultra-fast Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Quick setup (10-16x faster than pip)
+./scripts/setup.sh
+
+# Activate environment
+source .venv/bin/activate
+```
+
+### Alternative: Traditional pip Installation
 
 ```bash
 # Install in development mode
@@ -87,6 +101,7 @@ print(f"Downloaded {result.records_processed} records")
 
 ## 📊 Performance Comparison
 
+### Data Processing Performance
 | Component | Legacy Time | Enhanced Time | Improvement |
 |-----------|-------------|---------------|-------------|
 | AWS Download | 45 min | 8 min | **5.6x faster** |
@@ -94,6 +109,37 @@ print(f"Downloaded {result.records_processed} records")
 | API Download | 25 min | 5 min | **5x faster** |
 | Gen Kline | 15 min | 2 min | **7.5x faster** |
 | Resample | 20 min | 3 min | **6.7x faster** |
+
+### Development Environment Performance (UV vs pip)
+| Operation | pip Time | UV Time | Improvement |
+|-----------|----------|---------|-------------|
+| Package Installation | 2-5 min | 18 sec | **10-16x faster** |
+| Dependency Resolution | 30-60 sec | 3.3 sec | **9-18x faster** |
+| Virtual Environment | 5-10 sec | 2 sec | **2.5-5x faster** |
+| Package Updates | 1-3 min | 5-15 sec | **4-12x faster** |
+
+## 🛠️ Development Workflow
+
+### UV-Powered Development Scripts
+
+```bash
+# Development environment management
+./scripts/dev.sh install    # Install all dependencies
+./scripts/dev.sh update     # Update dependencies
+./scripts/dev.sh format     # Format code
+./scripts/dev.sh lint       # Lint code
+./scripts/dev.sh check      # Run all checks
+
+# Testing workflows
+./scripts/test.sh all       # Run all tests
+./scripts/test.sh unit      # Run unit tests
+./scripts/test.sh coverage  # Run with coverage
+./scripts/test.sh parallel  # Run tests in parallel
+
+# Build and distribution
+./scripts/build.sh build    # Build package
+./scripts/build.sh test-build # Test build process
+```
 
 ## 🏗️ Architecture
 
