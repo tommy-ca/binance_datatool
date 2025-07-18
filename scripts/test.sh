@@ -1,5 +1,5 @@
 #!/bin/bash
-# Testing workflow with UV
+# Modern UV test script with best practices
 
 set -e
 
@@ -49,12 +49,20 @@ case "$1" in
         echo "🐛 Running tests with debug output..."
         uv run pytest tests/ -v -s --tb=long
         ;;
+    "benchmark")
+        echo "⚡ Running benchmark tests..."
+        uv run pytest tests/ -m "benchmark" --benchmark-only -v
+        ;;
+    "smoke")
+        echo "🔥 Running smoke tests..."
+        uv run pytest tests/ -m "smoke" -v
+        ;;
     "all")
         echo "🎯 Running all tests..."
         uv run pytest tests/ -v
         ;;
     *)
-        echo "Usage: $0 {unit|integration|performance|coverage|parallel|fast|slow|watch|single|debug|all}"
+        echo "Usage: $0 {unit|integration|performance|coverage|parallel|fast|slow|watch|single|debug|benchmark|smoke|all}"
         echo ""
         echo "Commands:"
         echo "  unit           Run unit tests only"
@@ -67,6 +75,8 @@ case "$1" in
         echo "  watch          Run tests in watch mode"
         echo "  single <test>  Run a single test file or pattern"
         echo "  debug          Run tests with debug output"
+        echo "  benchmark      Run benchmark tests"
+        echo "  smoke          Run smoke tests"
         echo "  all            Run all tests"
         exit 1
         ;;

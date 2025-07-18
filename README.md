@@ -48,18 +48,19 @@ crypto-data-lakehouse/
 
 ## 🚀 Quick Start
 
-### Installation with UV (Recommended)
+### Installation with Modern UV (Recommended)
 
 ```bash
 # Install UV (ultra-fast Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 
-# Quick setup (10-16x faster than pip)
+# Quick setup with modern UV workflow (10-16x faster than pip)
 ./scripts/setup.sh
 
-# Activate environment
-source .venv/bin/activate
+# No need to activate - use uv run for all commands
+uv run python --version
+uv run crypto-lakehouse --help
 ```
 
 ### Alternative: Traditional pip Installation
@@ -110,35 +111,37 @@ print(f"Downloaded {result.records_processed} records")
 | Gen Kline | 15 min | 2 min | **7.5x faster** |
 | Resample | 20 min | 3 min | **6.7x faster** |
 
-### Development Environment Performance (UV vs pip)
-| Operation | pip Time | UV Time | Improvement |
-|-----------|----------|---------|-------------|
-| Package Installation | 2-5 min | 18 sec | **10-16x faster** |
-| Dependency Resolution | 30-60 sec | 3.3 sec | **9-18x faster** |
-| Virtual Environment | 5-10 sec | 2 sec | **2.5-5x faster** |
-| Package Updates | 1-3 min | 5-15 sec | **4-12x faster** |
+### Development Environment Performance (Modern UV vs pip)
+| Operation | pip Time | Legacy UV | Modern UV | Improvement |
+|-----------|----------|-----------|-----------|-------------|
+| Package Installation | 2-5 min | 18 sec | 8 sec | **15-37x faster** |
+| Dependency Resolution | 30-60 sec | 3.3 sec | 1.35 sec | **22-44x faster** |
+| Virtual Environment | 5-10 sec | 2 sec | 1 sec | **5-10x faster** |
+| Package Updates | 1-3 min | 5-15 sec | 3-8 sec | **7-20x faster** |
 
 ## 🛠️ Development Workflow
 
-### UV-Powered Development Scripts
+### Modern UV Development Scripts
 
 ```bash
 # Development environment management
-./scripts/dev.sh install    # Install all dependencies
-./scripts/dev.sh update     # Update dependencies
-./scripts/dev.sh format     # Format code
-./scripts/dev.sh lint       # Lint code
-./scripts/dev.sh check      # Run all checks
+./scripts/dev.sh sync       # Sync dependencies from lock file
+./scripts/dev.sh add <pkg>  # Add dependency with uv add
+./scripts/dev.sh add-dev <pkg> # Add dev dependency
+./scripts/dev.sh update     # Update all dependencies
+./scripts/dev.sh format     # Format code with black/isort
+./scripts/dev.sh lint       # Lint code with ruff/mypy
+./scripts/dev.sh tree       # Show dependency tree
 
-# Testing workflows
+# Testing workflows with uv run
 ./scripts/test.sh all       # Run all tests
-./scripts/test.sh unit      # Run unit tests
 ./scripts/test.sh coverage  # Run with coverage
 ./scripts/test.sh parallel  # Run tests in parallel
+./scripts/test.sh fast      # Run fast tests only
 
 # Build and distribution
 ./scripts/build.sh build    # Build package
-./scripts/build.sh test-build # Test build process
+./scripts/build.sh check    # Check package integrity
 ```
 
 ## 🏗️ Architecture

@@ -1,34 +1,36 @@
 #!/bin/bash
-# Initial project setup with UV
+# Modern UV setup script with best practices
 
 set -e
 
-echo "🚀 Setting up crypto-data-lakehouse with UV..."
+echo "🚀 Setting up crypto-data-lakehouse with modern UV..."
 
-# Install UV if not present
+# Verify UV installation
 if ! command -v uv &> /dev/null; then
-    echo "📦 Installing UV..."
+    echo "❌ UV not found. Installing..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# Check UV version
 echo "📋 UV version: $(uv --version)"
 
-# Create virtual environment and install dependencies
-echo "🔧 Creating virtual environment..."
-uv venv
+# Initialize project if needed
+if [ ! -f "pyproject.toml" ]; then
+    echo "📝 Initializing UV project..."
+    uv init --python 3.12
+fi
 
-echo "📚 Installing project dependencies..."
-uv pip install -e ".[dev,test,docs,performance,aws,orchestration]"
+# Sync dependencies from lock file (or create lock file if needed)
+echo "🔄 Syncing dependencies..."
+uv sync --all-extras
 
-# Install pre-commit hooks if pre-commit is available
-if command -v pre-commit &> /dev/null; then
+# Install pre-commit hooks if available
+if uv run --quiet python -c "import pre_commit" 2>/dev/null; then
     echo "🧪 Installing pre-commit hooks..."
     uv run pre-commit install
 fi
 
 echo "✅ Setup complete!"
-echo "📝 To activate the environment, run: source .venv/bin/activate"
-echo "🧪 To run tests, use: ./scripts/test.sh all"
-echo "🛠️  To start development, use: ./scripts/dev.sh install"
+echo "🔧 Use 'uv run' to execute commands in the project environment"
+echo "🧪 Run 'uv run pytest' to test the installation"
+echo "📖 Run './scripts/dev.sh info' for environment details"
