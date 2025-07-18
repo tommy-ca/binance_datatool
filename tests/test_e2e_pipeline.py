@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, AsyncMock
 from typing import List
 
-from src.crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
-from src.crypto_lakehouse.core.models import DataType, KlineData, FundingRateData
-from src.crypto_lakehouse.workflows.prefect_workflows import (
+from crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
+from crypto_lakehouse.core.models import DataType, KlineData, FundingRateData
+from crypto_lakehouse.workflows.prefect_workflows import (
     data_ingestion_pipeline,
     multi_symbol_ingestion_pipeline,
     daily_data_refresh_pipeline,

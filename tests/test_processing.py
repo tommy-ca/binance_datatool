@@ -4,9 +4,9 @@ import pytest
 import polars as pl
 from datetime import datetime, timezone
 
-from src.crypto_lakehouse.processing.kline_processor import KlineProcessor
-from src.crypto_lakehouse.processing.funding_processor import FundingRateProcessor
-from src.crypto_lakehouse.core.models import DataZone
+from crypto_lakehouse.processing.kline_processor import KlineProcessor
+from crypto_lakehouse.processing.funding_processor import FundingRateProcessor
+from crypto_lakehouse.core.models import DataZone
 
 
 class TestKlineProcessor:

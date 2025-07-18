@@ -8,9 +8,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from src.crypto_lakehouse.ingestion.bulk_downloader import S5cmdDownloader, BinanceDataParser
-from src.crypto_lakehouse.ingestion.binance import BinanceIngestor, BinanceBulkIngestor
-from src.crypto_lakehouse.core.models import DataType, TradeType, Exchange, Interval
+from crypto_lakehouse.ingestion.bulk_downloader import S5cmdDownloader, BinanceDataParser
+from crypto_lakehouse.ingestion.binance import BinanceIngestor, BinanceBulkIngestor
+from crypto_lakehouse.core.models import DataType, TradeType, Exchange, Interval
 
 
 class TestS5cmdDownloader:

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List
 
-from src.crypto_lakehouse.utils.data_merger import (
+from crypto_lakehouse.utils.data_merger import (
     DataMerger,
     MergeConfig,
     MergeStrategy,
@@ -15,7 +15,7 @@ from src.crypto_lakehouse.utils.data_merger import (
     merge_data,
     get_merge_strategies
 )
-from src.crypto_lakehouse.core.models import KlineData, FundingRateData, DataType
+from crypto_lakehouse.core.models import KlineData, FundingRateData, DataType
 
 
 @pytest.fixture

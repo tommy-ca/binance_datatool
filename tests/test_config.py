@@ -5,8 +5,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from src.crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
-from src.crypto_lakehouse.core.models import DataZone
+from crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
+from crypto_lakehouse.core.models import DataZone
 
 
 class TestS3Config:

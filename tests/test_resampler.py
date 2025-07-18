@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List
 
-from src.crypto_lakehouse.utils.resampler import (
+from crypto_lakehouse.utils.resampler import (
     DataResampler,
     ResamplingConfig,
     ResamplingResult,
@@ -13,7 +13,7 @@ from src.crypto_lakehouse.utils.resampler import (
     get_supported_timeframes,
     validate_timeframe_conversion
 )
-from src.crypto_lakehouse.core.models import KlineData
+from crypto_lakehouse.core.models import KlineData
 
 
 @pytest.fixture

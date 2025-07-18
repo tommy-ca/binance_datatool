@@ -9,13 +9,13 @@ import os
 import polars as pl
 import duckdb
 
-from src.crypto_lakehouse.utils.query_engine import (
+from crypto_lakehouse.utils.query_engine import (
     DuckDBQueryEngine,
     QueryConfig,
     QueryResult,
     create_query_engine
 )
-from src.crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
+from crypto_lakehouse.core.config import Settings, S3Config, StorageConfig
 
 
 @pytest.fixture

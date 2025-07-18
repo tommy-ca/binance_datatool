@@ -4,8 +4,8 @@ import pytest
 from typer.testing import CliRunner
 from unittest.mock import patch, AsyncMock
 
-from src.crypto_lakehouse.cli import app
-from src.crypto_lakehouse.core.models import Exchange, DataType, TradeType
+from crypto_lakehouse.cli import app
+from crypto_lakehouse.core.models import Exchange, DataType, TradeType
 
 
 class TestCLI:
@@ -205,7 +205,7 @@ class TestCLIIntegration:
     @pytest.mark.asyncio
     async def test_workflow_registry_integration(self):
         """Test that CLI properly integrates with workflow registry."""
-        from src.crypto_lakehouse.workflows.base import WorkflowRegistry
+        from crypto_lakehouse.workflows.base import WorkflowRegistry
         
         # Check that workflows are registered
         workflows = WorkflowRegistry.list_workflows()
@@ -214,7 +214,7 @@ class TestCLIIntegration:
     
     def test_settings_integration(self):
         """Test that CLI uses proper settings."""
-        from src.crypto_lakehouse.core.config import Settings
+        from crypto_lakehouse.core.config import Settings
         
         # Test that settings can be instantiated
         settings = Settings()

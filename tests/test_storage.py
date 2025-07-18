@@ -7,9 +7,9 @@ import polars as pl
 from pathlib import Path
 from datetime import datetime, timezone
 
-from src.crypto_lakehouse.storage.local_storage import LocalStorage
-from src.crypto_lakehouse.storage.factory import create_storage, create_local_storage
-from src.crypto_lakehouse.core.models import DataZone, DataType, TradeType, Exchange
+from crypto_lakehouse.storage.local_storage import LocalStorage
+from crypto_lakehouse.storage.factory import create_storage, create_local_storage
+from crypto_lakehouse.core.models import DataZone, DataType, TradeType, Exchange
 
 
 class TestLocalStorage:

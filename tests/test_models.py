@@ -4,7 +4,7 @@ import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from src.crypto_lakehouse.core.models import (
+from crypto_lakehouse.core.models import (
     Exchange, DataType, TradeType, Interval, DataZone,
     KlineData, FundingRateData, DataIngestionTask, IngestionMetadata
 )
