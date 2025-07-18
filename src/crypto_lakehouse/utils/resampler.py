@@ -13,7 +13,7 @@ import logging
 import polars as pl
 from pydantic import BaseModel, Field, validator
 
-from ..core.models import KlineData, TimeFrame
+from ..core.models import KlineData
 
 logger = logging.getLogger(__name__)
 
