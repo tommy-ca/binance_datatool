@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import polars as pl
 
-from src.crypto_lakehouse.core.config import Settings
-from src.crypto_lakehouse.core.models import (
+from crypto_lakehouse.core.config import Settings
+from crypto_lakehouse.core.models import (
     Exchange, DataType, TradeType, Interval, 
     KlineData, FundingRateData, DataIngestionTask
 )
