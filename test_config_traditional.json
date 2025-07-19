@@ -1,0 +1,43 @@
+{
+  "workflow_type": "archive_collection",
+  "workflow_version": "2.1.0-test",
+  "matrix_path": "test_archive_matrix.json",
+  "markets": [
+    "spot"
+  ],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "data_types": [
+    "klines"
+  ],
+  "intervals": [
+    "1m",
+    "1d"
+  ],
+  "date_range": {
+    "start": "2025-07-17",
+    "end": "2025-07-17"
+  },
+  "performance_optimization": {
+    "max_parallel_downloads": 4,
+    "batch_size": 10,
+    "part_size_mb": 5,
+    "enable_batch_mode": true
+  },
+  "quality_control": {
+    "download_checksum": false,
+    "verify_file_integrity": false,
+    "force_redownload": false,
+    "timeout_seconds": 60
+  },
+  "monitoring": {
+    "enable_monitoring": true,
+    "log_level": "DEBUG"
+  },
+  "operation_mode": "traditional",
+  "enable_s3_direct_sync": false,
+  "output_directory": "/tmp/traditional-output",
+  "base_url": "s3://binance-archive-test/data/"
+}

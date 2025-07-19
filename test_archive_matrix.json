@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "version": "2.1.0-test",
+    "generated_at": "2025-07-19T20:30:00Z",
+    "source": "MinIO Test Setup",
+    "total_entries": 2
+  },
+  "availability_matrix": [
+    {
+      "market": "spot",
+      "data_type": "klines",
+      "intervals": [
+        "1m",
+        "1d"
+      ],
+      "partitions": [
+        "daily"
+      ],
+      "symbols_available": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "date_range": {
+        "start": "2025-07-17",
+        "end": "2025-07-17"
+      },
+      "url_pattern": "s3://binance-archive-test/data/{partition}/{data_type}/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    }
+  ]
+}
