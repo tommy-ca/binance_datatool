@@ -1,0 +1,172 @@
+{
+  "traditional_workflow": {
+    "mode": "traditional",
+    "total_phases": 5,
+    "completed_phases": 5,
+    "simulated_total_time": 3.3000000000000003,
+    "actual_test_time": 0.5011916160583496,
+    "phases": [
+      {
+        "phase": "Listing source files",
+        "duration": 0.2,
+        "success": true
+      },
+      {
+        "phase": "Downloading files to local storage",
+        "duration": 1.5,
+        "success": true
+      },
+      {
+        "phase": "Processing and validating files",
+        "duration": 0.3,
+        "success": true
+      },
+      {
+        "phase": "Uploading files to destination",
+        "duration": 1.2,
+        "success": true
+      },
+      {
+        "phase": "Cleaning up local storage",
+        "duration": 0.1,
+        "success": true
+      }
+    ],
+    "operations_count": 5,
+    "network_transfers": 2,
+    "local_storage_required": true,
+    "efficiency_score": 60
+  },
+  "direct_sync_workflow": {
+    "mode": "direct_sync",
+    "total_phases": 4,
+    "completed_phases": 4,
+    "simulated_total_time": 1.3,
+    "actual_test_time": 0.401017427444458,
+    "phases": [
+      {
+        "phase": "Listing source files",
+        "duration": 0.2,
+        "success": true
+      },
+      {
+        "phase": "Configuring direct S3 to S3 transfer",
+        "duration": 0.1,
+        "success": true
+      },
+      {
+        "phase": "Executing batch s5cmd operations",
+        "duration": 0.8,
+        "success": true
+      },
+      {
+        "phase": "Validating transfer completion",
+        "duration": 0.2,
+        "success": true
+      }
+    ],
+    "operations_count": 1,
+    "network_transfers": 1,
+    "local_storage_required": false,
+    "efficiency_score": 95
+  },
+  "auto_mode_selection": {
+    "scenarios_tested": 3,
+    "scenarios_passed": 3,
+    "success_rate": "100.0%",
+    "results": [
+      {
+        "scenario": "S3 sources with destination bucket",
+        "source_urls": [
+          "s3://bucket/file1.zip",
+          "s3://bucket/file2.zip"
+        ],
+        "destination_bucket": "test-dest",
+        "expected_mode": "direct_sync",
+        "selected_mode": "direct_sync",
+        "correct": true,
+        "reason": "All S3 sources with valid destination"
+      },
+      {
+        "scenario": "Mixed source URLs",
+        "source_urls": [
+          "s3://bucket/file1.zip",
+          "https://example.com/file2.zip"
+        ],
+        "destination_bucket": "test-dest",
+        "expected_mode": "traditional",
+        "selected_mode": "traditional",
+        "correct": true,
+        "reason": "Mixed sources require traditional mode"
+      },
+      {
+        "scenario": "No destination bucket",
+        "source_urls": [
+          "s3://bucket/file1.zip"
+        ],
+        "destination_bucket": null,
+        "expected_mode": "traditional",
+        "selected_mode": "traditional",
+        "correct": true,
+        "reason": "No destination bucket configured"
+      }
+    ]
+  },
+  "s5cmd_batch_generation": {
+    "commands_generated": 2,
+    "validation_checks": {
+      "correct_command_count": true,
+      "contains_copy_command": true,
+      "contains_size_differ": true,
+      "contains_source_region": true,
+      "contains_destination": true
+    },
+    "all_checks_passed": true,
+    "batch_file_content": "cp --if-size-differ --source-region us-east-1 --part-size 25 's3://binance-archive-test/data/spot/daily/klines/BTCUSDT/1m/BTCUSDT-1m-2025-07-17.zip' 's3://crypto-lakehouse-bronze-test/binance/archive/test/spot/daily/klines/BTCUSDT/1m/BTCUSDT-1m-2025-07-17.zip'\ncp --if-size-differ --source-region us-east-1 --part-size 25 's3://binance-archive-test/data/spot/daily/klines/ETHUSDT/1m/ETHUSDT-1m-2025-07-17.zip' 's3://crypto-lakehouse-bronze-test/binance/archive/test/spot/daily/klines/ETHUSDT/1m/ETHUSDT-1m-2025-07-17.zip'\n"
+  },
+  "fallback_mechanisms": {
+    "scenarios_tested": 3,
+    "scenarios_passed": 3,
+    "success_rate": "100.0%",
+    "results": [
+      {
+        "scenario": "HTTP source URL (should fallback)",
+        "expected_fallback": true,
+        "actual_fallback": true,
+        "correct": true,
+        "reason": "Non-S3 source requires traditional download"
+      },
+      {
+        "scenario": "S5cmd unavailable (simulated)",
+        "expected_fallback": true,
+        "actual_fallback": true,
+        "correct": true,
+        "reason": "s5cmd not available for direct sync"
+      },
+      {
+        "scenario": "Valid S3 to S3 scenario",
+        "expected_fallback": false,
+        "actual_fallback": false,
+        "correct": true,
+        "reason": "Valid direct sync scenario"
+      }
+    ]
+  },
+  "performance_comparison": {
+    "time_improvement_percent": 60.606060606060595,
+    "time_saved_seconds": 2.0,
+    "operation_reduction_count": 4,
+    "operation_reduction_percent": 80.0,
+    "network_reduction_count": 1,
+    "network_reduction_percent": 50.0,
+    "efficiency_improvement": 35,
+    "local_storage_eliminated": true,
+    "summary": {
+      "faster_by": "60.6%",
+      "fewer_operations": "4 operations (80.0% reduction)",
+      "less_network_usage": "1 transfers (50.0% reduction)",
+      "efficiency_gain": "+35 points",
+      "storage_benefit": "100% local storage eliminated"
+    }
+  }
+}
