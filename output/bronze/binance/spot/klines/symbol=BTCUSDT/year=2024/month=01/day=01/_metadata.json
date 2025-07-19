@@ -1,0 +1,24 @@
+{
+  "zone": "bronze",
+  "exchange": "binance",
+  "data_type": "klines",
+  "trade_type": "spot",
+  "symbol": "BTCUSDT",
+  "partition_date": "2024-01-01T00:00:00",
+  "record_count": 100,
+  "created_at": "2025-07-19T18:38:15.156436",
+  "schema": {
+    "symbol": "String",
+    "open_time": "Datetime(time_unit='us', time_zone=None)",
+    "close_time": "Datetime(time_unit='us', time_zone=None)",
+    "open_price": "Float64",
+    "high_price": "Float64",
+    "low_price": "Float64",
+    "close_price": "Float64",
+    "volume": "Float64",
+    "quote_asset_volume": "Float64",
+    "number_of_trades": "Int64",
+    "taker_buy_base_asset_volume": "Float64",
+    "taker_buy_quote_asset_volume": "Float64"
+  }
+}

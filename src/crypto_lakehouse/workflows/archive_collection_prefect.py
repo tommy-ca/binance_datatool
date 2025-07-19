@@ -62,13 +62,55 @@ async def validate_archive_configuration_task(config: WorkflowConfig) -> bool:
     # Validate enum values using system models
     markets = config.get('markets', [])
     try:
-        validated_markets = [TradeType(market) for market in markets]
+        # Map external market names to internal TradeType values
+        market_mapping = {
+            'spot': TradeType.SPOT,
+            'futures_um': TradeType.UM_FUTURES,
+            'futures_cm': TradeType.CM_FUTURES,
+            'options': TradeType.OPTIONS
+        }
+        validated_markets = []
+        for market in markets:
+            if market in market_mapping:
+                validated_markets.append(market_mapping[market])
+            else:
+                raise ValueError(f"'{market}' is not a valid market type")
     except ValueError as e:
         raise ConfigurationError(f"Invalid markets in configuration: {e}")
     
     data_types = config.get('data_types', [])
     try:
-        validated_data_types = [DataType(dt) for dt in data_types]
+        # Map external data type names to internal DataType values
+        data_type_mapping = {
+            'klines': DataType.KLINES,
+            'trades': DataType.TRADES,
+            'fundingRate': DataType.FUNDING_RATES,
+            'funding_rates': DataType.FUNDING_RATES,
+            'liquidationSnapshot': DataType.LIQUIDATIONS,
+            'liquidations': DataType.LIQUIDATIONS,
+            'bookDepth': DataType.ORDER_BOOK,
+            'order_book': DataType.ORDER_BOOK,
+            'bookTicker': DataType.TICKER,
+            'ticker': DataType.TICKER,
+            'metrics': DataType.METRICS,
+            'BVOLIndex': DataType.VOLATILITY,
+            'volatility': DataType.VOLATILITY,
+            'EOHSummary': DataType.SUMMARY,
+            'summary': DataType.SUMMARY,
+            'aggTrades': DataType.TRADES,
+            'premiumIndex': DataType.FUNDING_RATES,
+            'indexPriceKlines': DataType.KLINES,
+            'markPriceKlines': DataType.KLINES
+        }
+        validated_data_types = []
+        for dt in data_types:
+            if dt in data_type_mapping:
+                validated_data_types.append(data_type_mapping[dt])
+            else:
+                try:
+                    validated_data_types.append(DataType(dt))
+                except ValueError:
+                    raise ValueError(f"'{dt}' is not a valid data type")
     except ValueError as e:
         raise ConfigurationError(f"Invalid data types in configuration: {e}")
     
@@ -136,9 +178,24 @@ async def generate_ingestion_tasks_task(
     ingestion_tasks = []
     
     # Get configuration parameters with validation
-    markets = [TradeType(m) for m in config.get('markets', [])]
+    market_mapping = {
+        'spot': TradeType.SPOT,
+        'futures_um': TradeType.UM_FUTURES,
+        'futures_cm': TradeType.CM_FUTURES,
+        'options': TradeType.OPTIONS
+    }
+    markets = [market_mapping[m] for m in config.get('markets', []) if m in market_mapping]
     symbols = config.get('symbols', [])
-    data_types = [DataType(dt) for dt in config.get('data_types', [])]
+    
+    # Handle flexible data type validation
+    data_types_config = config.get('data_types', [])
+    data_types = []
+    for dt in data_types_config:
+        try:
+            data_types.append(DataType(dt))
+        except ValueError:
+            logger.warning(f"Unknown data type: {dt}, skipping")
+    
     dates = _get_date_list(config)
     
     # Generate tasks from availability matrix
@@ -155,7 +212,10 @@ async def generate_ingestion_tasks_task(
                 trade_type = TradeType.UM_FUTURES
             elif matrix_market == 'futures_cm':
                 trade_type = TradeType.CM_FUTURES
+            elif matrix_market == 'options':
+                trade_type = TradeType.OPTIONS
             else:
+                logger.warning(f"Unknown market type: {matrix_market}")
                 continue  # Skip unknown market types
             
             # Map data type
@@ -193,13 +253,13 @@ async def generate_ingestion_tasks_task(
                                 target_zone=DataZone.BRONZE  # Archive data goes to Bronze zone
                             )
                             
-                            # Add archive-specific metadata
-                            task_dict = task.model_dump()
-                            task_dict.update({
-                                'partition_type': partition,
-                                'archive_date': date_str,
-                                'matrix_entry': entry
-                            })
+                            # Add archive-specific metadata for enhanced URL generation
+                            task.partition_type = partition
+                            task.archive_date = date_str
+                            task.matrix_entry = entry
+                            task.original_data_type = matrix_data_type  # Preserve original data type
+                            task.url_pattern = entry.get('url_pattern', '')
+                            task.filename_pattern = entry.get('filename_pattern', '')
                             
                             ingestion_tasks.append(task)
                             
@@ -482,10 +542,12 @@ async def archive_collection_flow(
             'timeout_seconds': config.get('timeout_seconds', 300),
             'verify_checksums': config.get('download_checksum', True),
             'storage': storage,
-            'batch_size': config.get('batch_size', 50),
-            'max_concurrent': config.get('max_parallel_downloads', 4),
+            'batch_size': config.get('batch_size', 100),  # Increased for better performance
+            'max_concurrent': config.get('max_parallel_downloads', 8),  # Increased for multiple markets
             'part_size_mb': config.get('part_size_mb', 50),
-            'enable_batch_mode': config.get('enable_batch_mode', True)
+            'enable_batch_mode': config.get('enable_batch_mode', True),
+            'enable_resume': config.get('enable_resume', True),
+            's5cmd_extra_args': config.get('s5cmd_extra_args', ['--no-sign-request', '--retry-count=3'])
         }
         bulk_downloader = BulkDownloader(downloader_config)
         
@@ -623,13 +685,33 @@ def _get_date_list(config: WorkflowConfig) -> List[str]:
 def _map_matrix_data_type(matrix_data_type: str) -> Optional[DataType]:
     """Map archive matrix data type to system DataType enum."""
     mapping = {
+        # Core data types
         'klines': DataType.KLINES,
         'trades': DataType.TRADES,
-        'aggTrades': DataType.TRADES,  # Map to trades for now
+        'aggTrades': DataType.TRADES,  # Aggregate trades mapped to trades
         'fundingRate': DataType.FUNDING_RATES,
-        'liquidationSnapshot': DataType.LIQUIDATIONS
+        'liquidationSnapshot': DataType.LIQUIDATIONS,
+        
+        # Order book data types
+        'bookDepth': DataType.ORDER_BOOK,
+        'bookTicker': DataType.TICKER,
+        
+        # Index and mark price data
+        'indexPriceKlines': DataType.KLINES,  # Treat as klines variant
+        'markPriceKlines': DataType.KLINES,   # Treat as klines variant
+        'premiumIndex': DataType.FUNDING_RATES,  # Related to funding
+        
+        # Metrics and volatility
+        'metrics': DataType.METRICS if hasattr(DataType, 'METRICS') else DataType.KLINES,
+        'BVOLIndex': DataType.VOLATILITY if hasattr(DataType, 'VOLATILITY') else DataType.KLINES,
+        'EOHSummary': DataType.SUMMARY if hasattr(DataType, 'SUMMARY') else DataType.KLINES
     }
-    return mapping.get(matrix_data_type)
+    
+    result = mapping.get(matrix_data_type)
+    if not result:
+        logger.warning(f"Unknown data type: {matrix_data_type}")
+    
+    return result
 
 
 def _is_valid_interval(interval: str) -> bool:
@@ -685,18 +767,29 @@ async def _generate_task_paths(
     trade_type_map = {
         TradeType.SPOT: 'spot',
         TradeType.UM_FUTURES: 'futures/um',
-        TradeType.CM_FUTURES: 'futures/cm'
+        TradeType.CM_FUTURES: 'futures/cm',
+        TradeType.OPTIONS: 'option'
     }
     
+    # Enhanced data type mapping with support for all Binance data types
     data_type_map = {
         DataType.KLINES: 'klines',
         DataType.TRADES: 'trades',
-        DataType.FUNDING_RATES: 'fundingRate'
+        DataType.FUNDING_RATES: 'fundingRate',
+        DataType.LIQUIDATIONS: 'liquidationSnapshot',
+        DataType.ORDER_BOOK: 'bookDepth',
+        DataType.TICKER: 'bookTicker'
     }
     
+    # Get the original data type from task metadata if available
+    original_data_type = getattr(task, 'original_data_type', None)
+    if original_data_type:
+        data_type_str = original_data_type
+    else:
+        data_type_str = data_type_map.get(task.data_type, task.data_type.value)
+    
     symbol = task.symbols[0]
-    trade_path = trade_type_map[task.trade_type]
-    data_type_str = data_type_map.get(task.data_type, task.data_type.value)
+    trade_path = trade_type_map.get(task.trade_type, task.trade_type.value)
     
     # Determine partition and date formatting
     if hasattr(task, 'partition_type'):
@@ -706,17 +799,36 @@ async def _generate_task_paths(
         partition = 'daily'
         archive_date = task.start_date.strftime('%Y-%m-%d')
     
-    # Build source path
-    base_url = "s3://data.binance.vision/data/"
-    source_path = f"{base_url}{trade_path}/{partition}/{data_type_str}/{symbol}"
-    
-    if task.interval and data_type_str in ['klines']:
-        source_path += f"/{task.interval.value}"
-        filename = f"{symbol}-{task.interval.value}-{archive_date}.zip"
+    # Enhanced URL generation using matrix patterns
+    if hasattr(task, 'url_pattern') and task.url_pattern:
+        # Use enhanced matrix URL pattern
+        url_pattern = task.url_pattern
+        filename_pattern = getattr(task, 'filename_pattern', '{symbol}-{data_type}-{date}.zip')
+        
+        # Replace placeholders in URL pattern
+        source_url = url_pattern.format(
+            partition=partition,
+            symbol=symbol,
+            interval=task.interval.value if task.interval else '',
+            filename=filename_pattern.format(
+                symbol=symbol,
+                interval=task.interval.value if task.interval else data_type_str,
+                date=archive_date,
+                data_type=data_type_str
+            )
+        )
     else:
-        filename = f"{symbol}-{data_type_str}-{archive_date}.zip"
-    
-    source_url = f"{source_path}/{filename}"
+        # Fallback to original URL generation
+        base_url = "s3://data.binance.vision/data/"
+        source_path = f"{base_url}{trade_path}/{partition}/{data_type_str}/{symbol}"
+        
+        if task.interval and data_type_str in ['klines', 'indexPriceKlines', 'markPriceKlines', 'bookDepth']:
+            source_path += f"/{task.interval.value}"
+            filename = f"{symbol}-{task.interval.value}-{archive_date}.zip"
+        else:
+            filename = f"{symbol}-{data_type_str}-{archive_date}.zip"
+        
+        source_url = f"{source_path}/{filename}"
     
     # Generate target path using storage interface
     if storage:

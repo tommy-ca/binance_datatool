@@ -1,0 +1,70 @@
+{
+  "endpoint": "https://fapi.binance.com/fapi/v1/fundingRate",
+  "params": {
+    "symbol": "BTCUSDT",
+    "limit": 10
+  },
+  "timestamp": "2025-07-19T13:08:14.451812",
+  "data": [
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752652800000,
+      "fundingRate": "0.00010000",
+      "markPrice": "118184.09413043"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752681600008,
+      "fundingRate": "0.00010000",
+      "markPrice": "119054.30000000"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752710400003,
+      "fundingRate": "0.00010000",
+      "markPrice": "118598.08606159"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752739200000,
+      "fundingRate": "0.00010000",
+      "markPrice": "118289.10000000"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752768000000,
+      "fundingRate": "0.00010000",
+      "markPrice": "118874.61847826"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752796800004,
+      "fundingRate": "0.00010000",
+      "markPrice": "119176.60000000"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752825600000,
+      "fundingRate": "0.00010000",
+      "markPrice": "119356.50000000"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752854400000,
+      "fundingRate": "0.00010000",
+      "markPrice": "117851.82027174"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752883200009,
+      "fundingRate": "0.00010000",
+      "markPrice": "117897.67534058"
+    },
+    {
+      "symbol": "BTCUSDT",
+      "fundingTime": 1752912000000,
+      "fundingRate": "0.00010000",
+      "markPrice": "118135.00000000"
+    }
+  ]
+}

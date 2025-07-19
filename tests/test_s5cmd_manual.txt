@@ -1,0 +1,3 @@
+cp --if-size-differ s3://data.binance.vision/data/spot/daily/klines/BTCUSDT/1d/BTCUSDT-1d-2025-07-15.zip test_output/test1.zip
+cp --if-size-differ s3://data.binance.vision/data/spot/daily/klines/ETHUSDT/1d/ETHUSDT-1d-2025-07-15.zip test_output/test2.zip
+EOF < /dev/null

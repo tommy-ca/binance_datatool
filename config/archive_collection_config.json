@@ -1,0 +1,19 @@
+{
+  "description": "Production configuration for comprehensive Binance archive sample collection",
+  "markets": ["spot", "futures_um", "futures_cm"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+  "data_types": ["klines", "trades", "aggTrades", "fundingRate", "markPriceKlines"],
+  "intervals": ["1m", "1h", "1d"],
+  "default_date": "2025-07-15",
+  "date_range": {
+    "start": "2025-07-14", 
+    "end": "2025-07-15"
+  },
+  "max_parallel_downloads": 6,
+  "download_checksum": true,
+  "force_redownload": false,
+  "output_directory": "archive-samples-production",
+  "skip_existing": true,
+  "retry_failed": true,
+  "timeout_seconds": 300
+}

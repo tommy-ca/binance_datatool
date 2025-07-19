@@ -1,0 +1,379 @@
+# System Architecture Template
+# Phase 2: Design | System Architecture Design
+# ================================================================
+
+system_architecture:
+  # Feature identification
+  feature_id: "FEAT807"
+  feature_name: "test-auth"
+  version: "1.0.0"
+  created_date: "2025-07-19"
+  created_by: "development-team"
+  
+  # Architecture overview
+  architecture_style: "{{ARCHITECTURE_STYLE}}"  # e.g., "Layered Architecture", "Microservices", "Event-Driven"
+  architecture_pattern: "{{ARCHITECTURE_PATTERN}}"  # e.g., "MVC", "CQRS", "Hexagonal"
+  
+  # Quality attributes mapping
+  quality_attributes:
+    performance:
+      response_time: "{{RESPONSE_TIME}}"  # e.g., "< 100ms"
+      throughput: "{{THROUGHPUT}}"  # e.g., "> 1000 req/s"
+      scalability_target: "{{SCALABILITY}}"  # e.g., "10x current load"
+      
+    reliability:
+      availability: "{{AVAILABILITY}}"  # e.g., "99.9%"
+      fault_tolerance: "{{FAULT_TOLERANCE}}"  # e.g., "Graceful degradation"
+      recovery_time: "{{RECOVERY_TIME}}"  # e.g., "< 5 minutes"
+      
+    security:
+      authentication: "{{AUTH_METHOD}}"  # e.g., "JWT tokens"
+      authorization: "{{AUTHZ_METHOD}}"  # e.g., "RBAC"
+      data_protection: "{{DATA_PROTECTION}}"  # e.g., "End-to-end encryption"
+      
+    maintainability:
+      modularity: "{{MODULARITY}}"  # e.g., "High cohesion, low coupling"
+      testability: "{{TESTABILITY}}"  # e.g., "> 95% test coverage"
+      extensibility: "{{EXTENSIBILITY}}"  # e.g., "Plugin architecture"
+  
+  # Architectural layers
+  architectural_layers:
+    presentation:
+      description: "{{PRESENTATION_DESC}}"  # e.g., "API endpoints and request handling"
+      components:
+        - name: "{{COMPONENT_NAME_1}}"  # e.g., "AuthController"
+          type: "{{COMPONENT_TYPE_1}}"  # e.g., "REST Controller"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"  # e.g., "Request validation"
+            - "{{RESPONSIBILITY_2}}"  # e.g., "Response formatting"
+          
+        - name: "{{COMPONENT_NAME_2}}"  # e.g., "ValidationMiddleware"
+          type: "{{COMPONENT_TYPE_2}}"  # e.g., "Middleware"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"
+            - "{{RESPONSIBILITY_2}}"
+      
+      patterns:
+        - pattern: "{{PATTERN_1}}"  # e.g., "Request-Response"
+        - pattern: "{{PATTERN_2}}"  # e.g., "Input Validation"
+      
+      technologies:
+        - "{{TECH_1}}"  # e.g., "FastAPI"
+        - "{{TECH_2}}"  # e.g., "Pydantic"
+        
+    application:
+      description: "{{APPLICATION_DESC}}"  # e.g., "Business logic and workflow orchestration"
+      components:
+        - name: "{{COMPONENT_NAME_1}}"  # e.g., "AuthService"
+          type: "{{COMPONENT_TYPE_1}}"  # e.g., "Application Service"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"  # e.g., "Authentication logic"
+            - "{{RESPONSIBILITY_2}}"  # e.g., "Business rule enforcement"
+          
+        - name: "{{COMPONENT_NAME_2}}"  # e.g., "TokenService"
+          type: "{{COMPONENT_TYPE_2}}"  # e.g., "Domain Service"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"
+            - "{{RESPONSIBILITY_2}}"
+      
+      patterns:
+        - pattern: "{{PATTERN_1}}"  # e.g., "Service Layer"
+        - pattern: "{{PATTERN_2}}"  # e.g., "Transaction Script"
+      
+      technologies:
+        - "{{TECH_1}}"  # e.g., "Python 3.12"
+        - "{{TECH_2}}"  # e.g., "Dependency Injection"
+        
+    domain:
+      description: "{{DOMAIN_DESC}}"  # e.g., "Core business entities and rules"
+      components:
+        - name: "{{COMPONENT_NAME_1}}"  # e.g., "User"
+          type: "{{COMPONENT_TYPE_1}}"  # e.g., "Aggregate Root"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"  # e.g., "User identity management"
+            - "{{RESPONSIBILITY_2}}"  # e.g., "Business rule validation"
+          
+        - name: "{{COMPONENT_NAME_2}}"  # e.g., "Credentials"
+          type: "{{COMPONENT_TYPE_2}}"  # e.g., "Value Object"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"
+            - "{{RESPONSIBILITY_2}}"
+      
+      patterns:
+        - pattern: "{{PATTERN_1}}"  # e.g., "Domain Model"
+        - pattern: "{{PATTERN_2}}"  # e.g., "Aggregate Pattern"
+      
+      technologies:
+        - "{{TECH_1}}"  # e.g., "Domain-Driven Design"
+        - "{{TECH_2}}"  # e.g., "Python Dataclasses"
+        
+    infrastructure:
+      description: "{{INFRASTRUCTURE_DESC}}"  # e.g., "External systems and technical concerns"
+      components:
+        - name: "{{COMPONENT_NAME_1}}"  # e.g., "UserRepository"
+          type: "{{COMPONENT_TYPE_1}}"  # e.g., "Repository"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"  # e.g., "Data persistence"
+            - "{{RESPONSIBILITY_2}}"  # e.g., "Query execution"
+          
+        - name: "{{COMPONENT_NAME_2}}"  # e.g., "EmailGateway"
+          type: "{{COMPONENT_TYPE_2}}"  # e.g., "Gateway"
+          responsibilities:
+            - "{{RESPONSIBILITY_1}}"
+            - "{{RESPONSIBILITY_2}}"
+      
+      patterns:
+        - pattern: "{{PATTERN_1}}"  # e.g., "Repository Pattern"
+        - pattern: "{{PATTERN_2}}"  # e.g., "Gateway Pattern"
+      
+      technologies:
+        - "{{TECH_1}}"  # e.g., "SQLAlchemy"
+        - "{{TECH_2}}"  # e.g., "PostgreSQL"
+  
+  # Cross-cutting concerns
+  cross_cutting_concerns:
+    logging:
+      strategy: "{{LOGGING_STRATEGY}}"  # e.g., "Structured logging with correlation IDs"
+      level: "{{LOG_LEVEL}}"  # e.g., "INFO"
+      format: "{{LOG_FORMAT}}"  # e.g., "JSON"
+      destinations: ["{{DEST_1}}", "{{DEST_2}}"]  # e.g., ["stdout", "ELK stack"]
+      
+    monitoring:
+      strategy: "{{MONITORING_STRATEGY}}"  # e.g., "Metrics collection and health checks"
+      metrics: ["{{METRIC_1}}", "{{METRIC_2}}"]  # e.g., ["response_time", "error_rate"]
+      tools: ["{{TOOL_1}}", "{{TOOL_2}}"]  # e.g., ["Prometheus", "Grafana"]
+      
+    error_handling:
+      strategy: "{{ERROR_STRATEGY}}"  # e.g., "Graceful degradation and retry policies"
+      patterns: ["{{ERROR_PATTERN_1}}", "{{ERROR_PATTERN_2}}"]  # e.g., ["Circuit Breaker", "Retry with Backoff"]
+      
+    caching:
+      strategy: "{{CACHE_STRATEGY}}"  # e.g., "Multi-level caching"
+      levels: ["{{CACHE_LEVEL_1}}", "{{CACHE_LEVEL_2}}"]  # e.g., ["Application cache", "Database cache"]
+      technologies: ["{{CACHE_TECH_1}}", "{{CACHE_TECH_2}}"]  # e.g., ["Redis", "In-memory"]
+      
+    security:
+      strategy: "{{SECURITY_STRATEGY}}"  # e.g., "Defense in depth"
+      controls: ["{{CONTROL_1}}", "{{CONTROL_2}}"]  # e.g., ["Input validation", "Output encoding"]
+      
+    configuration:
+      strategy: "{{CONFIG_STRATEGY}}"  # e.g., "Environment-based configuration"
+      sources: ["{{CONFIG_SOURCE_1}}", "{{CONFIG_SOURCE_2}}"]  # e.g., ["Environment variables", "Config files"]
+      validation: "{{CONFIG_VALIDATION}}"  # e.g., "Schema validation at startup"
+  
+  # Component interactions
+  component_interactions:
+    - interaction_id: "INT001"
+      source: "{{SOURCE_COMPONENT}}"  # e.g., "AuthController"
+      target: "{{TARGET_COMPONENT}}"  # e.g., "AuthService"
+      interaction_type: "{{INTERACTION_TYPE}}"  # e.g., "Synchronous call"
+      protocol: "{{PROTOCOL}}"  # e.g., "In-process method call"
+      data_format: "{{DATA_FORMAT}}"  # e.g., "Python objects"
+      
+      flow_description: "{{FLOW_DESC}}"  # e.g., "Controller receives request, validates input, calls service"
+      error_handling: "{{ERROR_HANDLING}}"  # e.g., "Exception propagation with mapping"
+      performance_considerations: "{{PERF_CONSIDERATIONS}}"  # e.g., "Direct method call, minimal overhead"
+      
+    - interaction_id: "INT002"
+      source: "{{SOURCE_COMPONENT}}"
+      target: "{{TARGET_COMPONENT}}"
+      interaction_type: "{{INTERACTION_TYPE}}"
+      protocol: "{{PROTOCOL}}"
+      data_format: "{{DATA_FORMAT}}"
+      
+      flow_description: "{{FLOW_DESC}}"
+      error_handling: "{{ERROR_HANDLING}}"
+      performance_considerations: "{{PERF_CONSIDERATIONS}}"
+  
+  # Data flow architecture
+  data_flow:
+    # Request flow
+    request_flow:
+      - step: 1
+        component: "{{COMPONENT_1}}"  # e.g., "Load Balancer"
+        action: "{{ACTION_1}}"  # e.g., "Route request to available instance"
+        data: "{{DATA_1}}"  # e.g., "HTTP request"
+        
+      - step: 2
+        component: "{{COMPONENT_2}}"  # e.g., "API Gateway"
+        action: "{{ACTION_2}}"  # e.g., "Authenticate and validate request"
+        data: "{{DATA_2}}"  # e.g., "Validated request with user context"
+        
+      - step: 3
+        component: "{{COMPONENT_3}}"  # e.g., "AuthController"
+        action: "{{ACTION_3}}"  # e.g., "Parse request and call service"
+        data: "{{DATA_3}}"  # e.g., "LoginRequest object"
+    
+    # Response flow
+    response_flow:
+      - step: 1
+        component: "{{COMPONENT_1}}"  # e.g., "AuthService"
+        action: "{{ACTION_1}}"  # e.g., "Process authentication"
+        data: "{{DATA_1}}"  # e.g., "AuthResponse object"
+        
+      - step: 2
+        component: "{{COMPONENT_2}}"  # e.g., "AuthController"
+        action: "{{ACTION_2}}"  # e.g., "Format response"
+        data: "{{DATA_2}}"  # e.g., "HTTP response"
+        
+      - step: 3
+        component: "{{COMPONENT_3}}"  # e.g., "API Gateway"
+        action: "{{ACTION_3}}"  # e.g., "Add security headers"
+        data: "{{DATA_3}}"  # e.g., "Secured HTTP response"
+    
+    # Error flow
+    error_flow:
+      - step: 1
+        component: "{{COMPONENT_1}}"
+        action: "{{ACTION_1}}"  # e.g., "Catch exception"
+        data: "{{DATA_1}}"  # e.g., "Exception object"
+        
+      - step: 2
+        component: "{{COMPONENT_2}}"
+        action: "{{ACTION_2}}"  # e.g., "Log error and map to user-friendly message"
+        data: "{{DATA_2}}"  # e.g., "Error response"
+  
+  # Deployment architecture
+  deployment_architecture:
+    # Environment structure
+    environments:
+      - name: "{{ENV_NAME_1}}"  # e.g., "Development"
+        purpose: "{{ENV_PURPOSE_1}}"  # e.g., "Feature development and testing"
+        characteristics:
+          - "{{CHAR_1}}"  # e.g., "Single instance deployment"
+          - "{{CHAR_2}}"  # e.g., "Mock external services"
+          - "{{CHAR_3}}"  # e.g., "Debug logging enabled"
+        
+      - name: "{{ENV_NAME_2}}"  # e.g., "Production"
+        purpose: "{{ENV_PURPOSE_2}}"  # e.g., "Live system serving users"
+        characteristics:
+          - "{{CHAR_1}}"  # e.g., "High availability deployment"
+          - "{{CHAR_2}}"  # e.g., "Real external services"
+          - "{{CHAR_3}}"  # e.g., "Optimized performance"
+    
+    # Infrastructure components
+    infrastructure:
+      compute:
+        - component: "{{COMPUTE_COMPONENT_1}}"  # e.g., "Application Servers"
+          type: "{{COMPUTE_TYPE_1}}"  # e.g., "Container"
+          specifications: "{{COMPUTE_SPECS_1}}"  # e.g., "2 CPU, 4GB RAM"
+          scaling: "{{SCALING_1}}"  # e.g., "Horizontal auto-scaling"
+          
+      storage:
+        - component: "{{STORAGE_COMPONENT_1}}"  # e.g., "Primary Database"
+          type: "{{STORAGE_TYPE_1}}"  # e.g., "PostgreSQL"
+          specifications: "{{STORAGE_SPECS_1}}"  # e.g., "100GB SSD, IOPS 3000"
+          backup: "{{BACKUP_1}}"  # e.g., "Daily automated backups"
+          
+      networking:
+        - component: "{{NETWORK_COMPONENT_1}}"  # e.g., "Load Balancer"
+          type: "{{NETWORK_TYPE_1}}"  # e.g., "Application Load Balancer"
+          configuration: "{{NETWORK_CONFIG_1}}"  # e.g., "Round-robin with health checks"
+    
+    # Deployment strategy
+    deployment_strategy:
+      approach: "{{DEPLOYMENT_APPROACH}}"  # e.g., "Blue-Green deployment"
+      automation: "{{DEPLOYMENT_AUTOMATION}}"  # e.g., "GitLab CI/CD"
+      rollback: "{{ROLLBACK_STRATEGY}}"  # e.g., "Automated rollback on health check failure"
+      monitoring: "{{DEPLOYMENT_MONITORING}}"  # e.g., "Real-time deployment metrics"
+
+# Architecture decisions
+architecture_decisions:
+  - decision_id: "AD001"
+    title: "{{DECISION_TITLE_1}}"  # e.g., "Use JWT for Authentication"
+    status: "{{DECISION_STATUS_1}}"  # e.g., "Accepted"
+    date: "{{DECISION_DATE_1}}"
+    
+    context: "{{DECISION_CONTEXT_1}}"  # e.g., "Need stateless authentication for scalability"
+    decision: "{{DECISION_1}}"  # e.g., "Implement JWT-based authentication"
+    rationale: "{{DECISION_RATIONALE_1}}"  # e.g., "JWT provides stateless authentication, supports distributed systems"
+    
+    alternatives_considered:
+      - alternative: "{{ALTERNATIVE_1}}"  # e.g., "Session-based authentication"
+        pros: ["{{PRO_1}}", "{{PRO_2}}"]  # e.g., ["Simple implementation", "Server-side control"]
+        cons: ["{{CON_1}}", "{{CON_2}}"]  # e.g., ["Requires shared session store", "Scalability issues"]
+        
+    consequences:
+      positive: ["{{POS_1}}", "{{POS_2}}"]  # e.g., ["Stateless design", "Better scalability"]
+      negative: ["{{NEG_1}}", "{{NEG_2}}"]  # e.g., ["Token management complexity", "Security considerations"]
+      
+    implementation_notes: "{{IMPL_NOTES_1}}"  # e.g., "Use RS256 algorithm, 15-minute expiry"
+
+# Technology stack
+technology_stack:
+  # Programming languages
+  languages:
+    primary: "{{PRIMARY_LANGUAGE}}"  # e.g., "Python 3.12"
+    secondary: ["{{SECONDARY_1}}", "{{SECONDARY_2}}"]  # e.g., ["JavaScript", "SQL"]
+    
+  # Frameworks and libraries
+  frameworks:
+    web: "{{WEB_FRAMEWORK}}"  # e.g., "FastAPI"
+    orm: "{{ORM_FRAMEWORK}}"  # e.g., "SQLAlchemy"
+    testing: "{{TESTING_FRAMEWORK}}"  # e.g., "pytest"
+    validation: "{{VALIDATION_FRAMEWORK}}"  # e.g., "Pydantic"
+    
+  # Databases
+  databases:
+    primary: "{{PRIMARY_DB}}"  # e.g., "PostgreSQL 15"
+    cache: "{{CACHE_DB}}"  # e.g., "Redis 7"
+    search: "{{SEARCH_DB}}"  # e.g., "Elasticsearch"
+    
+  # Infrastructure
+  infrastructure:
+    containerization: "{{CONTAINER_TECH}}"  # e.g., "Docker"
+    orchestration: "{{ORCHESTRATION}}"  # e.g., "Kubernetes"
+    cloud: "{{CLOUD_PROVIDER}}"  # e.g., "AWS"
+    monitoring: "{{MONITORING_STACK}}"  # e.g., "Prometheus + Grafana"
+
+# Non-functional requirements mapping
+nfr_mapping:
+  performance:
+    requirement: "{{PERF_REQUIREMENT}}"  # e.g., "Response time < 100ms"
+    architectural_support: "{{PERF_SUPPORT}}"  # e.g., "Caching layer, optimized database queries"
+    validation: "{{PERF_VALIDATION}}"  # e.g., "Load testing and performance monitoring"
+    
+  security:
+    requirement: "{{SECURITY_REQUIREMENT}}"  # e.g., "Secure authentication and authorization"
+    architectural_support: "{{SECURITY_SUPPORT}}"  # e.g., "JWT tokens, RBAC, input validation"
+    validation: "{{SECURITY_VALIDATION}}"  # e.g., "Security testing and code review"
+    
+  scalability:
+    requirement: "{{SCALABILITY_REQUIREMENT}}"  # e.g., "Support 10x current load"
+    architectural_support: "{{SCALABILITY_SUPPORT}}"  # e.g., "Horizontal scaling, load balancing"
+    validation: "{{SCALABILITY_VALIDATION}}"  # e.g., "Stress testing and capacity planning"
+
+# Architecture validation
+architecture_validation:
+  consistency_checks:
+    - "Architecture supports all functional requirements"
+    - "Quality attributes are addressed by design"
+    - "Component interactions are well-defined"
+    - "Technology choices align with constraints"
+    
+  feasibility_checks:
+    - "Performance targets are achievable"
+    - "Scalability requirements are met"
+    - "Security controls are comprehensive"
+    - "Deployment strategy is realistic"
+    
+  completeness_checks:
+    - "All architectural layers are defined"
+    - "Cross-cutting concerns are addressed"
+    - "Component responsibilities are clear"
+    - "Data flow is completely specified"
+
+# Next phase preparation
+next_phase_inputs:
+  component_design_requirements:
+    - "{{COMPONENT_REQ_1}}"  # e.g., "Detailed AuthService interface design"
+    - "{{COMPONENT_REQ_2}}"  # e.g., "User repository implementation specification"
+    - "{{COMPONENT_REQ_3}}"  # e.g., "JWT token manager design"
+    
+  integration_specifications:
+    - "{{INTEGRATION_SPEC_1}}"  # e.g., "Email service integration pattern"
+    - "{{INTEGRATION_SPEC_2}}"  # e.g., "Database connection management"
+    
+  performance_targets:
+    - "{{PERF_TARGET_1}}"  # e.g., "Database query response time < 10ms"
+    - "{{PERF_TARGET_2}}"  # e.g., "Memory usage < 256MB per instance"

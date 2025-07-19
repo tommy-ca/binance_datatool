@@ -1,0 +1,523 @@
+# Legacy Cryptocurrency Data Workflows - Functional Requirements
+# Phase 1: Specifications | EARS + BDD Integration | Extracted from Legacy Codebase
+# ================================================================
+
+functional_requirements:
+  # Feature identification
+  feature_id: "LEGACY-CRYPTO-WORKFLOWS"
+  feature_name: "Legacy Cryptocurrency Data Processing Workflows"
+  version: "1.0.0"
+  created_date: "2025-01-19"
+  created_by: "Legacy Analysis Team"
+  
+  # Business context
+  business_value: "Preserve and enhance proven cryptocurrency data processing workflows with 100% functional compatibility"
+  business_priority: "must_have"
+  target_users: ["Data Engineers", "Quantitative Analysts", "Trading Systems", "Research Teams"]
+  success_metrics:
+    - metric: "Data Processing Throughput"
+      target: "5-10x improvement over legacy scripts"
+    - metric: "Functional Compatibility"
+      target: "100% of legacy operations supported"
+    - metric: "Error Rate Reduction"
+      target: "90% fewer processing failures"
+
+# EARS (Easy Approach to Requirements Syntax) Patterns
+# Industry standard requirements extracted from legacy workflows
+ears_requirements:
+  # Pattern 1: Ubiquitous Requirements (always true)
+  ubiquitous:
+    - id: "UBIQ001"
+      requirement: "The system shall support three market types: spot trading, USD-M futures, and Coin-M futures"
+      rationale: "Core trading markets supported by Binance exchange"
+      verification: "Market type enumeration testing"
+      priority: "must_have"
+      legacy_source: "config.py TradeType definitions"
+      
+    - id: "UBIQ002"
+      requirement: "The system shall use Parquet format for all processed data storage"
+      rationale: "Efficient columnar storage format for time series data"
+      verification: "File format validation testing"
+      priority: "must_have"
+      legacy_source: "All generate modules use .pqt extension"
+      
+    - id: "UBIQ003"
+      requirement: "The system shall maintain UTC timezone with millisecond precision for all timestamps"
+      rationale: "Consistent time representation across global markets"
+      verification: "Timestamp format validation"
+      priority: "must_have"
+      legacy_source: "Polars datetime handling in legacy modules"
+      
+    - id: "UBIQ004"
+      requirement: "The system shall exclude stablecoins and leveraged tokens from default symbol processing"
+      rationale: "Focus on primary trading pairs for market analysis"
+      verification: "Symbol filtering validation"
+      priority: "must_have"
+      legacy_source: "Symbol filtering logic in api/binance.py"
+
+  # Pattern 2: Event-Driven Requirements (trigger → response)
+  event_driven:
+    - id: "EVENT001"
+      requirement: "When AWS data is unavailable, the system shall automatically fallback to Binance API data retrieval"
+      trigger: "AWS S3 data source returns 404 or network timeout"
+      system_response: "switch to Binance REST API with same parameters"
+      performance_constraint: "within 5 seconds of failure detection"
+      rationale: "Ensure continuous data availability from multiple sources"
+      verification: "Failover testing with simulated AWS outages"
+      priority: "must_have"
+      legacy_source: "api_download.sh script pattern"
+      
+    - id: "EVENT002"
+      requirement: "When processing kline data, the system shall calculate VWAP as quote_volume divided by volume"
+      trigger: "kline data processing with VWAP calculation enabled"
+      system_response: "compute average price and add avg_price_{interval} column"
+      accuracy_constraint: "maintain 8 decimal places precision"
+      rationale: "Volume-weighted average price for market analysis"
+      verification: "VWAP calculation accuracy testing"
+      priority: "must_have"
+      legacy_source: "generate/kline.py VWAP calculation logic"
+      
+    - id: "EVENT003"
+      requirement: "When detecting data gaps, the system shall identify gaps exceeding minimum time AND price change thresholds"
+      trigger: "gap detection analysis on time series data"
+      system_response: "flag gaps meeting both minimum days and price change criteria"
+      algorithm_constraint: "configurable thresholds for time and price"
+      rationale: "Identify significant market disruptions requiring data splitting"
+      verification: "Gap detection algorithm testing with known gaps"
+      priority: "must_have"
+      legacy_source: "Gap detection logic in legacy generate modules"
+      
+    - id: "EVENT004"
+      requirement: "When network failures occur, the system shall implement exponential backoff retry with maximum 3 attempts"
+      trigger: "HTTP request failure or timeout"
+      system_response: "retry with exponential delay: 1s, 2s, 4s"
+      resilience_constraint: "maximum 3 retry attempts before failure"
+      rationale: "Handle temporary network issues gracefully"
+      verification: "Network failure simulation testing"
+      priority: "must_have"
+      legacy_source: "Retry logic patterns in aws/ and api/ modules"
+      
+    - id: "EVENT005"
+      requirement: "When merging AWS and API data, the system shall remove duplicates based on timestamp and sort chronologically"
+      trigger: "data merge operation with multiple sources"
+      system_response: "concatenate, deduplicate by timestamp, sort ascending"
+      performance_constraint: "linear time complexity relative to input size"
+      rationale: "Ensure data consistency and chronological ordering"
+      verification: "Data merge validation with duplicate test data"
+      priority: "must_have"
+      legacy_source: "Data merging logic in generate/ modules"
+
+  # Pattern 3: State-Driven Requirements (condition → continuous response)
+  state_driven:
+    - id: "STATE001"
+      requirement: "While processing multiple symbols, the system shall utilize multiprocessing with CPU core count minus 2 workers"
+      precondition: "batch processing operation with multiple symbols"
+      system_response: "maintain worker pool with configurable parallelism"
+      resource_constraint: "reserve 2 CPU cores for system operations"
+      rationale: "Optimize processing speed while maintaining system responsiveness"
+      verification: "Parallel processing performance testing"
+      priority: "should_have"
+      legacy_source: "Multiprocessing patterns in legacy scripts"
+      
+    - id: "STATE002"
+      requirement: "While downloading large datasets, the system shall display real-time progress tracking"
+      precondition: "long-running download or processing operation"
+      system_response: "update progress bars with completion percentage and ETA"
+      usability_constraint: "update frequency of 1-2 times per second"
+      rationale: "Provide user feedback for long-running operations"
+      verification: "Progress tracking UI testing"
+      priority: "should_have"
+      legacy_source: "tqdm progress bars in legacy modules"
+      
+    - id: "STATE003"
+      requirement: "While processing funding rates, the system shall only consider rates with absolute value greater than 1e-6"
+      precondition: "funding rate data processing for futures contracts"
+      system_response: "filter out rates below significance threshold"
+      accuracy_constraint: "maintain precision to 0.0001% funding rate"
+      rationale: "Filter negligible funding rates for meaningful analysis"
+      verification: "Funding rate filtering validation"
+      priority: "should_have"
+      legacy_source: "Funding rate processing in aws/funding/ modules"
+
+  # Pattern 4: Optional Feature Requirements (feature-dependent)
+  optional_feature:
+    - id: "OPT001"
+      requirement: "Where gap splitting is enabled, the system shall create separate datasets for each gap-separated segment"
+      feature_condition: "--split-gaps flag is provided"
+      system_response: "generate multiple output files with SP{i}_{symbol} naming convention"
+      rationale: "Enable analysis of distinct market periods"
+      verification: "Gap splitting functionality testing"
+      priority: "could_have"
+      legacy_source: "Gap splitting logic in gen_kline.sh"
+      
+    - id: "OPT002"
+      requirement: "Where VWAP calculation is enabled, the system shall add average price columns for specified intervals"
+      feature_condition: "--with-vwap flag is provided"
+      system_response: "compute and include avg_price_{interval} columns in output"
+      rationale: "Provide volume-weighted pricing analysis capability"
+      verification: "VWAP feature toggle testing"
+      priority: "could_have"
+      legacy_source: "VWAP feature flag in gen_kline.sh"
+      
+    - id: "OPT003"
+      requirement: "Where funding rate integration is enabled, the system shall join futures klines with funding rate data"
+      feature_condition: "--with-funding-rates flag is provided for futures data"
+      system_response: "join kline data with corresponding funding rates by timestamp"
+      rationale: "Enable correlation analysis between prices and funding costs"
+      verification: "Funding rate join functionality testing"
+      priority: "could_have"
+      legacy_source: "Funding rate join logic in gen_kline.sh"
+      
+    - id: "OPT004"
+      requirement: "Where resampling is configured, the system shall aggregate 1-minute data to higher timeframes with offset support"
+      feature_condition: "resampling operation with target timeframe specification"
+      system_response: "aggregate OHLCV data with configurable time offset"
+      rationale: "Support multiple timeframe analysis with custom alignment"
+      verification: "Resampling offset testing"
+      priority: "could_have"
+      legacy_source: "Resampling logic in resample.sh"
+
+  # Pattern 5: Unwanted Behavior Requirements (error conditions)
+  unwanted_behavior:
+    - id: "UNWANTED001"
+      requirement: "If SHA256 checksum validation fails, then the system shall delete corrupted files and re-download"
+      unwanted_condition: "downloaded file checksum mismatch"
+      system_response: "delete corrupted file and trigger re-download from source"
+      rationale: "Ensure data integrity and prevent corrupted data processing"
+      verification: "Checksum validation failure testing"
+      priority: "must_have"
+      legacy_source: "Checksum validation in aws/ modules"
+      
+    - id: "UNWANTED002"
+      requirement: "If API rate limits are exceeded, then the system shall pause requests and implement backoff strategy"
+      unwanted_condition: "HTTP 429 Too Many Requests response"
+      system_response: "pause API requests for rate limit reset period"
+      rationale: "Comply with exchange API usage policies"
+      verification: "Rate limit handling testing"
+      priority: "must_have"
+      legacy_source: "Rate limiting patterns in api/ modules"
+      
+    - id: "UNWANTED003"
+      requirement: "If disk space is insufficient, then the system shall log error and gracefully terminate processing"
+      unwanted_condition: "disk space below 1GB available"
+      system_response: "log disk space error and exit with appropriate error code"
+      rationale: "Prevent system instability due to storage exhaustion"
+      verification: "Disk space exhaustion testing"
+      priority: "must_have"
+      legacy_source: "Resource management patterns in legacy scripts"
+      
+    - id: "UNWANTED004"
+      requirement: "If symbol filtering excludes all symbols, then the system shall log warning and process default symbol set"
+      unwanted_condition: "all symbols filtered out by exclusion criteria"
+      system_response: "log warning and fallback to top 10 volume symbols"
+      rationale: "Ensure processing continues with reasonable defaults"
+      verification: "Empty symbol set handling testing"
+      priority: "should_have"
+      legacy_source: "Symbol filtering fallback logic"
+
+# BDD (Behavior-Driven Development) Scenarios
+# Executable specifications derived from legacy workflow patterns
+bdd_scenarios:
+  feature: "Legacy Cryptocurrency Data Processing Workflows"
+  background: |
+    Given the crypto data processing system is running
+    And the Binance exchange API is available
+    And AWS S3 public data buckets are accessible
+    And local storage has sufficient space
+    
+  scenarios:
+    - name: "AWS data download with fallback to API"
+      id: "BDD001"
+      tags: ["data-ingestion", "failover", "aws", "api"]
+      gherkin: |
+        Scenario: System falls back to API when AWS data is unavailable
+          Given AWS S3 contains kline data for BTCUSDT up to 2023-12-01
+          And AWS S3 is missing data for BTCUSDT after 2023-12-01
+          When the user requests BTCUSDT kline data for December 2023
+          Then the system should download available data from AWS S3
+          And the system should detect missing data after 2023-12-01
+          And the system should automatically fetch missing data via Binance API
+          And the system should merge AWS and API data into single dataset
+          And the final dataset should be complete and chronologically sorted
+      
+      automation:
+        test_file: "tests/features/data_ingestion.feature"
+        step_definitions: "tests/steps/ingestion_steps.py"
+        priority: "high"
+      
+    - name: "VWAP calculation with funding rate integration"
+      id: "BDD002"
+      tags: ["data-processing", "vwap", "funding-rates"]
+      gherkin: |
+        Scenario: System calculates VWAP and joins funding rates for futures data
+          Given kline data exists for BTCUSDT perpetual futures for January 2024
+          And funding rate data exists for BTCUSDT for the same period
+          When the user generates klines with VWAP and funding rates enabled
+          Then the system should calculate avg_price_1m as quote_volume/volume
+          And the system should join funding rates by timestamp
+          And the output should include both kline and funding rate columns
+          And the VWAP calculations should maintain 8 decimal precision
+          And the funding rates should only include values > 0.0001%
+      
+      automation:
+        test_file: "tests/features/data_processing.feature"
+        step_definitions: "tests/steps/processing_steps.py"
+        priority: "high"
+      
+    - name: "Gap detection and data splitting"
+      id: "BDD003"
+      tags: ["data-quality", "gap-detection", "splitting"]
+      gherkin: |
+        Scenario: System detects significant gaps and splits data appropriately
+          Given ETHUSDT kline data with a 7-day gap in March 2024
+          And the price change during the gap exceeds 5%
+          And gap splitting is enabled
+          When the user processes ETHUSDT data for March 2024
+          Then the system should detect the significant gap
+          And the system should split data into pre-gap and post-gap segments
+          And the system should generate separate files: SP1_ETHUSDT and SP2_ETHUSDT
+          And each segment should maintain complete kline data integrity
+          And the gap information should be logged for analysis
+      
+      automation:
+        test_file: "tests/features/gap_detection.feature"
+        step_definitions: "tests/steps/gap_detection_steps.py"
+        priority: "medium"
+        
+    - name: "Multi-timeframe resampling with offset"
+      id: "BDD004"
+      tags: ["resampling", "timeframes", "performance"]
+      gherkin: |
+        Scenario: System resamples 1m data to multiple timeframes with offset
+          Given 1-minute kline data for ADAUSDT for a full week
+          And resampling is configured for 5m and 1h timeframes
+          And a 2-minute offset is specified for 5m resampling
+          When the user executes resampling workflow
+          Then the system should create 5m bars starting at :02, :07, :12, etc.
+          And the system should create 1h bars aligned to hour boundaries
+          And the 5m data should properly aggregate OHLCV values
+          And the 1h data should properly aggregate OHLCV values
+          And the processing should complete within linear time complexity
+      
+      automation:
+        test_file: "tests/features/resampling.feature"
+        step_definitions: "tests/steps/resampling_steps.py"
+        priority: "medium"
+        
+    - name: "Parallel processing with resource management"
+      id: "BDD005"
+      tags: ["performance", "parallel", "resource-management"]
+      gherkin: |
+        Scenario: System processes multiple symbols in parallel efficiently
+          Given a list of 50 cryptocurrency symbols
+          And the system has 8 CPU cores available
+          And each symbol has 30 days of 1m kline data
+          When the user starts batch processing for all symbols
+          Then the system should create 6 worker processes (8-2 reserved)
+          And the system should distribute symbols across workers
+          And the system should display real-time progress for each worker
+          And the system should complete processing 5-10x faster than sequential
+          And the system should maintain memory usage below 80% of available RAM
+      
+      automation:
+        test_file: "tests/features/parallel_processing.feature"
+        step_definitions: "tests/steps/parallel_steps.py"
+        priority: "low"
+
+# Requirements Traceability Matrix
+traceability:
+  business_requirements:
+    - br_id: "BR001"
+      description: "Maintain 100% functional compatibility with legacy shell scripts"
+      ears_requirements: ["UBIQ001", "UBIQ002", "EVENT001", "EVENT002", "EVENT003"]
+      bdd_scenarios: ["BDD001", "BDD002", "BDD003"]
+      
+    - br_id: "BR002"
+      description: "Achieve 5-10x performance improvement over legacy implementation"
+      ears_requirements: ["STATE001", "STATE002", "EVENT005"]
+      bdd_scenarios: ["BDD005"]
+      
+    - br_id: "BR003"
+      description: "Preserve all data processing algorithms and outputs"
+      ears_requirements: ["EVENT002", "EVENT003", "OPT001", "OPT002", "OPT003"]
+      bdd_scenarios: ["BDD002", "BDD003", "BDD004"]
+      
+  technical_requirements:
+    - tr_id: "TR001"
+      description: "Support all three Binance market types with appropriate data types"
+      ears_requirements: ["UBIQ001", "EVENT001", "STATE003"]
+      bdd_scenarios: ["BDD001", "BDD002"]
+      
+    - tr_id: "TR002"
+      description: "Implement robust error handling and data validation"
+      ears_requirements: ["UNWANTED001", "UNWANTED002", "UNWANTED003", "UNWANTED004"]
+      verification: "Error handling and recovery testing"
+      
+    - tr_id: "TR003"
+      description: "Maintain efficient storage format and organization"
+      ears_requirements: ["UBIQ002", "UBIQ003", "EVENT005"]
+      verification: "Storage format and performance testing"
+      
+  compliance_requirements:
+    - cr_id: "CR001"
+      description: "Comply with Binance API rate limits and usage policies"
+      standard: "Binance API Documentation v3"
+      ears_requirements: ["UNWANTED002", "EVENT004"]
+      verification: "API compliance testing"
+
+# Quality Attributes Requirements
+quality_attributes:
+  performance:
+    - attribute: "Processing Throughput"
+      requirement: "System shall process minimum 1,000 kline records per second per CPU core"
+      measurement: "Throughput benchmarking with real market data"
+      ears_ref: ["STATE001", "EVENT005"]
+      
+    - attribute: "Memory Efficiency"
+      requirement: "System shall process datasets larger than available RAM using streaming"
+      measurement: "Memory usage monitoring during large dataset processing"
+      ears_ref: ["STATE001"]
+      
+    - attribute: "Parallel Scalability"
+      requirement: "System shall achieve near-linear speedup with additional CPU cores"
+      measurement: "Scalability testing with varying core counts"
+      ears_ref: ["STATE001"]
+      
+  reliability:
+    - attribute: "Data Integrity"
+      requirement: "System shall maintain 100% data accuracy through checksum validation"
+      measurement: "Data integrity verification testing"
+      ears_ref: ["UNWANTED001"]
+      
+    - attribute: "Fault Tolerance"
+      requirement: "System shall gracefully handle network failures and API outages"
+      measurement: "Failure injection testing"
+      ears_ref: ["EVENT001", "EVENT004", "UNWANTED002"]
+      
+    - attribute: "Error Recovery"
+      requirement: "System shall automatically recover from transient failures"
+      measurement: "Recovery time and success rate measurement"
+      ears_ref: ["EVENT004", "UNWANTED001"]
+      
+  usability:
+    - attribute: "Progress Visibility"
+      requirement: "System shall provide real-time feedback for long-running operations"
+      measurement: "User experience testing with progress tracking"
+      ears_ref: ["STATE002"]
+      
+    - attribute: "Configuration Flexibility"
+      requirement: "System shall support command-line configuration for all processing options"
+      measurement: "Configuration option coverage testing"
+      ears_ref: ["OPT001", "OPT002", "OPT003", "OPT004"]
+
+# Stakeholder Acceptance Criteria
+stakeholder_acceptance:
+  data_engineers:
+    criteria:
+      - "All legacy shell script functionality is preserved"
+      - "Processing performance improves by minimum 5x"
+      - "Data output format remains compatible"
+      - "Error handling is more robust than legacy"
+    approval_status: "pending"
+    
+  quantitative_analysts:
+    criteria:
+      - "VWAP calculations maintain same precision as legacy"
+      - "Funding rate integration works identically"
+      - "Gap detection produces same results as legacy"
+      - "Resampling maintains same aggregation logic"
+    approval_status: "pending"
+    
+  trading_systems:
+    criteria:
+      - "Data delivery latency is minimized"
+      - "System handles high-frequency data ingestion"
+      - "API rate limits are properly managed"
+      - "Data availability is maximized through failover"
+    approval_status: "pending"
+    
+  research_teams:
+    criteria:
+      - "Historical data access is preserved"
+      - "Custom analysis workflows are supported"
+      - "Data quality is maintained or improved"
+      - "Processing transparency is maintained"
+    approval_status: "pending"
+
+# Validation and Verification
+validation:
+  functional_validation:
+    - check: "All EARS requirements map to legacy functionality"
+      status: "pending"
+    - check: "BDD scenarios cover critical workflow paths"
+      status: "pending"
+    - check: "Optional features preserve legacy behavior"
+      status: "pending"
+      
+  performance_validation:
+    - check: "Processing throughput meets 5-10x improvement target"
+      status: "pending"
+    - check: "Memory usage remains efficient for large datasets"
+      status: "pending"
+    - check: "Parallel processing scales linearly with CPU cores"
+      status: "pending"
+      
+  compatibility_validation:
+    - check: "Output data format matches legacy exactly"
+      status: "pending"
+    - check: "File organization structure is preserved"
+      status: "pending"
+    - check: "API integration maintains same behavior"
+      status: "pending"
+      
+  integration_validation:
+    - check: "All legacy workflows can be executed via modern system"
+      status: "pending"
+    - check: "Data quality and integrity are maintained"
+      status: "pending"
+    - check: "Error conditions produce same responses as legacy"
+      status: "pending"
+
+# Tools and Automation
+tools_integration:
+  legacy_compatibility_tools:
+    - tool: "Legacy Workflow Tester"
+      integration: "Automated comparison between legacy and modern outputs"
+      validation: "Byte-level data comparison"
+      status: "planned"
+    - tool: "Performance Benchmarker"
+      integration: "Side-by-side performance measurement"
+      metrics: "Throughput, memory usage, processing time"
+      status: "planned"
+      
+  testing_tools:
+    - tool: "BDD Test Framework"
+      integration: "pytest-bdd with market data fixtures"
+      coverage: "All critical workflow scenarios"
+      status: "planned"
+    - tool: "Data Quality Validator"
+      integration: "Automated data integrity checking"
+      validation: "Schema, checksums, statistical properties"
+      status: "planned"
+
+# Next Phase Preparation
+next_phase_inputs:
+  design_considerations:
+    - "Modern workflow orchestration architecture (from EVENT requirements)"
+    - "Parallel processing and resource management design (from STATE requirements)"
+    - "Data storage and retrieval optimization (from UBIQ requirements)"
+    - "Error handling and recovery mechanisms (from UNWANTED requirements)"
+    
+  technical_constraints:
+    - "Binance API rate limits and usage policies (from UNWANTED002)"
+    - "Storage format compatibility requirements (from UBIQ002)"
+    - "Memory efficiency constraints for large datasets (from STATE001)"
+    - "Network resilience and failover design (from EVENT001)"
+    
+  testing_requirements:
+    - "Legacy compatibility test suite with real market data"
+    - "Performance benchmarking against legacy implementation"
+    - "Data quality validation with historical datasets"
+    - "Error injection testing for robustness validation"
+
+# Enhanced specifications with EARS patterns, BDD integration, and comprehensive traceability derived from legacy cryptocurrency data processing workflows

@@ -1,0 +1,408 @@
+{
+  "metadata": {
+    "generated_date": "2025-01-19",
+    "archive_base_url": "s3://data.binance.vision/data/",
+    "description": "Comprehensive availability matrix for Binance public archive data",
+    "data_format": "ZIP files with daily/monthly partitions",
+    "checksum_format": "Each ZIP file has corresponding .CHECKSUM file"
+  },
+  "markets": {
+    "spot": {
+      "description": "Spot trading market data",
+      "base_path": "s3://data.binance.vision/data/spot/",
+      "partition_types": ["daily", "monthly"],
+      "data_types": {
+        "klines": {
+          "description": "OHLCV candlestick data",
+          "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"],
+          "available_partitions": ["daily", "monthly"]
+        },
+        "trades": {
+          "description": "Individual trade data",
+          "intervals": ["raw"],
+          "available_partitions": ["daily", "monthly"]
+        },
+        "aggTrades": {
+          "description": "Aggregated trade data",
+          "intervals": ["raw"],
+          "available_partitions": ["daily", "monthly"]
+        }
+      },
+      "sample_symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOTUSDT", "LINKUSDT"],
+      "file_naming_pattern": {
+        "daily": "{symbol}-{data_type}-{date}.zip (e.g., BTCUSDT-1m-2023-01-01.zip)",
+        "monthly": "{symbol}-{data_type}-{year}-{month}.zip (e.g., BTCUSDT-1m-2023-01.zip)"
+      },
+      "historical_data_start": "2017-08-17"
+    },
+    "futures": {
+      "um": {
+        "description": "USD-Margined futures market data",
+        "base_path": "s3://data.binance.vision/data/futures/um/",
+        "partition_types": ["daily", "monthly"],
+        "data_types": {
+          "klines": {
+            "description": "OHLCV candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "trades": {
+            "description": "Individual trade data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "aggTrades": {
+            "description": "Aggregated trade data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "bookDepth": {
+            "description": "Order book depth snapshots",
+            "intervals": ["raw"],
+            "available_partitions": ["daily"],
+            "note": "High-frequency order book data"
+          },
+          "bookTicker": {
+            "description": "Best bid/ask price data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "indexPriceKlines": {
+            "description": "Index price candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "markPriceKlines": {
+            "description": "Mark price candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "premiumIndexKlines": {
+            "description": "Premium index candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "fundingRate": {
+            "description": "Funding rate data",
+            "intervals": ["8h"],
+            "available_partitions": ["monthly"],
+            "note": "Funding rates paid every 8 hours"
+          },
+          "metrics": {
+            "description": "Market metrics and statistics",
+            "intervals": ["raw"],
+            "available_partitions": ["daily"],
+            "note": "Various market performance metrics"
+          }
+        },
+        "sample_symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOGEUSDT", "SOLUSDT"],
+        "quarterly_contracts": {
+          "description": "Quarterly settlement contracts with expiration dates",
+          "pattern": "{symbol}_{YYMMDD} (e.g., BTCUSDT_240329, ETHUSDT_251226)",
+          "note": "Contracts expire on specific quarterly dates"
+        },
+        "historical_data_start": "2019-12-31"
+      },
+      "cm": {
+        "description": "Coin-Margined futures market data",
+        "base_path": "s3://data.binance.vision/data/futures/cm/",
+        "partition_types": ["daily", "monthly"],
+        "data_types": {
+          "klines": {
+            "description": "OHLCV candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "trades": {
+            "description": "Individual trade data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "aggTrades": {
+            "description": "Aggregated trade data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "bookDepth": {
+            "description": "Order book depth snapshots",
+            "intervals": ["raw"],
+            "available_partitions": ["daily"]
+          },
+          "bookTicker": {
+            "description": "Best bid/ask price data",
+            "intervals": ["raw"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "indexPriceKlines": {
+            "description": "Index price candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "markPriceKlines": {
+            "description": "Mark price candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "premiumIndexKlines": {
+            "description": "Premium index candlestick data",
+            "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+            "available_partitions": ["daily", "monthly"]
+          },
+          "fundingRate": {
+            "description": "Funding rate data",
+            "intervals": ["8h"],
+            "available_partitions": ["monthly"]
+          },
+          "liquidationSnapshot": {
+            "description": "Liquidation event snapshots",
+            "intervals": ["raw"],
+            "available_partitions": ["daily"]
+          },
+          "metrics": {
+            "description": "Market metrics and statistics",
+            "intervals": ["raw"],
+            "available_partitions": ["daily"]
+          }
+        },
+        "sample_symbols": ["BTCUSD_PERP", "ETHUSD_PERP", "BNBUSD_PERP", "ADAUSD_PERP", "LINKUSD_PERP"],
+        "contract_types": {
+          "perpetual": {
+            "description": "Perpetual swap contracts",
+            "pattern": "{symbol}_PERP (e.g., BTCUSD_PERP, ETHUSD_PERP)"
+          },
+          "quarterly": {
+            "description": "Quarterly settlement contracts",
+            "pattern": "{symbol}_{YYMMDD} (e.g., BTCUSD_240329, ETHUSD_251226)"
+          }
+        },
+        "historical_data_start": "2020-08-11"
+      }
+    },
+    "options": {
+      "description": "Options market data",
+      "base_path": "s3://data.binance.vision/data/option/",
+      "partition_types": ["daily"],
+      "data_types": {
+        "BVOLIndex": {
+          "description": "Bitcoin Volatility Index data",
+          "intervals": ["raw"],
+          "available_partitions": ["daily"],
+          "symbols": ["BTCBVOLUSDT", "ETHBVOLUSDT"]
+        },
+        "EOHSummary": {
+          "description": "End of Hour summary data",
+          "intervals": ["hourly"],
+          "available_partitions": ["daily"]
+        }
+      },
+      "note": "Limited options data available compared to spot and futures",
+      "historical_data_start": "Available for limited symbols and timeframes"
+    }
+  },
+  "availability_matrix": [
+    {
+      "market": "spot",
+      "data_type": "klines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/spot/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "spot",
+      "data_type": "trades",
+      "intervals": ["raw"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/spot/{partition}/{data_type}/{symbol}/"
+    },
+    {
+      "market": "spot",
+      "data_type": "aggTrades",
+      "intervals": ["raw"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/spot/{partition}/{data_type}/{symbol}/"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "klines",
+      "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "bookDepth",
+      "intervals": ["raw"],
+      "partitions": ["daily"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/",
+      "note": "High-frequency data, daily partition only"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "fundingRate",
+      "intervals": ["8h"],
+      "partitions": ["monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/",
+      "note": "Monthly partition only, 8-hour frequency"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "indexPriceKlines",
+      "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "markPriceKlines", 
+      "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "premiumIndexKlines",
+      "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/um/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "klines",
+      "intervals": ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1mo"],
+      "partitions": ["daily", "monthly"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/{data_type}/{symbol}/{interval}/"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "liquidationSnapshot",
+      "intervals": ["raw"],
+      "partitions": ["daily"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/{data_type}/{symbol}/",
+      "note": "Coin-margined futures specific data type"
+    },
+    {
+      "market": "options",
+      "data_type": "BVOLIndex",
+      "intervals": ["raw"],
+      "partitions": ["daily"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/option/{partition}/{data_type}/",
+      "note": "Volatility index for BTC and ETH"
+    },
+    {
+      "market": "options",
+      "data_type": "EOHSummary",
+      "intervals": ["hourly"],
+      "partitions": ["daily"],
+      "available": true,
+      "path_pattern": "s3://data.binance.vision/data/option/{partition}/{data_type}/",
+      "note": "End of hour summary data"
+    }
+  ],
+  "file_naming_conventions": {
+    "daily_files": {
+      "pattern": "{symbol}-{data_type}-{YYYY-MM-DD}.zip",
+      "examples": [
+        "BTCUSDT-1m-2023-01-01.zip",
+        "ETHUSDT-trades-2023-01-01.zip",
+        "BTCUSD_PERP-klines-2023-01-01.zip"
+      ]
+    },
+    "monthly_files": {
+      "pattern": "{symbol}-{data_type}-{YYYY-MM}.zip",
+      "examples": [
+        "BTCUSDT-1m-2023-01.zip",
+        "ETHUSDT-aggTrades-2023-01.zip",
+        "BTCUSDT-fundingRate-2023-01.zip"
+      ]
+    },
+    "klines_with_interval": {
+      "pattern": "{symbol}-{interval}-{date}.zip",
+      "examples": [
+        "BTCUSDT-1m-2023-01-01.zip",
+        "ETHUSDT-4h-2023-01.zip"
+      ]
+    },
+    "checksum_files": {
+      "pattern": "{original_filename}.CHECKSUM",
+      "description": "Each ZIP file has a corresponding checksum file for integrity verification"
+    }
+  },
+  "partition_schema": {
+    "daily": {
+      "description": "One file per day per symbol per data type",
+      "frequency": "Daily",
+      "use_case": "Recent data, detailed analysis, high-frequency trading",
+      "file_size": "Typically 50-500KB per file depending on symbol activity"
+    },
+    "monthly": {
+      "description": "One file per month per symbol per data type",
+      "frequency": "Monthly",
+      "use_case": "Historical analysis, backtesting, bulk downloads",
+      "file_size": "Typically 1-50MB per file depending on symbol activity"
+    }
+  },
+  "symbol_patterns": {
+    "spot": {
+      "pattern": "{BASE}{QUOTE}",
+      "examples": ["BTCUSDT", "ETHBTC", "BNBBUSD"],
+      "base_assets": ["BTC", "ETH", "BNB", "ADA", "DOT", "LINK", "SOL"],
+      "quote_assets": ["USDT", "BUSD", "BTC", "ETH", "BNB", "USDC", "FDUSD"]
+    },
+    "futures_um": {
+      "perpetual": {
+        "pattern": "{BASE}{QUOTE}",
+        "examples": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]
+      },
+      "quarterly": {
+        "pattern": "{BASE}{QUOTE}_{YYMMDD}",
+        "examples": ["BTCUSDT_240329", "ETHUSDT_251226"]
+      }
+    },
+    "futures_cm": {
+      "perpetual": {
+        "pattern": "{BASE}USD_PERP",
+        "examples": ["BTCUSD_PERP", "ETHUSD_PERP", "BNBUSD_PERP"]
+      },
+      "quarterly": {
+        "pattern": "{BASE}USD_{YYMMDD}",
+        "examples": ["BTCUSD_240329", "ETHUSD_251226"]
+      }
+    }
+  },
+  "data_coverage_summary": {
+    "total_markets": 3,
+    "total_data_types": 13,
+    "symbol_count_estimates": {
+      "spot": "2000+ active symbols",
+      "futures_um": "400+ active symbols", 
+      "futures_cm": "50+ active symbols",
+      "options": "Limited symbols (BTC, ETH volatility indices)"
+    },
+    "earliest_data": {
+      "spot": "2017-08-17",
+      "futures_um": "2019-12-31",
+      "futures_cm": "2020-08-11",
+      "options": "Limited historical data"
+    },
+    "update_frequency": "Daily uploads, typically available within 24 hours of trading day end"
+  },
+  "access_information": {
+    "public_access": true,
+    "authentication_required": false,
+    "rate_limits": "Standard S3 access limits apply",
+    "tools": ["s5cmd", "aws cli", "rclone", "direct S3 API"],
+    "cost": "Standard S3 data transfer costs apply for downloads"
+  }
+}

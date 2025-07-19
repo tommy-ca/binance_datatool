@@ -1,0 +1,75 @@
+{
+  "workflow_type": "archive_collection",
+  "matrix_path": "enhanced_binance_archive_matrix.json",
+  "output_directory": "output/enhanced_archive_data",
+  "markets": ["spot", "futures_um", "futures_cm", "options"],
+  "symbols": {
+    "spot": ["BTCUSDT", "ETHUSDT", "ADAUSDT"],
+    "futures_um": ["BTCUSDT", "ETHUSDT", "ADAUSDT"],
+    "futures_cm": ["BTCUSD_PERP", "ETHUSD_PERP"],
+    "options": ["BTC", "ETH"]
+  },
+  "data_types": [
+    "klines",
+    "trades", 
+    "aggTrades",
+    "fundingRate",
+    "premiumIndex",
+    "indexPriceKlines",
+    "markPriceKlines",
+    "bookDepth",
+    "bookTicker",
+    "liquidationSnapshot",
+    "metrics",
+    "BVOLIndex",
+    "EOHSummary"
+  ],
+  "intervals": {
+    "klines": ["1m", "5m", "15m", "1h", "4h", "1d"],
+    "indexPriceKlines": ["1m", "1h", "1d"],
+    "markPriceKlines": ["1m", "1h", "1d"],
+    "bookDepth": ["1s", "5s", "1m"],
+    "BVOLIndex": ["1m", "1h", "1d"]
+  },
+  "date_range": {
+    "start": "2025-07-15",
+    "end": "2025-07-16"
+  },
+  "partitions": ["daily"],
+  "max_parallel_downloads": 12,
+  "batch_size": 150,
+  "force_redownload": false,
+  "download_checksum": true,
+  "timeout_seconds": 600,
+  "part_size_mb": 100,
+  "enable_batch_mode": true,
+  "enable_resume": true,
+  "s5cmd_extra_args": ["--no-sign-request", "--retry-count=5", "--stat"],
+  "environment": "development",
+  "enable_monitoring": true,
+  "use_cloud_storage": false,
+  "local_data_dir": "output/enhanced_archive_data",
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "storage": {
+    "type": "local",
+    "compression": true,
+    "partition_format": "year/month/day",
+    "validate_checksums": true
+  },
+  "performance": {
+    "batch_size": 2000,
+    "memory_limit_mb": 4096,
+    "max_file_size_mb": 1000,
+    "concurrent_writers": 4
+  },
+  "enhanced_features": {
+    "auto_detect_available_data": true,
+    "skip_missing_symbols": true,
+    "progressive_retry": true,
+    "market_specific_optimization": true,
+    "intelligent_batching": true
+  }
+}

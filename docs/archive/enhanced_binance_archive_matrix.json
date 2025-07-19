@@ -1,0 +1,307 @@
+{
+  "description": "Comprehensive Binance Archive Data Availability Matrix - Enhanced 2025",
+  "last_updated": "2025-07-19",
+  "supported_markets": ["spot", "futures_um", "futures_cm", "options"],
+  "availability_matrix": [
+    {
+      "market": "spot",
+      "data_type": "klines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2017-08-17",
+      "notes": "K-line/candlestick data for spot trading pairs",
+      "url_pattern": "s3://data.binance.vision/data/spot/{partition}/klines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "spot",
+      "data_type": "trades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-08-01",
+      "notes": "Individual trade records for spot trading pairs",
+      "url_pattern": "s3://data.binance.vision/data/spot/{partition}/trades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-trades-{date}.zip"
+    },
+    {
+      "market": "spot",
+      "data_type": "aggTrades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-08-01",
+      "notes": "Aggregated trade data for spot trading pairs",
+      "url_pattern": "s3://data.binance.vision/data/spot/{partition}/aggTrades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-aggTrades-{date}.zip"
+    },
+    {
+      "market": "spot",
+      "data_type": "bookDepth",
+      "intervals": ["1s", "5s", "10s", "1m", "5m", "1h"],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Order book depth snapshots for spot pairs",
+      "url_pattern": "s3://data.binance.vision/data/spot/{partition}/bookDepth/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "spot",
+      "data_type": "bookTicker",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Best bid/ask price and quantity for spot pairs",
+      "url_pattern": "s3://data.binance.vision/data/spot/{partition}/bookTicker/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-bookTicker-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "klines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-09-08",
+      "notes": "K-line/candlestick data for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/klines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "trades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-09-08",
+      "notes": "Individual trade records for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/trades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-trades-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "aggTrades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-09-08",
+      "notes": "Aggregated trade data for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/aggTrades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-aggTrades-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "fundingRate",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-09-08",
+      "notes": "Funding rate data for USDT-M perpetual futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/fundingRate/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-fundingRate-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "premiumIndex",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2019-09-08",
+      "notes": "Premium index for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/premiumIndex/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-premiumIndex-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "metrics",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2020-01-01",
+      "notes": "Open interest, long-short ratios and other metrics for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/metrics/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-metrics-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "indexPriceKlines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-01-01",
+      "notes": "Index price klines for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/indexPriceKlines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "markPriceKlines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-01-01",
+      "notes": "Mark price klines for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/markPriceKlines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "bookDepth",
+      "intervals": ["1s", "5s", "10s", "1m", "5m", "1h"],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Order book depth snapshots for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/bookDepth/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "bookTicker",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Best bid/ask price and quantity for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/bookTicker/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-bookTicker-{date}.zip"
+    },
+    {
+      "market": "futures_um",
+      "data_type": "liquidationSnapshot",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2020-01-01",
+      "notes": "Liquidation data for USDT-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/um/{partition}/liquidationSnapshot/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-liquidationSnapshot-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "klines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "K-line/candlestick data for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/klines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "trades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Individual trade records for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/trades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-trades-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "aggTrades",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Aggregated trade data for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/aggTrades/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-aggTrades-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "fundingRate",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Funding rate data for COIN-M perpetual futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/fundingRate/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-fundingRate-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "premiumIndex",
+      "intervals": [null],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Premium index for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/premiumIndex/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-premiumIndex-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "indexPriceKlines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Index price klines for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/indexPriceKlines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "markPriceKlines",
+      "intervals": ["1s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"],
+      "partitions": ["daily", "monthly"],
+      "available_from": "2020-05-01",
+      "notes": "Mark price klines for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/markPriceKlines/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "bookDepth",
+      "intervals": ["1s", "5s", "10s", "1m", "5m", "1h"],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Order book depth snapshots for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/bookDepth/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "bookTicker",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2021-01-01",
+      "notes": "Best bid/ask price and quantity for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/bookTicker/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-bookTicker-{date}.zip"
+    },
+    {
+      "market": "futures_cm",
+      "data_type": "liquidationSnapshot",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2020-05-01",
+      "notes": "Liquidation data for COIN-M futures",
+      "url_pattern": "s3://data.binance.vision/data/futures/cm/{partition}/liquidationSnapshot/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-liquidationSnapshot-{date}.zip"
+    },
+    {
+      "market": "options",
+      "data_type": "BVOLIndex",
+      "intervals": ["1m", "5m", "1h", "1d"],
+      "partitions": ["daily"],
+      "available_from": "2022-01-01",
+      "notes": "Binance Volatility Index for options",
+      "url_pattern": "s3://data.binance.vision/data/option/{partition}/BVOLIndex/{symbol}/{interval}/{filename}",
+      "filename_pattern": "{symbol}-{interval}-{date}.zip"
+    },
+    {
+      "market": "options",
+      "data_type": "EOHSummary",
+      "intervals": [null],
+      "partitions": ["daily"],
+      "available_from": "2022-01-01",
+      "notes": "End of hour summary for options",
+      "url_pattern": "s3://data.binance.vision/data/option/{partition}/EOHSummary/{symbol}/{filename}",
+      "filename_pattern": "{symbol}-EOHSummary-{date}.zip"
+    }
+  ],
+  "symbols": {
+    "spot": ["BTCUSDT", "ETHUSDT", "ADAUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "DOTUSDT", "LINKUSDT", "LTCUSDT", "BCHUSDT", "MATICUSDT", "AVAXUSDT", "UNIUSDT", "ATOMUSDT", "FILUSDT"],
+    "futures_um": ["BTCUSDT", "ETHUSDT", "ADAUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT", "DOTUSDT", "LINKUSDT", "LTCUSDT", "BCHUSDT", "MATICUSDT", "AVAXUSDT", "UNIUSDT", "ATOMUSDT", "FILUSDT"],
+    "futures_cm": ["BTCUSD_PERP", "ETHUSD_PERP", "ADAUSD_PERP", "BNBUSD_PERP", "XRPUSD_PERP", "LTCUSD_PERP", "BCHUSD_PERP"],
+    "options": ["BTC", "ETH"]
+  },
+  "file_format": {
+    "compression": "zip",
+    "content_format": "csv",
+    "checksum_files": true,
+    "naming_convention": "See filename_pattern in each data type"
+  },
+  "enhanced_features": {
+    "s5cmd_optimized": true,
+    "batch_downloads": true,
+    "checksum_validation": true,
+    "parallel_processing": true,
+    "resume_capability": true,
+    "lakehouse_integration": true
+  }
+}

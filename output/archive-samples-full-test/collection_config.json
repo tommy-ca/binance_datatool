@@ -1,0 +1,20 @@
+{
+  "markets": [
+    "spot"
+  ],
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "data_types": [
+    "klines",
+    "trades",
+    "aggTrades",
+    "fundingRate"
+  ],
+  "default_date": "2025-07-15",
+  "max_parallel_downloads": 4,
+  "download_checksum": true,
+  "force_redownload": false,
+  "output_directory": "archive-samples-full-test"
+}

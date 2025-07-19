@@ -1,0 +1,16 @@
+{
+  "markets": [
+    "spot"
+  ],
+  "symbols": [
+    "BTCUSDT"
+  ],
+  "data_types": [
+    "klines"
+  ],
+  "default_date": "2025-07-15",
+  "max_parallel_downloads": 2,
+  "download_checksum": true,
+  "force_redownload": false,
+  "output_directory": "archive-samples-workflow"
+}

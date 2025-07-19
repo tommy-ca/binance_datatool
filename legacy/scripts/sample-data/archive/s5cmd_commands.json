@@ -1,0 +1,6 @@
+{
+  "list_spot_klines": "s5cmd --no-sign-request ls s3://data.binance.vision/data/spot/daily/klines/BTCUSDT/1m/",
+  "download_spot_sample": "s5cmd --no-sign-request cp s3://data.binance.vision/data/spot/daily/klines/BTCUSDT/1m/BTCUSDT-1m-2025-07-17.zip ./sample-data/archive/",
+  "list_futures_funding": "s5cmd --no-sign-request ls s3://data.binance.vision/data/futures/um/daily/fundingRate/",
+  "download_futures_sample": "s5cmd --no-sign-request cp s3://data.binance.vision/data/futures/um/daily/klines/BTCUSDT/1m/BTCUSDT-1m-2025-07-17.zip ./sample-data/archive/"
+}

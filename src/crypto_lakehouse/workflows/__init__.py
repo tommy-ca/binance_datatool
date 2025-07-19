@@ -1,13 +1,12 @@
-"""Workflow orchestration for the crypto data lakehouse."""
+"""
+Workflow implementations for the crypto lakehouse platform.
 
-from .prefect_workflows import (
-    daily_data_refresh_pipeline,
-    data_ingestion_pipeline,
-    multi_symbol_ingestion_pipeline,
-)
+This module contains concrete workflow implementations that extend the base
+framework to provide specific data collection and processing capabilities.
+"""
+
+from .archive_collection import ArchiveCollectionWorkflow
 
 __all__ = [
-    "data_ingestion_pipeline",
-    "multi_symbol_ingestion_pipeline",
-    "daily_data_refresh_pipeline",
+    "ArchiveCollectionWorkflow"
 ]

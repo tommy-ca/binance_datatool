@@ -1,0 +1,16 @@
+{
+  "zone": "bronze",
+  "exchange": "binance",
+  "data_type": "funding_rates",
+  "trade_type": "um_futures",
+  "symbol": "BTCUSDT",
+  "partition_date": "2024-01-01T00:00:00",
+  "record_count": 30,
+  "created_at": "2025-07-19T18:38:15.158060",
+  "schema": {
+    "symbol": "String",
+    "funding_time": "Datetime(time_unit='us', time_zone=None)",
+    "funding_rate": "Float64",
+    "mark_price": "Float64"
+  }
+}
