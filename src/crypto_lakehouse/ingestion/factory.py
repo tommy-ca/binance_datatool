@@ -1,14 +1,14 @@
 """Ingestion factory for creating exchange-specific ingestors."""
 
-from ..core.models import Exchange
 from ..core.config import Settings
+from ..core.models import Exchange
 from .base import BaseIngestor
 from .binance import BinanceIngestor
 
 
 def create_ingestor(exchange: Exchange, settings: Settings) -> BaseIngestor:
     """Create appropriate ingestor based on exchange."""
-    
+
     if exchange == Exchange.BINANCE:
         return BinanceIngestor(settings)
     else:

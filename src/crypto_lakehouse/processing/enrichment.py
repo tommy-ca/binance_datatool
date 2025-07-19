@@ -1,372 +1,399 @@
-"""Data enrichment module for advanced feature engineering."""
+"""
+Enrichment processor for adding derived metrics and advanced analytics.
+
+This module provides additional enrichment capabilities for data in the Silver zone,
+adding market indicators, cross-asset correlations, and advanced derived metrics.
+"""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import polars as pl
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
-import logging
 
-from .base import BaseProcessor
 from ..core.models import DataZone, DataType
-from ..core.config import Settings
+from .base import BaseProcessor
 
 logger = logging.getLogger(__name__)
 
 
-class DataEnrichment(BaseProcessor):
-    """Advanced data enrichment for Gold zone transformations."""
+class EnrichmentProcessor(BaseProcessor):
+    """
+    Processor for data enrichment and advanced analytics.
+    
+    Adds market indicators, cross-asset correlations, and advanced derived metrics
+    to existing Silver zone data for Gold zone storage.
+    """
+    
+    def get_required_columns(self) -> List[str]:
+        """Get required columns for enrichment processing."""
+        return [
+            "symbol",
+            "processed_at"  # Must be already processed data
+        ]
+    
+    def validate_input(self, data: pl.DataFrame) -> Dict[str, Any]:
+        """
+        Validate input data for enrichment processing.
+        
+        Args:
+            data: Input data (typically from Silver zone)
+            
+        Returns:
+            Validation report with status and issues
+        """
+        validation_report = {
+            "valid": True,
+            "issues": [],
+            "record_count": len(data),
+            "column_check": {},
+            "data_quality": {}
+        }
+        
+        try:
+            # Check minimum required columns
+            required_columns = self.get_required_columns()
+            missing_columns = [col for col in required_columns if col not in data.columns]
+            
+            if missing_columns:
+                validation_report["valid"] = False
+                validation_report["issues"].append(f"Missing required columns: {missing_columns}")
+            
+            for col in required_columns:
+                validation_report["column_check"][col] = col in data.columns
+            
+            # Check if data appears to be already processed (has processor metadata)
+            if "processor_name" not in data.columns:
+                validation_report["issues"].append("Data does not appear to be pre-processed (missing processor_name)")
+            
+            # Check data recency
+            if "processed_at" in data.columns:
+                latest_processing = data["processed_at"].max()
+                if latest_processing:
+                    age_hours = (datetime.now() - latest_processing).total_seconds() / 3600
+                    validation_report["data_quality"]["data_age_hours"] = age_hours
+                    
+                    if age_hours > 24:
+                        validation_report["issues"].append(f"Data is {age_hours:.1f} hours old")
+            
+            return validation_report
+            
+        except Exception as e:
+            self.logger.error(f"Input validation failed: {e}")
+            validation_report["valid"] = False
+            validation_report["issues"].append(f"Validation error: {e}")
+            return validation_report
     
     async def process(
-        self,
-        data: pl.DataFrame,
-        source_zone: DataZone,
+        self, 
+        data: pl.DataFrame, 
+        source_zone: DataZone, 
         target_zone: DataZone,
+        data_type: Optional[DataType] = None,
         **kwargs
     ) -> pl.DataFrame:
-        """Enrich data from Silver to Gold zone."""
+        """
+        Process data for enrichment.
+        
+        Args:
+            data: Input data (typically from Silver zone)
+            source_zone: Source zone (typically SILVER)
+            target_zone: Target zone (typically GOLD)
+            data_type: Type of data being processed
+            **kwargs: Additional processing parameters
+            
+        Returns:
+            Enriched data ready for Gold zone
+        """
         try:
-            # Apply various enrichment strategies
-            enriched = data
+            self.logger.info(f"Enriching {len(data)} records from {source_zone} to {target_zone}")
             
-            if "close_price" in data.columns:
-                enriched = await self._add_technical_indicators(enriched)
-                enriched = await self._add_market_microstructure(enriched)
+            # Step 1: Validate input data
+            validation_report = self.validate_input(data)
+            if not validation_report["valid"]:
+                self.logger.warning(f"Input validation issues: {validation_report['issues']}")
             
-            if "funding_rate" in data.columns:
-                enriched = await self._add_funding_insights(enriched)
+            # Step 2: Determine enrichment strategy based on data type
+            if data_type == DataType.KLINES or "close_price" in data.columns:
+                enriched_data = self._enrich_kline_data(data)
+            elif data_type == DataType.FUNDING_RATES or "funding_rate" in data.columns:
+                enriched_data = self._enrich_funding_data(data)
+            else:
+                # Generic enrichment for unknown data types
+                enriched_data = self._enrich_generic_data(data)
             
-            # Add cross-asset features if multiple symbols
-            if len(data["symbol"].unique()) > 1:
-                enriched = await self._add_cross_asset_features(enriched)
+            # Step 3: Add cross-asset analytics if multiple symbols present
+            if "symbol" in enriched_data.columns and enriched_data["symbol"].n_unique() > 1:
+                cross_asset_data = self._add_cross_asset_analytics(enriched_data)
+            else:
+                cross_asset_data = enriched_data
             
-            # Add processing metadata
-            enriched = await self.add_processing_metadata(
-                enriched,
-                datetime.now(),
-                source_zone,
-                target_zone
-            )
+            # Step 4: Add market regime indicators
+            regime_data = self._add_market_regime_indicators(cross_asset_data)
             
-            logger.info(f"Successfully enriched {len(enriched)} records")
-            return enriched
+            # Step 5: Add processing metadata
+            final_data = self.add_processing_metadata(regime_data)
+            
+            self.logger.info(f"Successfully enriched {len(final_data)} records")
+            return final_data
             
         except Exception as e:
-            logger.error(f"Data enrichment failed: {e}")
+            self.logger.error(f"Enrichment processing failed: {e}")
             raise
     
-    def get_schema(self, zone: DataZone) -> pl.Schema:
-        """Get schema for enriched data."""
-        return pl.Schema({
-            # Base schema will be inherited from input data
-            # Additional enrichment columns will be added dynamically
-        })
-    
-    async def _add_technical_indicators(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Add comprehensive technical indicators."""
+    def _enrich_kline_data(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add enrichment specific to kline data.
+        
+        Args:
+            data: Kline data
+            
+        Returns:
+            Enriched kline data
+        """
         try:
-            enhanced = data
-            
-            # Moving averages
-            for window in [5, 10, 20, 50, 200]:
-                enhanced = enhanced.with_columns([
-                    pl.col("close_price").rolling_mean(window_size=window).over("symbol").alias(f"sma_{window}"),
-                    pl.col("close_price").ewm_mean(span=window).over("symbol").alias(f"ema_{window}")
-                ])
-            
-            # RSI (Relative Strength Index)
-            enhanced = await self._calculate_rsi(enhanced)
-            
-            # MACD (Moving Average Convergence Divergence)
-            enhanced = await self._calculate_macd(enhanced)
-            
-            # Bollinger Bands
-            enhanced = await self._calculate_bollinger_bands(enhanced)
-            
-            # Stochastic Oscillator
-            enhanced = await self._calculate_stochastic(enhanced)
-            
-            # Average True Range (ATR)
-            enhanced = await self._calculate_atr(enhanced)
-            
-            return enhanced
+            return data.with_columns([
+                # Advanced volatility metrics
+                pl.col("price_volatility_14").rolling_mean(window_size=7).over("symbol").alias("volatility_trend"),
+                
+                # Price momentum indicators
+                pl.when(pl.col("sma_7") > pl.col("sma_14"))
+                .then(pl.lit("bullish"))
+                .when(pl.col("sma_7") < pl.col("sma_14"))
+                .then(pl.lit("bearish"))
+                .otherwise(pl.lit("neutral"))
+                .alias("trend_direction"),
+                
+                # Volume profile analysis
+                (pl.col("volume") / pl.col("volume_ma_14")).alias("volume_ratio"),
+                
+                pl.when(pl.col("volume") > pl.col("volume_ma_14") * 1.5)
+                .then(pl.lit("high_volume"))
+                .when(pl.col("volume") > pl.col("volume_ma_14"))
+                .then(pl.lit("above_average"))
+                .when(pl.col("volume") < pl.col("volume_ma_14") * 0.5)
+                .then(pl.lit("low_volume"))
+                .otherwise(pl.lit("normal"))
+                .alias("volume_profile"),
+                
+                # RSI-based signals
+                pl.when(pl.col("rsi_14") > 70)
+                .then(pl.lit("overbought"))
+                .when(pl.col("rsi_14") < 30)
+                .then(pl.lit("oversold"))
+                .otherwise(pl.lit("neutral"))
+                .alias("rsi_signal"),
+                
+                # Support/Resistance levels (simplified)
+                pl.col("low_price").rolling_min(window_size=50).over("symbol").alias("support_level_50"),
+                pl.col("high_price").rolling_max(window_size=50).over("symbol").alias("resistance_level_50"),
+                
+                # Market microstructure
+                pl.when(pl.col("candle_type") == "bullish")
+                .then(1)
+                .otherwise(-1)
+                .rolling_mean(window_size=20).over("symbol")
+                .alias("bullish_momentum_20"),
+                
+                # Efficiency ratio (price change vs volatility)
+                (pl.col("price_change").abs() / pl.col("price_range")).alias("efficiency_ratio")
+            ])
             
         except Exception as e:
-            logger.error(f"Failed to add technical indicators: {e}")
+            self.logger.error(f"Failed to enrich kline data: {e}")
             return data
     
-    async def _calculate_rsi(self, data: pl.DataFrame, period: int = 14) -> pl.DataFrame:
-        """Calculate Relative Strength Index."""
+    def _enrich_funding_data(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add enrichment specific to funding rate data.
+        
+        Args:
+            data: Funding rate data
+            
+        Returns:
+            Enriched funding rate data
+        """
         try:
-            enhanced = data.with_columns([
-                # Price changes
-                (pl.col("close_price") - pl.col("close_price").shift(1)).over("symbol").alias("price_delta")
-            ])
-            
-            # Separate gains and losses
-            enhanced = enhanced.with_columns([
-                pl.when(pl.col("price_delta") > 0).then(pl.col("price_delta")).otherwise(0).alias("gain"),
-                pl.when(pl.col("price_delta") < 0).then(-pl.col("price_delta")).otherwise(0).alias("loss")
-            ])
-            
-            # Calculate average gains and losses
-            enhanced = enhanced.with_columns([
-                pl.col("gain").rolling_mean(window_size=period).over("symbol").alias("avg_gain"),
-                pl.col("loss").rolling_mean(window_size=period).over("symbol").alias("avg_loss")
-            ])
-            
-            # Calculate RSI
-            enhanced = enhanced.with_columns([
-                (100 - (100 / (1 + (pl.col("avg_gain") / pl.col("avg_loss"))))).alias("rsi")
-            ])
-            
-            # Clean up temporary columns
-            enhanced = enhanced.drop(["price_delta", "gain", "loss", "avg_gain", "avg_loss"])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"RSI calculation failed: {e}")
-            return data
-    
-    async def _calculate_macd(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Calculate MACD indicator."""
-        try:
-            enhanced = data.with_columns([
-                # MACD line
-                (
-                    pl.col("close_price").ewm_mean(span=12).over("symbol") - 
-                    pl.col("close_price").ewm_mean(span=26).over("symbol")
-                ).alias("macd"),
-                
-                # Signal line (9-period EMA of MACD)
-                pl.col("close_price").ewm_mean(span=12).over("symbol").alias("temp_ema12"),
-                pl.col("close_price").ewm_mean(span=26).over("symbol").alias("temp_ema26")
-            ])
-            
-            enhanced = enhanced.with_columns([
-                (pl.col("temp_ema12") - pl.col("temp_ema26")).alias("macd")
-            ])
-            
-            enhanced = enhanced.with_columns([
-                pl.col("macd").ewm_mean(span=9).over("symbol").alias("macd_signal")
-            ])
-            
-            # MACD histogram
-            enhanced = enhanced.with_columns([
-                (pl.col("macd") - pl.col("macd_signal")).alias("macd_histogram")
-            ])
-            
-            # Clean up
-            enhanced = enhanced.drop(["temp_ema12", "temp_ema26"])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"MACD calculation failed: {e}")
-            return data
-    
-    async def _calculate_bollinger_bands(self, data: pl.DataFrame, period: int = 20, std_dev: float = 2.0) -> pl.DataFrame:
-        """Calculate Bollinger Bands."""
-        try:
-            enhanced = data.with_columns([
-                pl.col("close_price").rolling_mean(window_size=period).over("symbol").alias("bb_middle"),
-                pl.col("close_price").rolling_std(window_size=period).over("symbol").alias("bb_std")
-            ])
-            
-            enhanced = enhanced.with_columns([
-                (pl.col("bb_middle") + std_dev * pl.col("bb_std")).alias("bb_upper"),
-                (pl.col("bb_middle") - std_dev * pl.col("bb_std")).alias("bb_lower"),
-                
-                # Bollinger Band width and position
-                (pl.col("bb_std") * 2 * std_dev).alias("bb_width"),
-                (
-                    (pl.col("close_price") - pl.col("bb_lower")) / 
-                    (pl.col("bb_upper") - pl.col("bb_lower"))
-                ).alias("bb_position")
-            ])
-            
-            # Clean up
-            enhanced = enhanced.drop(["bb_std"])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"Bollinger Bands calculation failed: {e}")
-            return data
-    
-    async def _calculate_stochastic(self, data: pl.DataFrame, k_period: int = 14, d_period: int = 3) -> pl.DataFrame:
-        """Calculate Stochastic Oscillator."""
-        try:
-            enhanced = data.with_columns([
-                # Highest high and lowest low over period
-                pl.col("high_price").rolling_max(window_size=k_period).over("symbol").alias("highest_high"),
-                pl.col("low_price").rolling_min(window_size=k_period).over("symbol").alias("lowest_low")
-            ])
-            
-            enhanced = enhanced.with_columns([
-                # %K
-                (
-                    (pl.col("close_price") - pl.col("lowest_low")) / 
-                    (pl.col("highest_high") - pl.col("lowest_low")) * 100
-                ).alias("stoch_k")
-            ])
-            
-            enhanced = enhanced.with_columns([
-                # %D (moving average of %K)
-                pl.col("stoch_k").rolling_mean(window_size=d_period).over("symbol").alias("stoch_d")
-            ])
-            
-            # Clean up
-            enhanced = enhanced.drop(["highest_high", "lowest_low"])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"Stochastic calculation failed: {e}")
-            return data
-    
-    async def _calculate_atr(self, data: pl.DataFrame, period: int = 14) -> pl.DataFrame:
-        """Calculate Average True Range."""
-        try:
-            enhanced = data.with_columns([
-                # True Range components
-                (pl.col("high_price") - pl.col("low_price")).alias("hl_diff"),
-                (pl.col("high_price") - pl.col("close_price").shift(1)).abs().over("symbol").alias("hc_diff"),
-                (pl.col("low_price") - pl.col("close_price").shift(1)).abs().over("symbol").alias("lc_diff")
-            ])
-            
-            # True Range is the maximum of the three differences
-            enhanced = enhanced.with_columns([
-                pl.max_horizontal(["hl_diff", "hc_diff", "lc_diff"]).alias("true_range")
-            ])
-            
-            # ATR is the moving average of True Range
-            enhanced = enhanced.with_columns([
-                pl.col("true_range").rolling_mean(window_size=period).over("symbol").alias("atr")
-            ])
-            
-            # Clean up
-            enhanced = enhanced.drop(["hl_diff", "hc_diff", "lc_diff", "true_range"])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"ATR calculation failed: {e}")
-            return data
-    
-    async def _add_market_microstructure(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Add market microstructure features."""
-        try:
-            enhanced = data.with_columns([
-                # Spread (high - low)
-                (pl.col("high_price") - pl.col("low_price")).alias("spread"),
-                
-                # Body size (close - open)
-                (pl.col("close_price") - pl.col("open_price")).alias("body_size"),
-                
-                # Upper shadow
-                (pl.col("high_price") - pl.max_horizontal(["open_price", "close_price"])).alias("upper_shadow"),
-                
-                # Lower shadow  
-                (pl.min_horizontal(["open_price", "close_price"]) - pl.col("low_price")).alias("lower_shadow"),
-                
-                # Buy pressure ratio
-                (
-                    pl.col("taker_buy_base_asset_volume") / pl.col("volume")
-                ).alias("buy_pressure_ratio"),
-                
-                # Quote volume ratio
-                (
-                    pl.col("quote_asset_volume") / pl.col("volume")
-                ).alias("quote_volume_ratio")
-            ])
-            
-            # Candlestick pattern recognition
-            enhanced = enhanced.with_columns([
-                # Doji pattern (small body relative to spread)
-                (
-                    pl.col("body_size").abs() / pl.col("spread") < 0.1
-                ).alias("is_doji"),
-                
-                # Hammer pattern
-                (
-                    (pl.col("lower_shadow") > 2 * pl.col("body_size").abs()) &
-                    (pl.col("upper_shadow") < pl.col("body_size").abs())
-                ).alias("is_hammer"),
-                
-                # Shooting star pattern
-                (
-                    (pl.col("upper_shadow") > 2 * pl.col("body_size").abs()) &
-                    (pl.col("lower_shadow") < pl.col("body_size").abs())
-                ).alias("is_shooting_star")
-            ])
-            
-            return enhanced
-            
-        except Exception as e:
-            logger.error(f"Market microstructure features failed: {e}")
-            return data
-    
-    async def _add_funding_insights(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Add funding rate insights and derivatives."""
-        try:
-            enhanced = data.with_columns([
+            return data.with_columns([
                 # Funding rate momentum
-                (
-                    pl.col("funding_rate") - pl.col("funding_rate").shift(1)
-                ).over("symbol").alias("funding_momentum"),
+                pl.when(pl.col("funding_rate_change") > 0)
+                .then(pl.lit("increasing"))
+                .when(pl.col("funding_rate_change") < 0)
+                .then(pl.lit("decreasing"))
+                .otherwise(pl.lit("stable"))
+                .alias("funding_momentum"),
                 
-                # Funding rate acceleration
-                (
-                    (pl.col("funding_rate") - pl.col("funding_rate").shift(1)) -
-                    (pl.col("funding_rate").shift(1) - pl.col("funding_rate").shift(2))
-                ).over("symbol").alias("funding_acceleration"),
+                # Extreme funding events
+                pl.when(pl.col("funding_rate").abs() > 0.01)
+                .then(pl.lit("extreme_event"))
+                .when(pl.col("funding_rate").abs() > 0.005)
+                .then(pl.lit("significant_event"))
+                .otherwise(pl.lit("normal"))
+                .alias("funding_event_type"),
                 
-                # Funding rate percentile ranking
-                pl.col("funding_rate").rank(method="average").over("symbol").alias("funding_rank"),
+                # Funding rate percentile within recent history
+                pl.col("funding_rate")
+                .rank(method="average")
+                .over("symbol")
+                .truediv(pl.count().over("symbol"))
+                .alias("funding_percentile"),
                 
-                # Extreme funding rate indicator
-                (
-                    (pl.col("funding_rate") > 0.001) |  # > 0.1%
-                    (pl.col("funding_rate") < -0.001)   # < -0.1%
-                ).alias("extreme_funding"),
+                # Mark price vs funding correlation indicator
+                pl.when((pl.col("funding_rate") > 0) & (pl.col("mark_price_momentum") > 0))
+                .then(pl.lit("aligned_bullish"))
+                .when((pl.col("funding_rate") < 0) & (pl.col("mark_price_momentum") < 0))
+                .then(pl.lit("aligned_bearish"))
+                .when((pl.col("funding_rate") > 0) & (pl.col("mark_price_momentum") < 0))
+                .then(pl.lit("contrarian_signal"))
+                .when((pl.col("funding_rate") < 0) & (pl.col("mark_price_momentum") > 0))
+                .then(pl.lit("contrarian_signal"))
+                .otherwise(pl.lit("neutral"))
+                .alias("funding_price_alignment"),
                 
-                # Funding rate regime change
-                (
-                    (pl.col("funding_rate") > 0) != (pl.col("funding_rate").shift(1) > 0)
-                ).over("symbol").alias("funding_regime_change")
+                # Funding volatility regime
+                pl.when(pl.col("funding_volatility_30") > pl.col("funding_volatility_30").quantile(0.8).over("symbol"))
+                .then(pl.lit("high_volatility"))
+                .when(pl.col("funding_volatility_30") < pl.col("funding_volatility_30").quantile(0.2).over("symbol"))
+                .then(pl.lit("low_volatility"))
+                .otherwise(pl.lit("normal_volatility"))
+                .alias("funding_volatility_regime")
             ])
             
-            return enhanced
-            
         except Exception as e:
-            logger.error(f"Funding insights failed: {e}")
+            self.logger.error(f"Failed to enrich funding data: {e}")
             return data
     
-    async def _add_cross_asset_features(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Add cross-asset correlation and spread features."""
+    def _enrich_generic_data(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add generic enrichment for unknown data types.
+        
+        Args:
+            data: Generic data
+            
+        Returns:
+            Enriched data with generic metrics
+        """
         try:
-            # This is a simplified implementation
-            # In practice, you'd want more sophisticated correlation calculations
+            enriched_columns = []
             
-            enhanced = data
-            
-            if "close_price" in data.columns:
-                # Market-wide features (across all symbols)
-                enhanced = enhanced.with_columns([
-                    # Market average price change
-                    pl.col("returns").mean().over("open_time").alias("market_avg_return"),
-                    
-                    # Symbol correlation with market
-                    pl.corr("returns", "market_avg_return").over("symbol").alias("market_correlation"),
-                    
-                    # Relative strength vs market
-                    (
-                        pl.col("returns") - pl.col("market_avg_return")
-                    ).alias("relative_strength")
+            # Add timestamp-based features if timestamp column exists
+            timestamp_cols = [col for col in data.columns if "time" in col.lower()]
+            if timestamp_cols:
+                timestamp_col = timestamp_cols[0]
+                enriched_columns.extend([
+                    pl.col(timestamp_col).dt.hour().alias("hour_of_day"),
+                    pl.col(timestamp_col).dt.weekday().alias("day_of_week"),
+                    pl.col(timestamp_col).dt.day().alias("day_of_month")
                 ])
             
-            return enhanced
+            # Add record age
+            enriched_columns.append(
+                (datetime.now() - pl.col("processed_at")).dt.total_seconds().truediv(3600).alias("record_age_hours")
+            )
+            
+            return data.with_columns(enriched_columns) if enriched_columns else data
             
         except Exception as e:
-            logger.error(f"Cross-asset features failed: {e}")
+            self.logger.error(f"Failed to add generic enrichment: {e}")
+            return data
+    
+    def _add_cross_asset_analytics(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add cross-asset analytics for multi-symbol data.
+        
+        Args:
+            data: Data with multiple symbols
+            
+        Returns:
+            Data with cross-asset analytics
+        """
+        try:
+            # Identify numeric columns for correlation analysis
+            numeric_cols = [col for col in data.columns if data[col].dtype in [pl.Float32, pl.Float64, pl.Int32, pl.Int64]]
+            
+            if not numeric_cols:
+                return data
+            
+            # Add relative performance metrics if price data available
+            price_cols = [col for col in numeric_cols if "price" in col.lower()]
+            if price_cols:
+                price_col = price_cols[0]  # Use first price column
+                
+                # Calculate market-relative performance
+                market_avg = data.group_by("processed_at").agg(
+                    pl.col(price_col).mean().alias("market_avg_price")
+                )
+                
+                data_with_market = data.join(market_avg, on="processed_at", how="left")
+                
+                return data_with_market.with_columns([
+                    (pl.col(price_col) / pl.col("market_avg_price")).alias("relative_performance"),
+                    pl.when(pl.col(price_col) > pl.col("market_avg_price"))
+                    .then(pl.lit("outperforming"))
+                    .otherwise(pl.lit("underperforming"))
+                    .alias("performance_category")
+                ])
+            
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add cross-asset analytics: {e}")
+            return data
+    
+    def _add_market_regime_indicators(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add market regime indicators based on multiple metrics.
+        
+        Args:
+            data: Input data
+            
+        Returns:
+            Data with market regime indicators
+        """
+        try:
+            regime_columns = []
+            
+            # Volatility regime
+            vol_cols = [col for col in data.columns if "volatility" in col.lower()]
+            if vol_cols:
+                vol_col = vol_cols[0]
+                regime_columns.append(
+                    pl.when(pl.col(vol_col) > pl.col(vol_col).quantile(0.8))
+                    .then(pl.lit("high_volatility"))
+                    .when(pl.col(vol_col) < pl.col(vol_col).quantile(0.2))
+                    .then(pl.lit("low_volatility"))
+                    .otherwise(pl.lit("normal_volatility"))
+                    .alias("volatility_regime")
+                )
+            
+            # Volume regime
+            vol_ratio_cols = [col for col in data.columns if "volume" in col.lower() and "ratio" in col.lower()]
+            if vol_ratio_cols:
+                vol_ratio_col = vol_ratio_cols[0]
+                regime_columns.append(
+                    pl.when(pl.col(vol_ratio_col) > 2.0)
+                    .then(pl.lit("high_volume"))
+                    .when(pl.col(vol_ratio_col) < 0.5)
+                    .then(pl.lit("low_volume"))
+                    .otherwise(pl.lit("normal_volume"))
+                    .alias("volume_regime")
+                )
+            
+            # Overall market regime composite
+            if len(regime_columns) >= 2:
+                regime_columns.append(
+                    pl.when((pl.col("volatility_regime") == "high_volatility") & 
+                           (pl.col("volume_regime") == "high_volume"))
+                    .then(pl.lit("stress"))
+                    .when((pl.col("volatility_regime") == "low_volatility") & 
+                          (pl.col("volume_regime") == "low_volume"))
+                    .then(pl.lit("calm"))
+                    .otherwise(pl.lit("mixed"))
+                    .alias("market_regime")
+                )
+            
+            return data.with_columns(regime_columns) if regime_columns else data
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add market regime indicators: {e}")
             return data

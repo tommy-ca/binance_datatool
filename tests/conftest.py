@@ -1,17 +1,23 @@
 """Pytest configuration and shared fixtures."""
 
-import pytest
-import tempfile
 import asyncio
-from pathlib import Path
+import tempfile
 from datetime import datetime, timezone
 from decimal import Decimal
+from pathlib import Path
+
 import polars as pl
+import pytest
 
 from crypto_lakehouse.core.config import Settings
 from crypto_lakehouse.core.models import (
-    Exchange, DataType, TradeType, Interval, 
-    KlineData, FundingRateData, DataIngestionTask
+    DataIngestionTask,
+    DataType,
+    Exchange,
+    FundingRateData,
+    Interval,
+    KlineData,
+    TradeType,
 )
 
 
@@ -34,7 +40,7 @@ def test_settings():
             storage__base_path=f"file://{temp_dir}",
             s3__bucket_name="test-bucket",
             workflow__concurrency_limit=2,
-            processing__batch_size=100
+            processing__batch_size=100,
         )
         yield settings
 
@@ -55,7 +61,7 @@ def sample_kline_data():
             quote_asset_volume=Decimal("525000.00"),
             number_of_trades=100,
             taker_buy_base_asset_volume=Decimal("5.25"),
-            taker_buy_quote_asset_volume=Decimal("262500.00")
+            taker_buy_quote_asset_volume=Decimal("262500.00"),
         ),
         KlineData(
             symbol="BTCUSDT",
@@ -69,8 +75,8 @@ def sample_kline_data():
             quote_asset_volume=Decimal("416250.00"),
             number_of_trades=85,
             taker_buy_base_asset_volume=Decimal("4.15"),
-            taker_buy_quote_asset_volume=Decimal("208125.00")
-        )
+            taker_buy_quote_asset_volume=Decimal("208125.00"),
+        ),
     ]
 
 
@@ -82,40 +88,42 @@ def sample_funding_data():
             symbol="BTCUSDT",
             funding_time=datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc),
             funding_rate=Decimal("0.0001"),
-            mark_price=Decimal("50000.00")
+            mark_price=Decimal("50000.00"),
         ),
         FundingRateData(
             symbol="BTCUSDT",
             funding_time=datetime(2024, 1, 1, 8, 0, tzinfo=timezone.utc),
             funding_rate=Decimal("0.0002"),
-            mark_price=Decimal("50100.00")
-        )
+            mark_price=Decimal("50100.00"),
+        ),
     ]
 
 
 @pytest.fixture
 def sample_kline_dataframe():
     """Create sample K-line Polars DataFrame."""
-    return pl.DataFrame({
-        "symbol": ["BTCUSDT", "BTCUSDT"],
-        "open_time": [
-            datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 1, 0, 1, tzinfo=timezone.utc)
-        ],
-        "close_time": [
-            datetime(2024, 1, 1, 0, 1, tzinfo=timezone.utc),
-            datetime(2024, 1, 1, 0, 2, tzinfo=timezone.utc)
-        ],
-        "open_price": [50000.0, 50050.0],
-        "high_price": [50100.0, 50200.0],
-        "low_price": [49950.0, 50000.0],
-        "close_price": [50050.0, 50150.0],
-        "volume": [10.5, 8.3],
-        "quote_asset_volume": [525000.0, 416250.0],
-        "number_of_trades": [100, 85],
-        "taker_buy_base_asset_volume": [5.25, 4.15],
-        "taker_buy_quote_asset_volume": [262500.0, 208125.0]
-    })
+    return pl.DataFrame(
+        {
+            "symbol": ["BTCUSDT", "BTCUSDT"],
+            "open_time": [
+                datetime(2024, 1, 1, 0, 0, tzinfo=timezone.utc),
+                datetime(2024, 1, 1, 0, 1, tzinfo=timezone.utc),
+            ],
+            "close_time": [
+                datetime(2024, 1, 1, 0, 1, tzinfo=timezone.utc),
+                datetime(2024, 1, 1, 0, 2, tzinfo=timezone.utc),
+            ],
+            "open_price": [50000.0, 50050.0],
+            "high_price": [50100.0, 50200.0],
+            "low_price": [49950.0, 50000.0],
+            "close_price": [50050.0, 50150.0],
+            "volume": [10.5, 8.3],
+            "quote_asset_volume": [525000.0, 416250.0],
+            "number_of_trades": [100, 85],
+            "taker_buy_base_asset_volume": [5.25, 4.15],
+            "taker_buy_quote_asset_volume": [262500.0, 208125.0],
+        }
+    )
 
 
 @pytest.fixture
@@ -130,7 +138,7 @@ def sample_ingestion_task():
         start_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
         end_date=datetime(2024, 1, 2, tzinfo=timezone.utc),
         force_update=False,
-        enable_validation=True
+        enable_validation=True,
     )
 
 
@@ -152,11 +160,11 @@ def mock_csv_funding_data():
 def temp_zip_file(tmp_path, mock_csv_kline_data):
     """Create temporary ZIP file with CSV data."""
     import zipfile
-    
+
     zip_path = tmp_path / "test_data.zip"
     csv_path = "BTCUSDT-1m-2024-01-01.csv"
-    
-    with zipfile.ZipFile(zip_path, 'w') as zf:
+
+    with zipfile.ZipFile(zip_path, "w") as zf:
         zf.writestr(csv_path, mock_csv_kline_data)
-    
+
     return str(zip_path)

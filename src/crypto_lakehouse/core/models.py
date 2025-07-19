@@ -1,14 +1,16 @@
 """Core data models and types for the crypto data lakehouse."""
 
-from enum import Enum
-from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel, Field, ConfigDict
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Exchange(str, Enum):
     """Supported cryptocurrency exchanges."""
+
     BINANCE = "binance"
     COINBASE = "coinbase"
     KRAKEN = "kraken"
@@ -16,6 +18,7 @@ class Exchange(str, Enum):
 
 class DataType(str, Enum):
     """Types of market data supported by the lakehouse."""
+
     KLINES = "klines"
     FUNDING_RATES = "funding_rates"
     LIQUIDATIONS = "liquidations"
@@ -25,6 +28,7 @@ class DataType(str, Enum):
 
 class Interval(str, Enum):
     """Time intervals for K-line data."""
+
     MIN_1 = "1m"
     MIN_5 = "5m"
     MIN_15 = "15m"
@@ -39,6 +43,7 @@ class Interval(str, Enum):
 
 class TradeType(str, Enum):
     """Types of trading instruments."""
+
     SPOT = "spot"
     UM_FUTURES = "um_futures"  # USDT-Margined Futures
     CM_FUTURES = "cm_futures"  # Coin-Margined Futures
@@ -46,19 +51,22 @@ class TradeType(str, Enum):
 
 class ContractType(str, Enum):
     """Contract types for futures."""
+
     PERPETUAL = "PERPETUAL"
     DELIVERY = "DELIVERY"
 
 
 class DataZone(str, Enum):
     """Data lakehouse storage zones."""
+
     BRONZE = "bronze"  # Raw data
     SILVER = "silver"  # Processed data
-    GOLD = "gold"     # Aggregated/feature-engineered data
+    GOLD = "gold"  # Aggregated/feature-engineered data
 
 
 class KlineData(BaseModel):
     """K-line (candlestick) data model."""
+
     model_config = ConfigDict(frozen=True)
 
     symbol: str
@@ -73,7 +81,7 @@ class KlineData(BaseModel):
     number_of_trades: int
     taker_buy_base_asset_volume: Decimal
     taker_buy_quote_asset_volume: Decimal
-    
+
     # Enhanced fields (computed in Silver zone)
     vwap: Optional[Decimal] = None
     returns: Optional[Decimal] = None
@@ -82,6 +90,7 @@ class KlineData(BaseModel):
 
 class FundingRateData(BaseModel):
     """Funding rate data model for perpetual futures."""
+
     model_config = ConfigDict(frozen=True)
 
     symbol: str
@@ -92,6 +101,7 @@ class FundingRateData(BaseModel):
 
 class LiquidationData(BaseModel):
     """Liquidation data model."""
+
     model_config = ConfigDict(frozen=True)
 
     symbol: str
@@ -105,7 +115,7 @@ class LiquidationData(BaseModel):
 
 class DataIngestionTask(BaseModel):
     """Task definition for data ingestion workflows."""
-    
+
     exchange: Exchange
     data_type: DataType
     trade_type: TradeType
@@ -114,7 +124,7 @@ class DataIngestionTask(BaseModel):
     end_date: Optional[datetime] = None
     interval: Optional[Interval] = None
     contract_type: Optional[ContractType] = None
-    
+
     # Processing options
     force_update: bool = False
     enable_validation: bool = True
@@ -123,7 +133,7 @@ class DataIngestionTask(BaseModel):
 
 class IngestionMetadata(BaseModel):
     """Metadata for tracking ingestion progress."""
-    
+
     task_id: str
     status: str
     created_at: datetime
@@ -131,7 +141,7 @@ class IngestionMetadata(BaseModel):
     records_processed: int = 0
     bytes_processed: int = 0
     errors: List[str] = Field(default_factory=list)
-    
+
     # File tracking
     source_files: List[str] = Field(default_factory=list)
     output_files: List[str] = Field(default_factory=list)

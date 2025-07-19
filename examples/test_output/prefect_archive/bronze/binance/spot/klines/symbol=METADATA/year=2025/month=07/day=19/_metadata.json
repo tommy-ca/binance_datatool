@@ -1,0 +1,21 @@
+{
+  "zone": "bronze",
+  "exchange": "binance",
+  "data_type": "klines",
+  "trade_type": "spot",
+  "symbol": "METADATA",
+  "partition_date": "2025-07-19T18:20:19.530021",
+  "record_count": 1,
+  "created_at": "2025-07-19T18:20:29.425115",
+  "schema": {
+    "task_id": "String",
+    "status": "String",
+    "created_at": "Datetime(time_unit='us', time_zone=None)",
+    "updated_at": "Datetime(time_unit='us', time_zone=None)",
+    "records_processed": "Int64",
+    "bytes_processed": "Int64",
+    "errors": "List(Null)",
+    "source_files": "List(Null)",
+    "output_files": "List(Null)"
+  }
+}

@@ -1,246 +1,336 @@
-"""K-line data processor for Bronze to Silver transformation."""
+"""
+Kline (candlestick) data processor for Silver layer transformation.
+
+This module processes raw kline data from the Bronze zone, applying cleaning,
+validation, enrichment, and technical indicators for storage in the Silver zone.
+"""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import polars as pl
-from typing import Dict, Any
-from datetime import datetime
-import logging
-from decimal import Decimal
 
+from ..core.models import DataZone
 from .base import BaseProcessor
-from ..core.models import DataZone, DataType
-from ..core.config import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class KlineProcessor(BaseProcessor):
-    """Processor for K-line (candlestick) data."""
+    """
+    Processor for candlestick (kline) data transformation.
+    
+    Transforms raw kline data from Bronze zone into clean, validated, and enriched
+    data for Silver zone storage with technical indicators and derived metrics.
+    """
+    
+    def get_required_columns(self) -> List[str]:
+        """Get required columns for kline processing."""
+        return [
+            "symbol",
+            "open_time", 
+            "close_time",
+            "open_price",
+            "high_price", 
+            "low_price",
+            "close_price",
+            "volume",
+            "quote_asset_volume",
+            "number_of_trades"
+        ]
+    
+    def validate_input(self, data: pl.DataFrame) -> Dict[str, Any]:
+        """
+        Validate input kline data structure and quality.
+        
+        Args:
+            data: Input kline data
+            
+        Returns:
+            Validation report with status and issues
+        """
+        validation_report = {
+            "valid": True,
+            "issues": [],
+            "record_count": len(data),
+            "column_check": {},
+            "data_quality": {}
+        }
+        
+        try:
+            # Check required columns
+            required_columns = self.get_required_columns()
+            missing_columns = [col for col in required_columns if col not in data.columns]
+            
+            if missing_columns:
+                validation_report["valid"] = False
+                validation_report["issues"].append(f"Missing required columns: {missing_columns}")
+            
+            for col in required_columns:
+                validation_report["column_check"][col] = col in data.columns
+            
+            # Validate numeric price columns
+            price_columns = ["open_price", "high_price", "low_price", "close_price"]
+            numeric_validation = self.validate_numeric_columns(data, price_columns + ["volume", "quote_asset_volume"])
+            
+            if not numeric_validation["valid"]:
+                validation_report["valid"] = False
+                validation_report["issues"].extend(numeric_validation["issues"])
+            
+            validation_report["data_quality"] = numeric_validation["statistics"]
+            
+            # Check for logical price relationships (high >= low, etc.)
+            if all(col in data.columns for col in price_columns):
+                invalid_hloc = data.filter(
+                    (pl.col("high_price") < pl.col("low_price")) |
+                    (pl.col("open_price") < 0) |
+                    (pl.col("close_price") < 0)
+                ).height
+                
+                if invalid_hloc > 0:
+                    validation_report["valid"] = False
+                    validation_report["issues"].append(f"Invalid HLOC relationships: {invalid_hloc} records")
+            
+            # Check timestamp ordering
+            if "open_time" in data.columns and "close_time" in data.columns:
+                invalid_times = data.filter(pl.col("close_time") <= pl.col("open_time")).height
+                if invalid_times > 0:
+                    validation_report["valid"] = False
+                    validation_report["issues"].append(f"Invalid timestamp ordering: {invalid_times} records")
+            
+            return validation_report
+            
+        except Exception as e:
+            self.logger.error(f"Input validation failed: {e}")
+            validation_report["valid"] = False
+            validation_report["issues"].append(f"Validation error: {e}")
+            return validation_report
     
     async def process(
-        self,
-        data: pl.DataFrame,
-        source_zone: DataZone,
+        self, 
+        data: pl.DataFrame, 
+        source_zone: DataZone, 
         target_zone: DataZone,
         **kwargs
     ) -> pl.DataFrame:
-        """Process K-line data from Bronze to Silver zone."""
+        """
+        Process kline data from Bronze to Silver zone.
+        
+        Args:
+            data: Input kline data
+            source_zone: Source zone (typically BRONZE)
+            target_zone: Target zone (typically SILVER)
+            **kwargs: Additional processing parameters
+            
+        Returns:
+            Processed kline data with enrichments
+        """
         try:
-            # Validate input schema
-            expected_schema = self.get_schema(source_zone)
-            if not self.validate_schema(data, expected_schema):
-                raise ValueError("Input data schema validation failed")
+            self.logger.info(f"Processing {len(data)} kline records from {source_zone} to {target_zone}")
             
-            # Sort by symbol and timestamp
-            processed_data = data.sort(["symbol", "open_time"])
+            # Step 1: Validate input data
+            validation_report = self.validate_input(data)
+            if not validation_report["valid"]:
+                raise ValueError(f"Input validation failed: {validation_report['issues']}")
             
-            # Clean and validate data
-            processed_data = await self._clean_data(processed_data)
+            # Step 2: Clean data
+            cleaned_data = self.clean_data(data)
             
-            # Add computed features
-            processed_data = await self._add_features(processed_data)
-            
-            # Add processing metadata
-            processed_data = await self.add_processing_metadata(
-                processed_data,
-                datetime.now(),
-                source_zone,
-                target_zone
+            # Step 3: Deduplicate based on symbol and open_time
+            deduplicated_data = self.deduplicate_data(
+                cleaned_data, 
+                ["symbol", "open_time"]
             )
             
-            # Validate output schema
-            output_schema = self.get_schema(target_zone)
-            if not self.validate_schema(processed_data, output_schema):
-                logger.warning("Output schema validation failed, but continuing")
+            # Step 4: Sort by timestamp
+            sorted_data = self.sort_by_timestamp(deduplicated_data, "open_time")
             
-            logger.info(f"Successfully processed {len(processed_data)} K-line records")
-            return processed_data
+            # Step 5: Add derived columns
+            enriched_data = self._add_derived_metrics(sorted_data)
+            
+            # Step 6: Add technical indicators
+            technical_data = self._add_technical_indicators(enriched_data)
+            
+            # Step 7: Add processing metadata
+            final_data = self.add_processing_metadata(technical_data)
+            
+            # Step 8: Final validation
+            final_validation = self._validate_processed_data(final_data)
+            if not final_validation["valid"]:
+                self.logger.warning(f"Processed data validation issues: {final_validation['issues']}")
+            
+            self.logger.info(f"Successfully processed {len(final_data)} kline records")
+            return final_data
             
         except Exception as e:
-            logger.error(f"K-line processing failed: {e}")
+            self.logger.error(f"Kline processing failed: {e}")
             raise
     
-    def get_schema(self, zone: DataZone) -> pl.Schema:
-        """Get expected schema for K-line data in different zones."""
+    def _add_derived_metrics(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add derived metrics to kline data.
         
-        bronze_schema = pl.Schema({
-            "symbol": pl.Utf8,
-            "open_time": pl.Datetime,
-            "close_time": pl.Datetime,
-            "open_price": pl.Float64,
-            "high_price": pl.Float64,
-            "low_price": pl.Float64,
-            "close_price": pl.Float64,
-            "volume": pl.Float64,
-            "quote_asset_volume": pl.Float64,
-            "number_of_trades": pl.Int64,
-            "taker_buy_base_asset_volume": pl.Float64,
-            "taker_buy_quote_asset_volume": pl.Float64
-        })
-        
-        silver_schema = bronze_schema.copy()
-        silver_schema.update({
-            # Enhanced features
-            "vwap": pl.Float64,
-            "returns": pl.Float64,
-            "log_returns": pl.Float64,
-            "price_change": pl.Float64,
-            "price_change_percent": pl.Float64,
-            "volatility": pl.Float64,
+        Args:
+            data: Input kline data
             
-            # Technical indicators
-            "typical_price": pl.Float64,
-            "volume_weighted_average": pl.Float64,
-            
-            # Metadata
-            "_processed_at": pl.Datetime,
-            "_source_zone": pl.Utf8,
-            "_target_zone": pl.Utf8,
-            "_processor_version": pl.Utf8
-        })
-        
-        if zone == DataZone.BRONZE:
-            return bronze_schema
-        elif zone == DataZone.SILVER:
-            return silver_schema
-        else:
-            return bronze_schema
-    
-    async def _clean_data(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Clean and validate K-line data."""
-        cleaned = data
-        
-        # Remove rows with invalid prices (null, zero, negative)
-        cleaned = cleaned.filter(
-            (pl.col("open_price") > 0) &
-            (pl.col("high_price") > 0) &
-            (pl.col("low_price") > 0) &
-            (pl.col("close_price") > 0) &
-            (pl.col("volume") >= 0)
-        )
-        
-        # Validate OHLC relationships
-        cleaned = cleaned.filter(
-            (pl.col("high_price") >= pl.col("open_price")) &
-            (pl.col("high_price") >= pl.col("close_price")) &
-            (pl.col("low_price") <= pl.col("open_price")) &
-            (pl.col("low_price") <= pl.col("close_price")) &
-            (pl.col("high_price") >= pl.col("low_price"))
-        )
-        
-        # Remove duplicate records
-        cleaned = cleaned.unique(subset=["symbol", "open_time"])
-        
-        # Fill any remaining nulls with appropriate values
-        cleaned = cleaned.with_columns([
-            pl.col("number_of_trades").fill_null(0),
-            pl.col("taker_buy_base_asset_volume").fill_null(0),
-            pl.col("taker_buy_quote_asset_volume").fill_null(0)
-        ])
-        
-        rows_removed = len(data) - len(cleaned)
-        if rows_removed > 0:
-            logger.info(f"Cleaned data: removed {rows_removed} invalid records")
-        
-        return cleaned
-    
-    async def _add_features(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Add computed features to K-line data."""
-        enhanced = data.with_columns([
-            # Volume Weighted Average Price (VWAP)
-            (
-                (pl.col("high_price") + pl.col("low_price") + pl.col("close_price")) / 3 * pl.col("volume")
-            ).sum().over("symbol") / pl.col("volume").sum().over("symbol").alias("vwap"),
-            
-            # Price changes
-            (pl.col("close_price") - pl.col("open_price")).alias("price_change"),
-            (
-                (pl.col("close_price") - pl.col("open_price")) / pl.col("open_price") * 100
-            ).alias("price_change_percent"),
-            
-            # Returns (period over period)
-            (
-                (pl.col("close_price") / pl.col("close_price").shift(1) - 1) * 100
-            ).over("symbol").alias("returns"),
-            
-            # Log returns
-            (
-                pl.col("close_price").log() - pl.col("close_price").shift(1).log()
-            ).over("symbol").alias("log_returns"),
-            
-            # Typical price
-            (
-                (pl.col("high_price") + pl.col("low_price") + pl.col("close_price")) / 3
-            ).alias("typical_price"),
-            
-            # Volume weighted average (different from VWAP)
-            (
-                pl.col("quote_asset_volume") / pl.col("volume")
-            ).alias("volume_weighted_average"),
-            
-        ])
-        
-        # Calculate volatility (rolling standard deviation of returns)
-        enhanced = enhanced.with_columns([
-            pl.col("returns").rolling_std(window_size=20, min_periods=1).over("symbol").alias("volatility")
-        ])
-        
-        # Handle edge cases and infinite values
-        enhanced = enhanced.with_columns([
-            pl.col("vwap").fill_null(pl.col("close_price")),
-            pl.col("returns").fill_null(0.0),
-            pl.col("log_returns").fill_null(0.0),
-            pl.col("volatility").fill_null(0.0)
-        ])
-        
-        # Replace infinite values with nulls then fill
-        numeric_cols = ["returns", "log_returns", "price_change_percent", "volatility"]
-        for col in numeric_cols:
-            enhanced = enhanced.with_columns([
-                pl.when(pl.col(col).is_infinite()).then(None).otherwise(pl.col(col)).alias(col)
-            ])
-            enhanced = enhanced.with_columns([
-                pl.col(col).fill_null(0.0)
-            ])
-        
-        logger.info("Added enhanced features to K-line data")
-        return enhanced
-    
-    async def calculate_additional_indicators(
-        self, 
-        data: pl.DataFrame, 
-        indicators: list = None
-    ) -> pl.DataFrame:
-        """Calculate additional technical indicators."""
-        if not indicators:
-            indicators = ["sma_20", "ema_20", "bollinger_bands"]
-        
-        enhanced = data
-        
-        for indicator in indicators:
-            if indicator == "sma_20":
-                enhanced = enhanced.with_columns([
-                    pl.col("close_price").rolling_mean(window_size=20).over("symbol").alias("sma_20")
-                ])
-            
-            elif indicator == "ema_20":
-                # Exponential Moving Average (simplified)
-                enhanced = enhanced.with_columns([
-                    pl.col("close_price").ewm_mean(span=20).over("symbol").alias("ema_20")
-                ])
-            
-            elif indicator == "bollinger_bands":
-                # Bollinger Bands (20-period SMA ± 2 standard deviations)
-                enhanced = enhanced.with_columns([
-                    pl.col("close_price").rolling_mean(window_size=20).over("symbol").alias("bb_middle"),
-                    pl.col("close_price").rolling_std(window_size=20).over("symbol").alias("bb_std")
-                ])
+        Returns:
+            Data with derived metrics added
+        """
+        try:
+            return data.with_columns([
+                # Price-based metrics
+                (pl.col("high_price") - pl.col("low_price")).alias("price_range"),
+                (pl.col("close_price") - pl.col("open_price")).alias("price_change"),
+                ((pl.col("close_price") - pl.col("open_price")) / pl.col("open_price") * 100).alias("price_change_pct"),
                 
-                enhanced = enhanced.with_columns([
-                    (pl.col("bb_middle") + 2 * pl.col("bb_std")).alias("bb_upper"),
-                    (pl.col("bb_middle") - 2 * pl.col("bb_std")).alias("bb_lower")
-                ])
+                # Volume-based metrics
+                (pl.col("quote_asset_volume") / pl.col("volume")).alias("avg_price"),
+                (pl.col("volume") / pl.col("number_of_trades")).alias("avg_trade_size"),
                 
-                # Clean up temporary columns
-                enhanced = enhanced.drop(["bb_std"])
+                # Time-based metrics
+                (pl.col("close_time") - pl.col("open_time")).dt.total_milliseconds().alias("duration_ms"),
+                
+                # Volatility metrics
+                ((pl.col("high_price") - pl.col("low_price")) / pl.col("open_price") * 100).alias("volatility_pct"),
+                
+                # Body and wick metrics for candlestick analysis
+                pl.when(pl.col("close_price") >= pl.col("open_price"))
+                .then(pl.col("close_price") - pl.col("open_price"))
+                .otherwise(pl.col("open_price") - pl.col("close_price"))
+                .alias("body_size"),
+                
+                pl.when(pl.col("close_price") >= pl.col("open_price"))
+                .then(pl.lit("bullish"))
+                .otherwise(pl.lit("bearish"))
+                .alias("candle_type"),
+                
+                # Upper and lower wicks
+                pl.when(pl.col("close_price") >= pl.col("open_price"))
+                .then(pl.col("high_price") - pl.col("close_price"))
+                .otherwise(pl.col("high_price") - pl.col("open_price"))
+                .alias("upper_wick"),
+                
+                pl.when(pl.col("close_price") >= pl.col("open_price"))
+                .then(pl.col("open_price") - pl.col("low_price"))
+                .otherwise(pl.col("close_price") - pl.col("low_price"))
+                .alias("lower_wick")
+            ])
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add derived metrics: {e}")
+            raise
+    
+    def _add_technical_indicators(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add technical indicators to kline data.
         
-        return enhanced
+        Args:
+            data: Input kline data
+            
+        Returns:
+            Data with technical indicators added
+        """
+        try:
+            # Sort by symbol and time for proper indicator calculation
+            sorted_data = data.sort(["symbol", "open_time"])
+            
+            # Add moving averages and other indicators
+            return sorted_data.with_columns([
+                # Simple Moving Averages
+                pl.col("close_price").rolling_mean(window_size=7).over("symbol").alias("sma_7"),
+                pl.col("close_price").rolling_mean(window_size=14).over("symbol").alias("sma_14"),
+                pl.col("close_price").rolling_mean(window_size=30).over("symbol").alias("sma_30"),
+                
+                # Volume Moving Average
+                pl.col("volume").rolling_mean(window_size=14).over("symbol").alias("volume_ma_14"),
+                
+                # Price volatility (rolling standard deviation)
+                pl.col("close_price").rolling_std(window_size=14).over("symbol").alias("price_volatility_14"),
+                
+                # Volume-weighted average price (VWAP) approximation
+                ((pl.col("high_price") + pl.col("low_price") + pl.col("close_price")) / 3 * pl.col("volume"))
+                .rolling_sum(window_size=14).over("symbol")
+                .truediv(pl.col("volume").rolling_sum(window_size=14).over("symbol"))
+                .alias("vwap_14"),
+                
+                # Relative Strength Index (RSI) components
+                pl.col("price_change")
+                .map_elements(lambda x: max(x, 0), return_dtype=pl.Float64)
+                .rolling_mean(window_size=14).over("symbol")
+                .alias("avg_gain_14"),
+                
+                pl.col("price_change")
+                .map_elements(lambda x: abs(min(x, 0)), return_dtype=pl.Float64)
+                .rolling_mean(window_size=14).over("symbol")
+                .alias("avg_loss_14"),
+            ]).with_columns([
+                # Calculate RSI
+                pl.when(pl.col("avg_loss_14") == 0)
+                .then(100)
+                .otherwise(100 - (100 / (1 + pl.col("avg_gain_14") / pl.col("avg_loss_14"))))
+                .alias("rsi_14")
+            ])
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add technical indicators: {e}")
+            # Return original data if indicator calculation fails
+            return data
+    
+    def _validate_processed_data(self, data: pl.DataFrame) -> Dict[str, Any]:
+        """
+        Validate the final processed data.
+        
+        Args:
+            data: Processed kline data
+            
+        Returns:
+            Validation report
+        """
+        validation_report = {
+            "valid": True,
+            "issues": [],
+            "metrics": {}
+        }
+        
+        try:
+            # Check for required columns after processing
+            required_final_columns = self.get_required_columns() + [
+                "price_range", "price_change", "price_change_pct", 
+                "processed_at", "processor_name"
+            ]
+            
+            missing_columns = [col for col in required_final_columns if col not in data.columns]
+            if missing_columns:
+                validation_report["issues"].append(f"Missing processed columns: {missing_columns}")
+            
+            # Check for null values in critical derived columns
+            critical_derived = ["price_range", "price_change", "avg_price"]
+            for col in critical_derived:
+                if col in data.columns:
+                    null_count = data[col].null_count()
+                    if null_count > 0:
+                        validation_report["issues"].append(f"Null values in derived column {col}: {null_count}")
+            
+            # Calculate processing metrics
+            validation_report["metrics"] = {
+                "total_records": len(data),
+                "columns_count": len(data.columns),
+                "symbols_count": data["symbol"].n_unique() if "symbol" in data.columns else 0,
+                "date_range": {
+                    "min_time": data["open_time"].min() if "open_time" in data.columns else None,
+                    "max_time": data["open_time"].max() if "open_time" in data.columns else None
+                }
+            }
+            
+            # Mark as invalid if there are issues
+            if validation_report["issues"]:
+                validation_report["valid"] = False
+            
+            return validation_report
+            
+        except Exception as e:
+            self.logger.error(f"Final validation failed: {e}")
+            validation_report["valid"] = False
+            validation_report["issues"].append(f"Validation error: {e}")
+            return validation_report

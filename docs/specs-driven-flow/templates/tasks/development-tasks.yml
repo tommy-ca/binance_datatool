@@ -1,0 +1,370 @@
+# Development Tasks Template
+# Phase 3: Tasks | Development Task Breakdown
+# ================================================================
+
+development_tasks:
+  # Feature identification
+  feature_id: "{{FEATURE_ID}}"
+  feature_name: "{{FEATURE_NAME}}"
+  version: "{{VERSION}}"
+  created_date: "{{DATE}}"
+  created_by: "{{TEAM_NAME}}"
+  category: "development"
+  
+  # Task breakdown structure
+  tasks:
+    - id: "DEV001"
+      title: "{{TASK_TITLE_1}}"  # e.g., "Implement AuthService Component"
+      description: "{{TASK_DESCRIPTION_1}}"  # e.g., "Create the main authentication service with all required methods"
+      type: "{{TASK_TYPE_1}}"  # e.g., "Feature Development", "Bug Fix", "Refactoring"
+      
+      # Requirements traceability
+      requirements_mapping:
+        functional_requirements:
+          - "{{FR_ID_1}}"  # e.g., "FR001" - User Login
+          - "{{FR_ID_2}}"  # e.g., "FR002" - Token Validation
+        technical_requirements:
+          - "{{TR_ID_1}}"  # e.g., "TR001" - Authentication Architecture
+          - "{{TR_ID_2}}"  # e.g., "TR002" - Security Requirements
+        
+      # Design traceability
+      design_mapping:
+        architecture_components:
+          - "{{ARCH_COMPONENT_1}}"  # e.g., "AuthService component specification"
+          - "{{ARCH_COMPONENT_2}}"  # e.g., "Application layer design"
+        interface_definitions:
+          - "{{INTERFACE_1}}"  # e.g., "IAuthService interface definition"
+          - "{{INTERFACE_2}}"  # e.g., "AuthResponse data model"
+        
+      # Task deliverables
+      deliverables:
+        code:
+          - file: "{{CODE_FILE_1}}"  # e.g., "src/auth/auth_service.py"
+            description: "{{CODE_DESC_1}}"  # e.g., "AuthService class implementation"
+            type: "{{CODE_TYPE_1}}"  # e.g., "Python class"
+          - file: "{{CODE_FILE_2}}"  # e.g., "src/auth/interfaces.py"
+            description: "{{CODE_DESC_2}}"  # e.g., "Authentication interfaces"
+            type: "{{CODE_TYPE_2}}"  # e.g., "Python interfaces"
+            
+        tests:
+          - file: "{{TEST_FILE_1}}"  # e.g., "tests/unit/test_auth_service.py"
+            description: "{{TEST_DESC_1}}"  # e.g., "Unit tests with >95% coverage"
+            coverage_target: "{{COVERAGE_1}}"  # e.g., ">95%"
+          - file: "{{TEST_FILE_2}}"  # e.g., "tests/integration/test_auth_integration.py"
+            description: "{{TEST_DESC_2}}"  # e.g., "Integration tests with mock dependencies"
+            coverage_target: "{{COVERAGE_2}}"  # e.g., ">90%"
+            
+        documentation:
+          - file: "{{DOC_FILE_1}}"  # e.g., "docs/api/auth-service.md"
+            description: "{{DOC_DESC_1}}"  # e.g., "Component documentation"
+            type: "{{DOC_TYPE_1}}"  # e.g., "Technical documentation"
+          - file: "{{DOC_FILE_2}}"  # e.g., "docs/api/auth-api.yml"
+            description: "{{DOC_DESC_2}}"  # e.g., "API specification"
+            type: "{{DOC_TYPE_2}}"  # e.g., "OpenAPI specification"
+        
+      # Acceptance criteria
+      acceptance_criteria:
+        functional:
+          - "{{AC_FUNCTIONAL_1}}"  # e.g., "All IAuthService methods implemented"
+          - "{{AC_FUNCTIONAL_2}}"  # e.g., "Authentication logic follows business rules"
+          - "{{AC_FUNCTIONAL_3}}"  # e.g., "Error handling follows design specification"
+          
+        technical:
+          - "{{AC_TECHNICAL_1}}"  # e.g., "Code follows coding standards"
+          - "{{AC_TECHNICAL_2}}"  # e.g., "Unit test coverage > 95%"
+          - "{{AC_TECHNICAL_3}}"  # e.g., "Integration tests pass"
+          
+        performance:
+          - "{{AC_PERFORMANCE_1}}"  # e.g., "Response time < 50ms"
+          - "{{AC_PERFORMANCE_2}}"  # e.g., "Memory usage < 100MB"
+          - "{{AC_PERFORMANCE_3}}"  # e.g., "Supports 100 concurrent requests"
+          
+        security:
+          - "{{AC_SECURITY_1}}"  # e.g., "Input validation implemented"
+          - "{{AC_SECURITY_2}}"  # e.g., "No security vulnerabilities found"
+          - "{{AC_SECURITY_3}}"  # e.g., "Logging implemented per standards"
+      
+      # Effort estimation
+      effort_estimate:
+        story_points: "{{STORY_POINTS_1}}"  # e.g., 8
+        hours: "{{HOURS_1}}"  # e.g., 16
+        uncertainty: "{{UNCERTAINTY_1}}"  # e.g., "medium" (low | medium | high)
+        estimation_method: "{{ESTIMATION_METHOD_1}}"  # e.g., "Planning poker"
+        confidence_level: "{{CONFIDENCE_1}}"  # e.g., "80%" (percentage)
+        
+      # Task dependencies
+      dependencies:
+        blocking_tasks:
+          - task_id: "{{BLOCKING_TASK_1}}"  # e.g., "DEV002"
+            description: "{{BLOCKING_DESC_1}}"  # e.g., "User entity implementation"
+            relationship: "{{BLOCKING_REL_1}}"  # e.g., "Must complete before starting"
+            
+        dependent_tasks:
+          - task_id: "{{DEPENDENT_TASK_1}}"  # e.g., "TEST001"
+            description: "{{DEPENDENT_DESC_1}}"  # e.g., "AuthService unit tests"
+            relationship: "{{DEPENDENT_REL_1}}"  # e.g., "Can start after this task"
+            
+        external_dependencies:
+          - dependency: "{{EXTERNAL_DEP_1}}"  # e.g., "Database schema creation"
+            owner: "{{DEP_OWNER_1}}"  # e.g., "Database team"
+            status: "{{DEP_STATUS_1}}"  # e.g., "pending" (pending | in_progress | completed)
+            
+      # Resource assignment
+      assignment:
+        primary_assignee: "{{PRIMARY_ASSIGNEE_1}}"  # e.g., "backend_developer"
+        secondary_assignees: ["{{SECONDARY_1}}", "{{SECONDARY_2}}"]  # e.g., ["security_engineer", "qa_engineer"]
+        required_skills: ["{{SKILL_1}}", "{{SKILL_2}}"]  # e.g., ["Python", "Authentication systems"]
+        
+      # Scheduling
+      scheduling:
+        priority: "{{PRIORITY_1}}"  # e.g., "high" (low | medium | high | critical)
+        target_sprint: "{{SPRINT_1}}"  # e.g., 1
+        planned_start_date: "{{START_DATE_1}}"  # e.g., "2024-01-15"
+        planned_end_date: "{{END_DATE_1}}"  # e.g., "2024-01-17"
+        milestone: "{{MILESTONE_1}}"  # e.g., "Authentication MVP"
+        
+      # Quality gates
+      quality_gates:
+        code_review:
+          required: true
+          reviewers: ["{{REVIEWER_1}}", "{{REVIEWER_2}}"]  # e.g., ["tech_lead", "senior_developer"]
+          criteria: ["{{REVIEW_CRITERIA_1}}", "{{REVIEW_CRITERIA_2}}"]  # e.g., ["Code quality", "Security review"]
+          
+        testing:
+          unit_tests: "{{UNIT_TEST_REQ_1}}"  # e.g., "> 95% coverage"
+          integration_tests: "{{INTEGRATION_TEST_REQ_1}}"  # e.g., "All critical paths tested"
+          performance_tests: "{{PERFORMANCE_TEST_REQ_1}}"  # e.g., "Response time < 50ms"
+          
+        security:
+          security_review: true
+          vulnerability_scan: true
+          security_criteria: ["{{SECURITY_CRITERIA_1}}", "{{SECURITY_CRITERIA_2}}"]  # e.g., ["No high-risk vulnerabilities", "Input validation complete"]
+          
+      # Risk assessment
+      risks:
+        - risk_id: "DEV_RISK_001"
+          description: "{{RISK_DESC_1}}"  # e.g., "Authentication logic complexity"
+          probability: "{{RISK_PROB_1}}"  # e.g., "medium" (low | medium | high)
+          impact: "{{RISK_IMPACT_1}}"  # e.g., "high" (low | medium | high)
+          mitigation: "{{RISK_MITIGATION_1}}"  # e.g., "Pair programming and extensive testing"
+          owner: "{{RISK_OWNER_1}}"  # e.g., "backend_developer"
+          
+    - id: "DEV002"
+      title: "{{TASK_TITLE_2}}"  # e.g., "Implement User Entity and Repository"
+      description: "{{TASK_DESCRIPTION_2}}"  # e.g., "Create User domain entity and repository implementation"
+      type: "{{TASK_TYPE_2}}"  # e.g., "Feature Development"
+      
+      requirements_mapping:
+        functional_requirements:
+          - "{{FR_ID_1}}"  # e.g., "FR001" - User Login
+          - "{{FR_ID_3}}"  # e.g., "FR003" - User Management
+        technical_requirements:
+          - "{{TR_ID_3}}"  # e.g., "TR003" - Data Model
+          - "{{TR_ID_4}}"  # e.g., "TR004" - Database Design
+        
+      design_mapping:
+        architecture_components:
+          - "{{ARCH_COMPONENT_3}}"  # e.g., "User entity specification"
+          - "{{ARCH_COMPONENT_4}}"  # e.g., "Domain layer design"
+        interface_definitions:
+          - "{{INTERFACE_3}}"  # e.g., "UserRepository interface"
+          - "{{INTERFACE_4}}"  # e.g., "User entity definition"
+        
+      deliverables:
+        code:
+          - file: "{{CODE_FILE_3}}"  # e.g., "src/domain/user.py"
+            description: "{{CODE_DESC_3}}"  # e.g., "User entity class"
+            type: "{{CODE_TYPE_3}}"  # e.g., "Python dataclass"
+          - file: "{{CODE_FILE_4}}"  # e.g., "src/infrastructure/user_repository.py"
+            description: "{{CODE_DESC_4}}"  # e.g., "UserRepository implementation"
+            type: "{{CODE_TYPE_4}}"  # e.g., "Python class"
+            
+        tests:
+          - file: "{{TEST_FILE_3}}"  # e.g., "tests/unit/test_user_entity.py"
+            description: "{{TEST_DESC_3}}"  # e.g., "User entity unit tests"
+            coverage_target: "{{COVERAGE_3}}"  # e.g., ">95%"
+          - file: "{{TEST_FILE_4}}"  # e.g., "tests/integration/test_user_repository.py"
+            description: "{{TEST_DESC_4}}"  # e.g., "Repository integration tests"
+            coverage_target: "{{COVERAGE_4}}"  # e.g., ">90%"
+            
+        infrastructure:
+          - file: "{{INFRA_FILE_1}}"  # e.g., "migrations/001_create_users_table.sql"
+            description: "{{INFRA_DESC_1}}"  # e.g., "Database migration scripts"
+            type: "{{INFRA_TYPE_1}}"  # e.g., "SQL migration"
+        
+      acceptance_criteria:
+        functional:
+          - "{{AC_FUNCTIONAL_4}}"  # e.g., "User entity validates all constraints"
+          - "{{AC_FUNCTIONAL_5}}"  # e.g., "Repository implements all CRUD operations"
+          - "{{AC_FUNCTIONAL_6}}"  # e.g., "Database schema matches design"
+          
+        technical:
+          - "{{AC_TECHNICAL_4}}"  # e.g., "Entity follows domain model principles"
+          - "{{AC_TECHNICAL_5}}"  # e.g., "Repository follows repository pattern"
+          - "{{AC_TECHNICAL_6}}"  # e.g., "All validation rules enforced"
+      
+      effort_estimate:
+        story_points: "{{STORY_POINTS_2}}"  # e.g., 5
+        hours: "{{HOURS_2}}"  # e.g., 10
+        uncertainty: "{{UNCERTAINTY_2}}"  # e.g., "low"
+        estimation_method: "{{ESTIMATION_METHOD_2}}"
+        confidence_level: "{{CONFIDENCE_2}}"  # e.g., "90%"
+        
+      dependencies:
+        blocking_tasks: []  # No blocking tasks for this example
+        dependent_tasks:
+          - task_id: "DEV001"
+            description: "AuthService implementation"
+            relationship: "Depends on User entity"
+        external_dependencies: []
+        
+      assignment:
+        primary_assignee: "{{PRIMARY_ASSIGNEE_2}}"  # e.g., "backend_developer"
+        secondary_assignees: ["{{SECONDARY_3}}"]  # e.g., ["database_engineer"]
+        required_skills: ["{{SKILL_3}}", "{{SKILL_4}}"]  # e.g., ["Python", "Database design"]
+        
+      scheduling:
+        priority: "{{PRIORITY_2}}"  # e.g., "high"
+        target_sprint: "{{SPRINT_2}}"  # e.g., 1
+        planned_start_date: "{{START_DATE_2}}"
+        planned_end_date: "{{END_DATE_2}}"
+        milestone: "{{MILESTONE_2}}"
+        
+      quality_gates:
+        code_review:
+          required: true
+          reviewers: ["{{REVIEWER_3}}", "{{REVIEWER_4}}"]
+          criteria: ["{{REVIEW_CRITERIA_3}}", "{{REVIEW_CRITERIA_4}}"]
+          
+        testing:
+          unit_tests: "{{UNIT_TEST_REQ_2}}"
+          integration_tests: "{{INTEGRATION_TEST_REQ_2}}"
+          performance_tests: "{{PERFORMANCE_TEST_REQ_2}}"
+          
+        database:
+          schema_review: true
+          migration_testing: true
+          performance_validation: true
+
+# Task planning metadata
+planning_metadata:
+  # Sprint planning
+  sprint_planning:
+    total_story_points: "{{TOTAL_STORY_POINTS}}"  # Sum of all task story points
+    estimated_duration: "{{ESTIMATED_DURATION}}"  # Total estimated duration
+    team_capacity: "{{TEAM_CAPACITY}}"  # Available team capacity
+    sprint_goal: "{{SPRINT_GOAL}}"  # e.g., "Complete authentication foundation"
+    
+  # Resource allocation
+  resource_allocation:
+    - role: "{{ROLE_1}}"  # e.g., "backend_developer"
+      allocation_percentage: "{{ALLOCATION_1}}"  # e.g., "80%"
+      tasks_assigned: ["{{TASK_1}}", "{{TASK_2}}"]  # e.g., ["DEV001", "DEV002"]
+      
+    - role: "{{ROLE_2}}"  # e.g., "database_engineer"
+      allocation_percentage: "{{ALLOCATION_2}}"  # e.g., "40%"
+      tasks_assigned: ["{{TASK_3}}"]  # e.g., ["DEV002"]
+      
+  # Timeline planning
+  timeline:
+    - milestone: "{{MILESTONE_1}}"  # e.g., "Development Start"
+      date: "{{MILESTONE_DATE_1}}"  # e.g., "2024-01-15"
+      deliverables: ["{{DELIVERABLE_1}}"]  # e.g., ["Project setup complete"]
+      
+    - milestone: "{{MILESTONE_2}}"  # e.g., "Core Implementation"
+      date: "{{MILESTONE_DATE_2}}"  # e.g., "2024-01-20"
+      deliverables: ["{{DELIVERABLE_2}}", "{{DELIVERABLE_3}}"]  # e.g., ["User entity", "AuthService"]
+      
+    - milestone: "{{MILESTONE_3}}"  # e.g., "Testing Complete"
+      date: "{{MILESTONE_DATE_3}}"  # e.g., "2024-01-25"
+      deliverables: ["{{DELIVERABLE_4}}"]  # e.g., ["All tests passing"]
+
+# Quality assurance
+quality_assurance:
+  # Development standards
+  development_standards:
+    coding_standards: "{{CODING_STANDARDS}}"  # e.g., "PEP 8 for Python"
+    documentation_standards: "{{DOC_STANDARDS}}"  # e.g., "Google-style docstrings"
+    testing_standards: "{{TEST_STANDARDS}}"  # e.g., "pytest with >95% coverage"
+    security_standards: "{{SECURITY_STANDARDS}}"  # e.g., "OWASP guidelines"
+    
+  # Review process
+  review_process:
+    code_review_required: true
+    design_review_required: true
+    security_review_required: true
+    performance_review_required: false
+    
+    review_criteria:
+      - criteria: "{{REVIEW_CRITERIA_1}}"  # e.g., "Code quality and readability"
+      - criteria: "{{REVIEW_CRITERIA_2}}"  # e.g., "Adherence to design patterns"
+      - criteria: "{{REVIEW_CRITERIA_3}}"  # e.g., "Security best practices"
+      - criteria: "{{REVIEW_CRITERIA_4}}"  # e.g., "Test coverage and quality"
+  
+  # Definition of done
+  definition_of_done:
+    - "{{DOD_1}}"  # e.g., "Code implemented and tested"
+    - "{{DOD_2}}"  # e.g., "Unit tests passing with >95% coverage"
+    - "{{DOD_3}}"  # e.g., "Integration tests passing"
+    - "{{DOD_4}}"  # e.g., "Code review completed and approved"
+    - "{{DOD_5}}"  # e.g., "Documentation updated"
+    - "{{DOD_6}}"  # e.g., "Security review passed"
+    - "{{DOD_7}}"  # e.g., "Performance criteria met"
+    - "{{DOD_8}}"  # e.g., "Deployment to staging successful"
+
+# Risk management
+risk_management:
+  # Overall project risks
+  project_risks:
+    - risk_id: "PROJ_RISK_001"
+      description: "{{PROJECT_RISK_1}}"  # e.g., "Technical complexity underestimated"
+      probability: "{{PROJ_PROB_1}}"  # e.g., "medium"
+      impact: "{{PROJ_IMPACT_1}}"  # e.g., "high"
+      mitigation: "{{PROJ_MITIGATION_1}}"  # e.g., "Regular technical reviews and spike tasks"
+      owner: "{{PROJ_RISK_OWNER_1}}"  # e.g., "tech_lead"
+      
+  # Risk monitoring
+  risk_monitoring:
+    review_frequency: "{{RISK_REVIEW_FREQ}}"  # e.g., "Weekly"
+    escalation_criteria: "{{ESCALATION_CRITERIA}}"  # e.g., "High impact risks or blocked tasks"
+    mitigation_tracking: "{{MITIGATION_TRACKING}}"  # e.g., "Action items with owners and deadlines"
+
+# Validation criteria
+validation_criteria:
+  task_completeness:
+    - "All functional requirements mapped to tasks"
+    - "All design components addressed"
+    - "Effort estimates provided for all tasks"
+    - "Dependencies identified and validated"
+    - "Quality gates defined for all tasks"
+    
+  planning_quality:
+    - "Resource allocation is realistic"
+    - "Timeline is achievable"
+    - "Dependencies are managed"
+    - "Risks are identified and mitigated"
+    - "Definition of done is clear"
+    
+  team_readiness:
+    - "All team members understand their tasks"
+    - "Required skills are available"
+    - "Tools and environment are ready"
+    - "Dependencies are confirmed"
+    - "Communication plan is established"
+
+# Next phase preparation
+next_phase_inputs:
+  implementation_setup:
+    - "{{IMPL_SETUP_1}}"  # e.g., "Development environment configuration"
+    - "{{IMPL_SETUP_2}}"  # e.g., "Project structure initialization"
+    - "{{IMPL_SETUP_3}}"  # e.g., "CI/CD pipeline setup"
+    
+  development_priorities:
+    - priority: 1
+      tasks: ["{{HIGH_PRIORITY_TASK_1}}", "{{HIGH_PRIORITY_TASK_2}}"]  # e.g., ["DEV002", "DEV001"]
+      rationale: "{{PRIORITY_RATIONALE_1}}"  # e.g., "Foundation components needed first"
+      
+  success_metrics:
+    - metric: "{{SUCCESS_METRIC_1}}"  # e.g., "All tasks completed on time"
+    - metric: "{{SUCCESS_METRIC_2}}"  # e.g., "Quality gates passed"
+    - metric: "{{SUCCESS_METRIC_3}}"  # e.g., "Team velocity maintained"

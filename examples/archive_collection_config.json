@@ -1,0 +1,37 @@
+{
+  "workflow_type": "archive_collection",
+  "matrix_path": "data/binance_archive_matrix.json",
+  "output_directory": "output/archive_data",
+  "markets": ["spot", "futures_um", "futures_cm"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "ADAUSDT"],
+  "data_types": ["klines", "trades", "fundingRate"],
+  "date_range": {
+    "start": "2025-07-01",
+    "end": "2025-07-15"
+  },
+  "max_parallel_downloads": 4,
+  "force_redownload": false,
+  "download_checksum": true,
+  "timeout_seconds": 300,
+  "batch_size": 50,
+  "part_size_mb": 50,
+  "enable_batch_mode": true,
+  "environment": "development",
+  "enable_monitoring": true,
+  "use_cloud_storage": false,
+  "local_data_dir": "output/archive_data",
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "storage": {
+    "type": "local",
+    "compression": true,
+    "partition_format": "year/month/day"
+  },
+  "performance": {
+    "batch_size": 1000,
+    "memory_limit_mb": 2048,
+    "max_file_size_mb": 500
+  }
+}

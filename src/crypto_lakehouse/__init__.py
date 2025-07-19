@@ -15,32 +15,32 @@ Key Features:
 __version__ = "2.0.0"
 __author__ = "Crypto Data Lakehouse Team"
 
-from .core.models import DataType, Exchange, Interval
 from .core.config import Settings
+from .core.models import DataType, Exchange, Interval
 
 
 class CryptoLakehouse:
     """Main lakehouse interface for cryptocurrency data operations."""
-    
+
     def __init__(self, settings: Settings = None):
         """Initialize the crypto lakehouse with optional settings."""
         self.settings = settings or Settings()
-        
+
     def run_workflow(self, workflow_name: str, **kwargs):
         """Run a specified workflow with given parameters."""
         return {
             "workflow": workflow_name,
             "status": "completed",
             "records_processed": 1000,
-            "parameters": kwargs
+            "parameters": kwargs,
         }
-        
+
     def get_status(self):
         """Get the current status of the lakehouse."""
         return {
             "status": "ready",
             "version": __version__,
-            "environment": self.settings.environment if self.settings else "default"
+            "environment": self.settings.environment if self.settings else "default",
         }
 
 

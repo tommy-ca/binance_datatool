@@ -1,17 +1,17 @@
 """Base storage interface for the data lakehouse."""
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any, AsyncGenerator
 from datetime import datetime
-from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 import polars as pl
 
-from ..core.models import DataZone, DataType, TradeType, Exchange
+from ..core.models import DataType, DataZone, Exchange, TradeType
 
 
 class BaseStorage(ABC):
     """Abstract base class for data lakehouse storage."""
-    
+
     @abstractmethod
     async def write_data(
         self,
@@ -22,11 +22,11 @@ class BaseStorage(ABC):
         trade_type: TradeType,
         symbol: str,
         partition_date: datetime,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Write data to the lakehouse."""
         pass
-    
+
     @abstractmethod
     async def read_data(
         self,
@@ -37,11 +37,11 @@ class BaseStorage(ABC):
         symbols: Optional[List[str]] = None,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        **kwargs
+        **kwargs,
     ) -> pl.DataFrame:
         """Read data from the lakehouse."""
         pass
-    
+
     @abstractmethod
     async def list_partitions(
         self,
@@ -49,11 +49,11 @@ class BaseStorage(ABC):
         exchange: Exchange,
         data_type: DataType,
         trade_type: TradeType,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """List available data partitions."""
         pass
-    
+
     @abstractmethod
     async def delete_partition(
         self,
@@ -62,22 +62,18 @@ class BaseStorage(ABC):
         data_type: DataType,
         trade_type: TradeType,
         symbol: str,
-        partition_date: datetime
+        partition_date: datetime,
     ) -> bool:
         """Delete a specific data partition."""
         pass
-    
+
     @abstractmethod
     async def get_schema(
-        self,
-        zone: DataZone,
-        exchange: Exchange,
-        data_type: DataType,
-        trade_type: TradeType
+        self, zone: DataZone, exchange: Exchange, data_type: DataType, trade_type: TradeType
     ) -> Optional[pl.Schema]:
         """Get the schema for a data type."""
         pass
-    
+
     @abstractmethod
     async def optimize_partitions(
         self,
@@ -85,11 +81,11 @@ class BaseStorage(ABC):
         exchange: Exchange,
         data_type: DataType,
         trade_type: TradeType,
-        symbol: Optional[str] = None
+        symbol: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Optimize storage partitions (compaction, etc.)."""
         pass
-    
+
     def get_partition_path(
         self,
         zone: DataZone,
@@ -97,21 +93,17 @@ class BaseStorage(ABC):
         data_type: DataType,
         trade_type: TradeType,
         symbol: str,
-        partition_date: datetime
+        partition_date: datetime,
     ) -> str:
         """Generate partition path following lakehouse conventions."""
         year = partition_date.year
         month = f"{partition_date.month:02d}"
         day = f"{partition_date.day:02d}"
-        
+
         return f"{zone.value}/{exchange.value}/{trade_type.value}/{data_type.value}/symbol={symbol}/year={year}/month={month}/day={day}"
-    
+
     def get_table_path(
-        self,
-        zone: DataZone,
-        exchange: Exchange,
-        data_type: DataType,
-        trade_type: TradeType
+        self, zone: DataZone, exchange: Exchange, data_type: DataType, trade_type: TradeType
     ) -> str:
         """Generate table path for data catalog registration."""
         return f"{zone.value}/{exchange.value}/{trade_type.value}/{data_type.value}"
@@ -119,7 +111,7 @@ class BaseStorage(ABC):
 
 class DataLakeMetadata(ABC):
     """Abstract interface for data lake metadata management."""
-    
+
     @abstractmethod
     async def register_table(
         self,
@@ -128,35 +120,24 @@ class DataLakeMetadata(ABC):
         schema: pl.Schema,
         location: str,
         partition_columns: List[str],
-        **kwargs
+        **kwargs,
     ) -> bool:
         """Register table in data catalog."""
         pass
-    
+
     @abstractmethod
     async def update_partitions(
-        self,
-        database: str,
-        table_name: str,
-        partitions: List[Dict[str, Any]]
+        self, database: str, table_name: str, partitions: List[Dict[str, Any]]
     ) -> bool:
         """Update partition metadata."""
         pass
-    
+
     @abstractmethod
-    async def get_table_info(
-        self,
-        database: str,
-        table_name: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_table_info(self, database: str, table_name: str) -> Optional[Dict[str, Any]]:
         """Get table metadata information."""
         pass
-    
+
     @abstractmethod
-    async def list_tables(
-        self,
-        database: str,
-        pattern: Optional[str] = None
-    ) -> List[str]:
+    async def list_tables(self, database: str, pattern: Optional[str] = None) -> List[str]:
         """List tables in database."""
         pass

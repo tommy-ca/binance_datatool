@@ -1,178 +1,72 @@
-"""Configuration management for the crypto data lakehouse."""
+"""
+Simple configuration management for crypto lakehouse workflows.
+"""
 
-import os
-from pathlib import Path
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
-
-from .models import DataZone
+from typing import Dict, Any, Optional
+from .exceptions import ValidationError
 
 
-class S3Config(BaseModel):
-    """S3 storage configuration."""
-    bucket_name: str
-    region: str = "us-east-1"
-    access_key_id: Optional[str] = None
-    secret_access_key: Optional[str] = None
-    endpoint_url: Optional[str] = None
-
-
-class StorageConfig(BaseModel):
-    """Data lakehouse storage configuration."""
-    base_path: str = "s3://crypto-data-lakehouse"
+class Settings:
+    """System settings for storage and configuration."""
     
-    @property
-    def bronze_path(self) -> str:
-        """Raw data storage path."""
-        return f"{self.base_path}/bronze"
-    
-    @property
-    def silver_path(self) -> str:
-        """Processed data storage path."""
-        return f"{self.base_path}/silver"
-    
-    @property
-    def gold_path(self) -> str:
-        """Aggregated data storage path."""
-        return f"{self.base_path}/gold"
-    
-    def get_zone_path(self, zone: DataZone) -> str:
-        """Get storage path for a specific zone."""
-        if zone == DataZone.BRONZE:
-            return self.bronze_path
-        elif zone == DataZone.SILVER:
-            return self.silver_path
-        elif zone == DataZone.GOLD:
-            return self.gold_path
-        else:
-            raise ValueError(f"Unknown data zone: {zone}")
-
-
-class WorkflowConfig(BaseModel):
-    """Workflow orchestration configuration."""
-    engine: str = "prefect"  # or "dagster"
-    concurrency_limit: int = 10
-    retry_attempts: int = 3
-    retry_delay_seconds: int = 60
-
-
-class ProcessingConfig(BaseModel):
-    """Data processing configuration."""
-    batch_size: int = 10000
-    memory_limit_gb: int = 8
-    cpu_count: Optional[int] = None
-    enable_parallel: bool = True
-    partition_cols: list[str] = Field(default=["year", "month", "day"])
-
-
-class BinanceConfig(BaseModel):
-    """Binance-specific configuration."""
-    aws_base_url: str = "https://data.binance.vision"
-    api_base_url: str = "https://api.binance.com"
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    rate_limit_requests_per_minute: int = 1200
-    
-    # Data availability
-    spot_start_date: str = "2017-08-17"
-    futures_start_date: str = "2019-09-08"
-
-
-class DataCatalogConfig(BaseModel):
-    """Data catalog configuration."""
-    enabled: bool = True
-    provider: str = "glue"  # or "hive", "unity"
-    database_name: str = "crypto_lakehouse"
-    region: str = "us-east-1"
-
-
-class QueryConfig(BaseModel):
-    """Query engine configuration."""
-    duckdb_memory_limit: str = "8GB"
-    duckdb_threads: Optional[int] = None
-    trino_enabled: bool = False
-    trino_coordinator_url: Optional[str] = None
-
-
-class MonitoringConfig(BaseModel):
-    """Monitoring and observability configuration."""
-    log_level: str = "INFO"
-    enable_metrics: bool = True
-    metrics_backend: str = "prometheus"
-    alert_webhook_url: Optional[str] = None
-
-
-class Settings(BaseSettings):
-    """Main application settings."""
-    
-    # Core settings
-    environment: str = Field(default="development", env="ENVIRONMENT")
-    debug: bool = Field(default=False, env="DEBUG")
-    
-    # Storage
-    storage: StorageConfig = Field(default_factory=StorageConfig)
-    s3: S3Config = Field(default_factory=lambda: S3Config(
-        bucket_name=os.getenv("S3_BUCKET", "crypto-data-lakehouse"),
-        region=os.getenv("AWS_REGION", "us-east-1"),
-        access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-    ))
-    
-    # Processing
-    workflow: WorkflowConfig = Field(default_factory=WorkflowConfig)
-    processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
-    
-    # Data sources
-    binance: BinanceConfig = Field(default_factory=BinanceConfig)
-    
-    # Infrastructure
-    data_catalog: DataCatalogConfig = Field(default_factory=DataCatalogConfig)
-    query: QueryConfig = Field(default_factory=QueryConfig)
-    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
-    
-    # Local development
-    local_data_dir: Path = Field(
-        default_factory=lambda: Path(os.getenv("CRYPTO_DATA_DIR", "~/crypto_data")).expanduser()
-    )
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        env_nested_delimiter = "__"
-        case_sensitive = False
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, config_data: Optional[Dict[str, Any]] = None):
+        """Initialize settings from configuration data."""
+        self._config = config_data or {}
         
-        # Ensure local data directory exists
-        self.local_data_dir.mkdir(parents=True, exist_ok=True)
-    
-    @property
-    def is_cloud_enabled(self) -> bool:
-        """Check if cloud storage is properly configured."""
-        return bool(self.s3.bucket_name and (
-            self.s3.access_key_id or 
-            os.getenv("AWS_PROFILE") or 
-            os.getenv("AWS_ROLE_ARN")
-        ))
-    
-    @property
-    def processing_concurrency(self) -> int:
-        """Get optimal processing concurrency."""
-        if self.processing.cpu_count:
-            return self.processing.cpu_count
-        return max(1, os.cpu_count() - 1)
-    
-    def get_storage_path(self, zone: DataZone, exchange: str, data_type: str) -> str:
-        """Get full storage path for a specific data type."""
-        base_path = self.storage.get_zone_path(zone)
-        return f"{base_path}/{exchange}/{data_type}"
-    
-    def get_local_cache_path(self, exchange: str, data_type: str) -> Path:
-        """Get local cache path for development."""
-        return self.local_data_dir / exchange / data_type
+        # Storage configuration
+        self.is_cloud_enabled = self._config.get('use_cloud_storage', False)
+        self.local_data_dir = self._config.get('output_directory', 'output')
+        
+        # AWS/S3 configuration
+        self.aws_access_key_id = self._config.get('aws_access_key_id')
+        self.aws_secret_access_key = self._config.get('aws_secret_access_key')
+        self.s3_bucket = self._config.get('s3_bucket')
+        self.s3_region = self._config.get('s3_region', 'us-east-1')
+        
+        # Binance configuration  
+        self.binance = BinanceSettings(self._config.get('binance', {}))
 
 
-# Global settings instance
-settings = Settings()
+class BinanceSettings:
+    """Binance-specific settings."""
+    
+    def __init__(self, config_data: Dict[str, Any]):
+        """Initialize Binance settings."""
+        self.api_key = config_data.get('api_key')
+        self.api_secret = config_data.get('api_secret')
+        self.base_url = config_data.get('base_url', 'https://api.binance.com')
+        self.testnet = config_data.get('testnet', False)
+        self.timeout = config_data.get('timeout', 30)
+
+
+class WorkflowConfig:
+    """Simple workflow configuration class."""
+    
+    def __init__(self, config_data: Dict[str, Any], validate: bool = True):
+        """Initialize configuration."""
+        self._config = config_data.copy()
+        if validate:
+            self.validate()
+    
+    def validate(self) -> None:
+        """Validate required fields."""
+        required = ['workflow_type', 'matrix_path', 'output_directory']
+        missing = [f for f in required if f not in self._config]
+        if missing:
+            raise ValidationError(f"Missing required fields: {missing}")
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get configuration value."""
+        return self._config.get(key, default)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return self._config.copy()
+    
+    def __contains__(self, key: str) -> bool:
+        """Check if key exists in configuration."""
+        return key in self._config
+    
+    def __getitem__(self, key: str) -> Any:
+        """Enable dictionary-style access."""
+        return self._config[key]

@@ -1,168 +1,255 @@
-"""Base data processing classes."""
+"""
+Base processor class for data transformation between lakehouse zones.
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
-import polars as pl
+This module provides the abstract base class and common functionality for all
+data processors in the cryptocurrency lakehouse platform.
+"""
+
 import logging
+from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from ..core.models import DataZone, DataType, TradeType, Exchange
+import polars as pl
+
 from ..core.config import Settings
+from ..core.models import DataType, DataZone, Exchange, TradeType
 
 logger = logging.getLogger(__name__)
 
 
 class BaseProcessor(ABC):
-    """Abstract base class for data processors."""
+    """
+    Abstract base class for data processors.
+    
+    Data processors are responsible for transforming data between different zones
+    in the lakehouse architecture (Bronze -> Silver -> Gold).
+    """
     
     def __init__(self, settings: Settings):
+        """
+        Initialize the processor with configuration settings.
+        
+        Args:
+            settings: Configuration settings for the processor
+        """
         self.settings = settings
-        self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+        self.logger = logging.getLogger(self.__class__.__name__)
     
     @abstractmethod
     async def process(
-        self,
-        data: pl.DataFrame,
-        source_zone: DataZone,
+        self, 
+        data: pl.DataFrame, 
+        source_zone: DataZone, 
         target_zone: DataZone,
         **kwargs
     ) -> pl.DataFrame:
-        """Process data from source to target zone."""
+        """
+        Process data from source zone to target zone format.
+        
+        Args:
+            data: Input data to process
+            source_zone: Source lakehouse zone (e.g., BRONZE)
+            target_zone: Target lakehouse zone (e.g., SILVER)
+            **kwargs: Additional processing parameters
+            
+        Returns:
+            Processed data ready for target zone
+        """
         pass
     
     @abstractmethod
-    def get_schema(self, zone: DataZone) -> pl.Schema:
-        """Get expected schema for the data in a specific zone."""
+    def validate_input(self, data: pl.DataFrame) -> Dict[str, Any]:
+        """
+        Validate input data structure and quality.
+        
+        Args:
+            data: Input data to validate
+            
+        Returns:
+            Validation report with status and issues
+        """
         pass
     
-    def validate_schema(self, data: pl.DataFrame, expected_schema: pl.Schema) -> bool:
-        """Validate DataFrame schema against expected schema."""
-        try:
-            data_columns = set(data.columns)
-            expected_columns = set(expected_schema.keys())
+    @abstractmethod
+    def get_required_columns(self) -> List[str]:
+        """
+        Get list of required columns for this processor.
+        
+        Returns:
+            List of required column names
+        """
+        pass
+    
+    def clean_data(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Perform common data cleaning operations.
+        
+        Args:
+            data: Input data to clean
             
-            missing_columns = expected_columns - data_columns
+        Returns:
+            Cleaned data
+        """
+        try:
+            # Remove completely null rows
+            cleaned_data = data.filter(~pl.all_horizontal(pl.all().is_null()))
+            
+            # Log cleaning statistics
+            original_count = len(data)
+            cleaned_count = len(cleaned_data)
+            
+            if original_count != cleaned_count:
+                self.logger.info(f"Removed {original_count - cleaned_count} null rows")
+            
+            return cleaned_data
+            
+        except Exception as e:
+            self.logger.error(f"Data cleaning failed: {e}")
+            raise
+    
+    def add_processing_metadata(self, data: pl.DataFrame) -> pl.DataFrame:
+        """
+        Add processing metadata to the data.
+        
+        Args:
+            data: Input data
+            
+        Returns:
+            Data with processing metadata added
+        """
+        try:
+            current_time = datetime.now()
+            
+            return data.with_columns([
+                pl.lit(current_time).alias("processed_at"),
+                pl.lit(self.__class__.__name__).alias("processor_name"),
+                pl.lit("2.0.0").alias("processor_version")
+            ])
+            
+        except Exception as e:
+            self.logger.error(f"Failed to add processing metadata: {e}")
+            raise
+    
+    def deduplicate_data(self, data: pl.DataFrame, key_columns: List[str]) -> pl.DataFrame:
+        """
+        Remove duplicate records based on key columns.
+        
+        Args:
+            data: Input data
+            key_columns: Columns to use for deduplication
+            
+        Returns:
+            Deduplicated data
+        """
+        try:
+            # Check if key columns exist
+            missing_columns = [col for col in key_columns if col not in data.columns]
             if missing_columns:
-                self.logger.error(f"Missing required columns: {missing_columns}")
-                return False
+                self.logger.warning(f"Key columns not found: {missing_columns}")
+                return data
             
-            # Check data types for key columns
-            for col_name, expected_type in expected_schema.items():
-                if col_name in data.columns:
-                    actual_type = data[col_name].dtype
-                    if not self._is_compatible_type(actual_type, expected_type):
-                        self.logger.warning(
-                            f"Column {col_name} type mismatch: {actual_type} vs {expected_type}"
-                        )
+            original_count = len(data)
+            deduplicated_data = data.unique(subset=key_columns, keep="last")
+            deduplicated_count = len(deduplicated_data)
             
-            return True
+            if original_count != deduplicated_count:
+                self.logger.info(f"Removed {original_count - deduplicated_count} duplicate records")
+            
+            return deduplicated_data
             
         except Exception as e:
-            self.logger.error(f"Schema validation failed: {e}")
-            return False
+            self.logger.error(f"Deduplication failed: {e}")
+            raise
     
-    def _is_compatible_type(self, actual: pl.DataType, expected: pl.DataType) -> bool:
-        """Check if data types are compatible."""
-        # Simplified type compatibility check
-        if actual == expected:
-            return True
+    def validate_numeric_columns(self, data: pl.DataFrame, numeric_columns: List[str]) -> Dict[str, Any]:
+        """
+        Validate numeric columns for reasonable values.
         
-        # Allow some flexibility for numeric types
-        numeric_types = {pl.Int32, pl.Int64, pl.Float32, pl.Float64}
-        if actual in numeric_types and expected in numeric_types:
-            return True
+        Args:
+            data: Input data
+            numeric_columns: List of numeric columns to validate
+            
+        Returns:
+            Validation report
+        """
+        validation_report = {
+            "valid": True,
+            "issues": [],
+            "statistics": {}
+        }
         
-        return False
-    
-    async def add_processing_metadata(
-        self, 
-        data: pl.DataFrame, 
-        processing_time: datetime,
-        source_zone: DataZone,
-        target_zone: DataZone
-    ) -> pl.DataFrame:
-        """Add metadata columns for tracking data lineage."""
-        return data.with_columns([
-            pl.lit(processing_time).alias("_processed_at"),
-            pl.lit(source_zone.value).alias("_source_zone"),
-            pl.lit(target_zone.value).alias("_target_zone"),
-            pl.lit("2.0.0").alias("_processor_version")
-        ])
-    
-    async def validate_data_quality(self, data: pl.DataFrame) -> Dict[str, Any]:
-        """Perform basic data quality checks."""
         try:
-            quality_report = {
-                "total_rows": data.shape[0],
-                "total_columns": data.shape[1],
-                "null_counts": {},
-                "duplicate_rows": 0,
-                "data_types": {},
-                "quality_score": 1.0
-            }
+            for col in numeric_columns:
+                if col in data.columns:
+                    # Check for negative values where they shouldn't exist
+                    if col in ["volume", "quote_asset_volume", "number_of_trades"]:
+                        negative_count = data.filter(pl.col(col) < 0).height
+                        if negative_count > 0:
+                            validation_report["valid"] = False
+                            validation_report["issues"].append(f"Negative values in {col}: {negative_count}")
+                    
+                    # Check for extremely large values (possible data corruption)
+                    if col.endswith("_price"):
+                        max_value = data[col].max()
+                        if max_value and max_value > 1000000:  # Arbitrary large value threshold
+                            validation_report["issues"].append(f"Extremely large price in {col}: {max_value}")
+                    
+                    # Collect statistics
+                    validation_report["statistics"][col] = {
+                        "min": data[col].min(),
+                        "max": data[col].max(),
+                        "mean": data[col].mean(),
+                        "null_count": data[col].null_count()
+                    }
             
-            # Count nulls per column
-            for col in data.columns:
-                null_count = data[col].null_count()
-                quality_report["null_counts"][col] = null_count
-                quality_report["data_types"][col] = str(data[col].dtype)
-            
-            # Count duplicate rows
-            quality_report["duplicate_rows"] = data.shape[0] - data.unique().shape[0]
-            
-            # Calculate quality score (simple heuristic)
-            total_nulls = sum(quality_report["null_counts"].values())
-            total_cells = data.shape[0] * data.shape[1]
-            
-            if total_cells > 0:
-                null_ratio = total_nulls / total_cells
-                duplicate_ratio = quality_report["duplicate_rows"] / data.shape[0]
-                quality_report["quality_score"] = max(0, 1.0 - null_ratio - duplicate_ratio)
-            
-            return quality_report
+            return validation_report
             
         except Exception as e:
-            self.logger.error(f"Data quality validation failed: {e}")
-            return {"error": str(e), "quality_score": 0.0}
-
-
-class BatchProcessor(BaseProcessor):
-    """Base class for batch data processing."""
+            self.logger.error(f"Numeric validation failed: {e}")
+            validation_report["valid"] = False
+            validation_report["issues"].append(f"Validation error: {e}")
+            return validation_report
     
-    async def process_in_batches(
-        self,
-        data: pl.DataFrame,
-        batch_size: Optional[int] = None,
-        **kwargs
-    ) -> pl.DataFrame:
-        """Process large datasets in batches."""
-        if batch_size is None:
-            batch_size = self.settings.processing.batch_size
+    def sort_by_timestamp(self, data: pl.DataFrame, timestamp_column: str) -> pl.DataFrame:
+        """
+        Sort data by timestamp column.
         
-        if data.shape[0] <= batch_size:
-            return await self.process(data, **kwargs)
-        
-        results = []
-        total_rows = data.shape[0]
-        
-        for i in range(0, total_rows, batch_size):
-            batch = data.slice(i, batch_size)
-            self.logger.info(f"Processing batch {i//batch_size + 1}/{(total_rows + batch_size - 1)//batch_size}")
+        Args:
+            data: Input data
+            timestamp_column: Name of timestamp column
             
-            processed_batch = await self.process(batch, **kwargs)
-            results.append(processed_batch)
-        
-        return pl.concat(results)
-
-
-class StreamProcessor(BaseProcessor):
-    """Base class for streaming data processing."""
+        Returns:
+            Sorted data
+        """
+        try:
+            if timestamp_column in data.columns:
+                return data.sort(timestamp_column)
+            else:
+                self.logger.warning(f"Timestamp column not found: {timestamp_column}")
+                return data
+                
+        except Exception as e:
+            self.logger.error(f"Sorting failed: {e}")
+            raise
     
-    async def process_stream(
-        self,
-        data_stream,
-        **kwargs
-    ):
-        """Process streaming data."""
-        # Implementation depends on streaming framework
-        raise NotImplementedError("Streaming processing not implemented yet")
+    def calculate_processing_metrics(self, input_data: pl.DataFrame, output_data: pl.DataFrame) -> Dict[str, Any]:
+        """
+        Calculate metrics about the processing operation.
+        
+        Args:
+            input_data: Original input data
+            output_data: Processed output data
+            
+        Returns:
+            Processing metrics
+        """
+        return {
+            "input_records": len(input_data),
+            "output_records": len(output_data),
+            "records_change": len(output_data) - len(input_data),
+            "processing_efficiency": len(output_data) / len(input_data) if len(input_data) > 0 else 0,
+            "input_columns": len(input_data.columns),
+            "output_columns": len(output_data.columns),
+            "columns_added": len(output_data.columns) - len(input_data.columns)
+        }
