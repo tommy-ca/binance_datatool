@@ -1,0 +1,79 @@
+{
+  "workflow_type": "archive_collection",
+  "workflow_version": "2.1.0",
+  "enhanced_features": {
+    "s3_direct_sync": true,
+    "auto_mode_selection": true,
+    "efficiency_optimization": true
+  },
+  
+  "operation_mode": "auto",
+  "enable_s3_direct_sync": true,
+  "sync_mode": "copy",
+  "enable_incremental": true,
+  
+  "s3_config": {
+    "destination_bucket": "crypto-lakehouse-bronze-dev",
+    "destination_prefix": "binance/archive",
+    "source_region": "ap-northeast-1",
+    "retry_count": 3
+  },
+  
+  "matrix_path": "docs/archive/enhanced_binance_archive_matrix.json",
+  "output_directory": "s3://crypto-lakehouse-bronze-dev/binance/archive/",
+  
+  "markets": ["spot", "futures_um"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "ADAUSDT"],
+  "data_types": ["klines", "fundingRate"],
+  "intervals": ["1m", "5m", "1h", "1d"],
+  
+  "date_range": {
+    "start": "2025-07-15",
+    "end": "2025-07-17"
+  },
+  
+  "performance_optimization": {
+    "max_parallel_downloads": 12,
+    "batch_size": 150,
+    "part_size_mb": 50,
+    "enable_batch_mode": true,
+    "enable_multipart": true
+  },
+  
+  "quality_control": {
+    "download_checksum": true,
+    "verify_file_integrity": true,
+    "force_redownload": false,
+    "timeout_seconds": 300
+  },
+  
+  "monitoring": {
+    "enable_monitoring": true,
+    "collect_metrics": true,
+    "log_level": "INFO",
+    "progress_reporting": true
+  },
+  
+  "advanced_options": {
+    "s5cmd_extra_args": [
+      "--no-sign-request",
+      "--retry-count=3",
+      "--numworkers=12"
+    ],
+    "enable_resume": true,
+    "cleanup_on_failure": true
+  },
+  
+  "efficiency_targets": {
+    "operations_reduction_goal": "50%",
+    "network_bandwidth_savings": "50%",
+    "local_storage_elimination": true,
+    "processing_time_improvement": "30%"
+  },
+  
+  "fallback_config": {
+    "auto_fallback_to_traditional": true,
+    "fallback_on_s3_errors": true,
+    "max_direct_sync_retries": 2
+  }
+}
