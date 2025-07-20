@@ -1,0 +1,66 @@
+{
+  "workflow_type": "archive_samples",
+  "description": "Production S3 Direct Sync Configuration with Performance Optimization",
+  "version": "2.1.0",
+  
+  "markets": ["spot", "um_futures"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT"],
+  "data_types": ["klines", "funding_rates"],
+  "intervals": ["1m", "5m", "15m", "1h", "4h", "1d"],
+  "date_range": {
+    "start_date": "2025-07-01",
+    "end_date": "2025-07-19"
+  },
+  
+  "enable_s3_direct_sync": true,
+  "operation_mode": "direct_sync",
+  "destination_bucket": "prod-crypto-lakehouse-bronze",
+  "destination_prefix": "binance/archive",
+  "sync_mode": "copy",
+  "enable_incremental": true,
+  
+  "performance_optimization": {
+    "max_concurrent": 16,
+    "batch_size": 200,
+    "part_size_mb": 100,
+    "retry_count": 5,
+    "enable_multipart_threshold_mb": 50
+  },
+  
+  "s3_config": {
+    "region": "us-east-1",
+    "storage_class": "STANDARD",
+    "use_accelerated_endpoint": false
+  },
+  
+  "monitoring": {
+    "enable_performance_tracking": true,
+    "enable_cost_tracking": true,
+    "enable_detailed_logging": true,
+    "metrics_collection_interval": 60,
+    "log_level": "INFO"
+  },
+  
+  "quality_control": {
+    "enable_checksum_validation": true,
+    "enable_size_verification": true,
+    "max_retry_attempts": 3,
+    "timeout_seconds": 300
+  },
+  
+  "base_output_dir": "output/production-archive",
+  "dry_run": false,
+  "verbose": false,
+  
+  "metadata": {
+    "description": "Production-grade S3 direct sync for comprehensive data collection",
+    "author": "Production Data Team",
+    "created_date": "2025-07-19",
+    "environment": "production",
+    "compliance": {
+      "data_retention_policy": "7_years",
+      "encryption_required": true,
+      "audit_logging": true
+    }
+  }
+}

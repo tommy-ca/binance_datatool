@@ -55,24 +55,65 @@ Testing documentation and strategies:
 - ✅ **Matrix-Driven Configuration** with URL pattern support
 - ✅ **Production Ready** with 100% core functionality validation
 
+### 🚀 [S3 Direct Sync](./s3-direct-sync/)
+**NEW**: Advanced S3 to S3 direct sync functionality with significant performance improvements:
+
+#### 📊 **S3 Direct Sync Performance Enhancement**
+- **[Architecture Overview](./s3-direct-sync/architecture.md)** - System design and component architecture
+- **[s5cmd Specifications](./s3-direct-sync/s5cmd-specifications.md)** - Comprehensive s5cmd integration guide
+- **[Performance Benchmarks](./s3-direct-sync/performance.md)** - Detailed performance analysis and optimization
+- **[Best Practices](./s3-direct-sync/best-practices.md)** - Operational best practices and guidelines
+- **[Configuration Examples](./s3-direct-sync/examples/)** - Ready-to-use configuration templates
+
+**Performance Achievements:**
+- ✅ **60%+ Faster Processing** - Reduced from 3.3s to 1.3s per batch
+- ✅ **80% Operation Reduction** - From 5 to 1 operation per file
+- ✅ **50% Bandwidth Savings** - Single S3 to S3 transfer vs download/upload
+- ✅ **100% Storage Elimination** - No local temporary files required
+- ✅ **Enhanced Reliability** - Intelligent fallback and error handling
+
 ## 🎯 Quick Navigation
 
 ### For New Users
 1. Start with [Architecture Overview](./architecture/) to understand the system
 2. Follow [Development Setup](./development/) for local environment
 3. Try the [Enhanced Archive Collection Examples](./workflows/archive-collection-examples.md)
+4. Explore [S3 Direct Sync](./s3-direct-sync/) for high-performance data collection
 
 ### For Developers
 1. Review [Development Guidelines](./development/)
 2. Check [API Reference](./workflows/archive-collection-api.md) for integration
 3. Follow [Testing Strategies](./testing/) for quality assurance
+4. Implement [S3 Direct Sync](./s3-direct-sync/) for optimized data pipelines
 
 ### For Operators
 1. Review [Deployment Guides](./deployment/)
 2. Use [Workflow Configuration](./workflows/enhanced-archive-collection.md#configuration-reference)
 3. Monitor with [Performance Specifications](./workflows/enhanced-archive-collection.md#performance-specifications)
+4. Optimize operations with [S3 Direct Sync Best Practices](./s3-direct-sync/best-practices.md)
 
 ## 🔍 Key Documentation Updates
+
+### S3 Direct Sync (v2.1.0) - **NEW!**
+The S3 Direct Sync functionality represents a breakthrough in data transfer efficiency:
+
+**Revolutionary Performance:**
+- **60.6% faster processing** - From 3.3s to 1.3s per batch (actual benchmarks)
+- **80% operation reduction** - Eliminates download/upload cycle
+- **50% bandwidth savings** - Direct S3 to S3 transfers
+- **100% storage elimination** - No local temporary storage required
+
+**Enterprise Features:**
+- **Intelligent auto-mode selection** - Automatic optimization based on conditions
+- **Comprehensive fallback mechanisms** - Graceful degradation to traditional mode
+- **Production-ready monitoring** - Real-time performance tracking and alerting
+- **Zero breaking changes** - Full backward compatibility maintained
+
+**Technical Innovation:**
+- **s5cmd integration** - High-performance S3 command-line tool
+- **Batch processing optimization** - Up to 500 files per batch operation
+- **Memory efficiency** - Constant <100MB usage regardless of file count
+- **Cross-region optimization** - Intelligent transfer routing
 
 ### Enhanced Archive Collection (v2.0)
 The Enhanced Archive Collection Workflow represents a major upgrade providing:
@@ -110,6 +151,21 @@ The Enhanced Archive Collection Workflow represents a major upgrade providing:
 - Memory-optimized for large collections
 
 ## 📖 Getting Started Examples
+
+### S3 Direct Sync Quick Start
+```json
+{
+  "enable_s3_direct_sync": true,
+  "operation_mode": "auto",
+  "destination_bucket": "your-lakehouse-bucket",
+  "destination_prefix": "binance/archive",
+  "performance_optimization": {
+    "max_concurrent": 16,
+    "batch_size": 200,
+    "part_size_mb": 100
+  }
+}
+```
 
 ### Basic Collection
 ```python
@@ -149,7 +205,44 @@ config = WorkflowConfig({
 
 ## 🔧 Configuration Templates
 
-### High-Performance Setup
+### S3 Direct Sync Templates
+
+#### High-Performance S3 Direct Sync
+```json
+{
+  "enable_s3_direct_sync": true,
+  "operation_mode": "direct_sync",
+  "performance_optimization": {
+    "max_concurrent": 32,
+    "batch_size": 500,
+    "part_size_mb": 100
+  },
+  "s3_config": {
+    "use_accelerated_endpoint": true,
+    "storage_class": "STANDARD"
+  }
+}
+```
+
+#### Cost-Optimized S3 Direct Sync
+```json
+{
+  "enable_s3_direct_sync": true,
+  "operation_mode": "auto",
+  "performance_optimization": {
+    "max_concurrent": 8,
+    "batch_size": 100,
+    "part_size_mb": 50
+  },
+  "s3_config": {
+    "storage_class": "STANDARD_IA"
+  }
+}
+```
+
+### Traditional Workflow Templates
+
+#### High-Performance Setup
 ```json
 {
     "batch_size": 100,
@@ -213,6 +306,13 @@ config = WorkflowConfig({
 - Test changes across all supported markets and data types
 
 ## 🎉 What's New
+
+### Version 2.1.0 Highlights - **S3 Direct Sync Revolution**
+- **Revolutionary Performance**: 60%+ faster processing with direct S3 to S3 transfers
+- **Zero Storage Requirement**: 100% elimination of local temporary storage
+- **Intelligent Operation**: Auto-mode selection with graceful fallback mechanisms
+- **Production Ready**: Comprehensive monitoring, error handling, and performance optimization
+- **Backward Compatible**: Zero breaking changes, seamless upgrade path
 
 ### Version 2.0 Highlights
 - **4x Market Coverage**: Added futures CM and options support

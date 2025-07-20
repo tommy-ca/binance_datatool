@@ -1,0 +1,99 @@
+{
+  "workflow_type": "archive_samples",
+  "description": "High Performance S3 Direct Sync Configuration for Large-Scale Operations",
+  "version": "2.1.0",
+  
+  "markets": ["spot", "um_futures", "cm_futures"],
+  "symbols": ["*"],
+  "data_types": ["klines", "funding_rates", "aggTrades"],
+  "intervals": ["*"],
+  "date_range": {
+    "start_date": "2025-01-01",
+    "end_date": "2025-07-19"
+  },
+  
+  "enable_s3_direct_sync": true,
+  "operation_mode": "direct_sync",
+  "destination_bucket": "enterprise-crypto-lakehouse-bronze",
+  "destination_prefix": "binance/archive",
+  "sync_mode": "copy",
+  "enable_incremental": true,
+  
+  "performance_optimization": {
+    "max_concurrent": 32,
+    "batch_size": 500,
+    "part_size_mb": 100,
+    "retry_count": 3,
+    "enable_multipart_threshold_mb": 25,
+    "adaptive_batch_sizing": true,
+    "dynamic_worker_scaling": true
+  },
+  
+  "s3_config": {
+    "region": "us-east-1",
+    "storage_class": "STANDARD",
+    "use_accelerated_endpoint": true,
+    "enable_request_payer": false,
+    "server_side_encryption": "AES256"
+  },
+  
+  "advanced_features": {
+    "enable_parallel_prefix_processing": true,
+    "enable_intelligent_routing": true,
+    "enable_bandwidth_optimization": true,
+    "enable_memory_optimization": true,
+    "enable_network_compression": false
+  },
+  
+  "monitoring": {
+    "enable_performance_tracking": true,
+    "enable_cost_tracking": true,
+    "enable_detailed_logging": false,
+    "enable_real_time_metrics": true,
+    "metrics_collection_interval": 30,
+    "log_level": "WARNING",
+    "cloudwatch_integration": true,
+    "custom_metrics_namespace": "CryptoLakehouse/S3DirectSync"
+  },
+  
+  "quality_control": {
+    "enable_checksum_validation": true,
+    "enable_size_verification": true,
+    "enable_integrity_checks": true,
+    "max_retry_attempts": 3,
+    "timeout_seconds": 600,
+    "enable_automatic_recovery": true
+  },
+  
+  "resource_management": {
+    "memory_limit_gb": 8,
+    "cpu_limit_cores": 16,
+    "network_bandwidth_limit_mbps": 1000,
+    "disk_space_limit_gb": 100,
+    "enable_resource_monitoring": true
+  },
+  
+  "base_output_dir": "output/enterprise-archive",
+  "dry_run": false,
+  "verbose": false,
+  
+  "metadata": {
+    "description": "Enterprise-grade S3 direct sync for maximum performance and scale",
+    "author": "Enterprise Data Infrastructure Team",
+    "created_date": "2025-07-19",
+    "environment": "production",
+    "performance_tier": "enterprise",
+    "sla_requirements": {
+      "availability": "99.9%",
+      "performance_improvement": "> 60%",
+      "error_rate": "< 1%",
+      "recovery_time": "< 5 minutes"
+    },
+    "compliance": {
+      "data_retention_policy": "10_years",
+      "encryption_required": true,
+      "audit_logging": true,
+      "data_governance": "enterprise_tier"
+    }
+  }
+}

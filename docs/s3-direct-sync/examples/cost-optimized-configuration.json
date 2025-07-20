@@ -1,0 +1,94 @@
+{
+  "workflow_type": "archive_samples",
+  "description": "Cost-Optimized S3 Direct Sync Configuration for Budget-Conscious Operations",
+  "version": "2.1.0",
+  
+  "markets": ["spot"],
+  "symbols": ["BTCUSDT", "ETHUSDT"],
+  "data_types": ["klines"],
+  "intervals": ["1h", "1d"],
+  "date_range": {
+    "start_date": "2025-07-15",
+    "end_date": "2025-07-19"
+  },
+  
+  "enable_s3_direct_sync": true,
+  "operation_mode": "auto",
+  "destination_bucket": "cost-optimized-crypto-lakehouse",
+  "destination_prefix": "binance/archive",
+  "sync_mode": "sync",
+  "enable_incremental": true,
+  
+  "performance_optimization": {
+    "max_concurrent": 8,
+    "batch_size": 100,
+    "part_size_mb": 50,
+    "retry_count": 5,
+    "enable_multipart_threshold_mb": 100
+  },
+  
+  "s3_config": {
+    "region": "us-east-1",
+    "storage_class": "STANDARD_IA",
+    "use_accelerated_endpoint": false,
+    "lifecycle_policy": "transition_to_glacier_after_90_days"
+  },
+  
+  "cost_optimization": {
+    "enable_intelligent_tiering": true,
+    "enable_compression": false,
+    "enable_deduplication": true,
+    "prefer_smaller_part_sizes": true,
+    "minimize_request_count": true,
+    "optimize_for_long_term_storage": true
+  },
+  
+  "monitoring": {
+    "enable_performance_tracking": false,
+    "enable_cost_tracking": true,
+    "enable_detailed_logging": false,
+    "metrics_collection_interval": 300,
+    "log_level": "ERROR",
+    "focus_on_cost_metrics": true
+  },
+  
+  "quality_control": {
+    "enable_checksum_validation": true,
+    "enable_size_verification": true,
+    "max_retry_attempts": 5,
+    "timeout_seconds": 600,
+    "prioritize_reliability_over_speed": true
+  },
+  
+  "resource_constraints": {
+    "memory_limit_gb": 2,
+    "cpu_limit_cores": 4,
+    "network_bandwidth_limit_mbps": 100,
+    "max_daily_transfer_gb": 500,
+    "enable_resource_throttling": true
+  },
+  
+  "base_output_dir": "output/cost-optimized-archive",
+  "dry_run": false,
+  "verbose": false,
+  
+  "metadata": {
+    "description": "Cost-optimized S3 direct sync for budget-conscious data collection",
+    "author": "Cost Optimization Team",
+    "created_date": "2025-07-19",
+    "environment": "production",
+    "cost_tier": "optimized",
+    "budget_constraints": {
+      "monthly_budget_usd": 100,
+      "cost_per_gb_target": 0.02,
+      "storage_cost_optimization": "high_priority",
+      "transfer_cost_optimization": "high_priority"
+    },
+    "sla_requirements": {
+      "availability": "99.0%",
+      "performance_improvement": "> 40%",
+      "error_rate": "< 3%",
+      "recovery_time": "< 15 minutes"
+    }
+  }
+}

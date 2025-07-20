@@ -1,0 +1,30 @@
+{
+  "workflow_type": "archive_samples",
+  "description": "Basic S3 Direct Sync Configuration Example",
+  "version": "2.1.0",
+  
+  "markets": ["spot"],
+  "symbols": ["BTCUSDT", "ETHUSDT"],
+  "data_types": ["klines"],
+  "intervals": ["1m", "1h", "1d"],
+  "date_range": {
+    "start_date": "2025-07-15",
+    "end_date": "2025-07-15"
+  },
+  
+  "enable_s3_direct_sync": true,
+  "operation_mode": "auto",
+  "destination_bucket": "crypto-lakehouse-bronze",
+  "destination_prefix": "binance/archive",
+  
+  "base_output_dir": "output/archive-samples",
+  "dry_run": false,
+  "verbose": true,
+  
+  "metadata": {
+    "description": "Basic S3 direct sync for daily klines data collection",
+    "author": "S3 Direct Sync System",
+    "created_date": "2025-07-19",
+    "environment": "development"
+  }
+}
