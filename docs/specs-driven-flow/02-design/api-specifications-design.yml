@@ -1,0 +1,861 @@
+---
+# API Specifications Design: Prefect + s5cmd + MinIO Infrastructure
+# Phase 2: API Design and Interface Specifications
+# Version: 1.0.0
+# Date: 2025-07-20
+---
+
+api_design_overview:
+  api_strategy: "api_first_microservices_architecture"
+  design_principles:
+    - "restful_design_with_resource_orientation"
+    - "versioning_for_backward_compatibility"
+    - "consistent_error_handling_and_responses"
+    - "comprehensive_authentication_and_authorization"
+    - "rate_limiting_and_throttling"
+    - "extensive_documentation_and_testing"
+  
+  api_gateway_configuration:
+    gateway_technology: "istio_gateway_with_virtual_services"
+    base_domain: "api.crypto-lakehouse.com"
+    tls_configuration: "automatic_tls_with_cert_manager"
+    cors_policy: "restrictive_with_allowed_origins"
+
+api_specifications:
+  infrastructure_management_api:
+    base_path: "/api/v1/infrastructure"
+    description: "Centralized infrastructure management and status API"
+    authentication: "bearer_token_jwt"
+    rate_limiting: "1000_requests_per_minute_per_user"
+    
+    endpoints:
+      infrastructure_status:
+        path: "/status"
+        method: "GET"
+        description: "Get overall infrastructure health and status"
+        authentication: "required"
+        authorization: "infrastructure_read"
+        
+        response_schema:
+          type: "object"
+          properties:
+            overall_status:
+              type: "string"
+              enum: ["healthy", "degraded", "unhealthy"]
+            timestamp:
+              type: "string"
+              format: "date-time"
+            components:
+              type: "object"
+              properties:
+                prefect_server:
+                  $ref: "#/components/schemas/ComponentStatus"
+                minio_cluster:
+                  $ref: "#/components/schemas/ComponentStatus"
+                s5cmd_executor:
+                  $ref: "#/components/schemas/ComponentStatus"
+                postgresql_cluster:
+                  $ref: "#/components/schemas/ComponentStatus"
+                redis_cache:
+                  $ref: "#/components/schemas/ComponentStatus"
+            performance_metrics:
+              type: "object"
+              properties:
+                active_workflows:
+                  type: "integer"
+                s5cmd_operations_per_minute:
+                  type: "number"
+                storage_utilization_percentage:
+                  type: "number"
+                api_response_time_ms:
+                  type: "number"
+        
+        example_response: |
+          {
+            "overall_status": "healthy",
+            "timestamp": "2025-07-20T10:00:00Z",
+            "components": {
+              "prefect_server": {
+                "status": "healthy",
+                "version": "3.0.0",
+                "uptime_seconds": 86400,
+                "replicas_ready": 3
+              },
+              "minio_cluster": {
+                "status": "healthy",
+                "version": "RELEASE.2025-07-20T00-00-00Z",
+                "nodes_ready": 4,
+                "storage_available_gb": 95000
+              }
+            },
+            "performance_metrics": {
+              "active_workflows": 25,
+              "s5cmd_operations_per_minute": 150,
+              "storage_utilization_percentage": 65.5,
+              "api_response_time_ms": 85
+            }
+          }
+      
+      component_details:
+        path: "/components/{component_name}"
+        method: "GET"
+        description: "Get detailed status and metrics for specific component"
+        authentication: "required"
+        authorization: "infrastructure_read"
+        
+        parameters:
+          - name: "component_name"
+            in: "path"
+            required: true
+            schema:
+              type: "string"
+              enum: ["prefect", "minio", "s5cmd", "postgresql", "redis"]
+        
+        response_schema:
+          type: "object"
+          properties:
+            component_name:
+              type: "string"
+            status:
+              $ref: "#/components/schemas/ComponentStatus"
+            detailed_metrics:
+              type: "object"
+              additionalProperties: true
+            recent_events:
+              type: "array"
+              items:
+                $ref: "#/components/schemas/ComponentEvent"
+
+  prefect_orchestration_api:
+    base_path: "/api/v1/prefect"
+    description: "Workflow orchestration and management API"
+    authentication: "bearer_token_jwt"
+    rate_limiting: "2000_requests_per_minute_per_user"
+    
+    endpoints:
+      workflow_management:
+        workflows_list:
+          path: "/workflows"
+          method: "GET"
+          description: "List available workflows with filtering and pagination"
+          authentication: "required"
+          authorization: "workflow_read"
+          
+          parameters:
+            - name: "status"
+              in: "query"
+              schema:
+                type: "string"
+                enum: ["active", "inactive", "archived"]
+            - name: "workflow_type"
+              in: "query"
+              schema:
+                type: "string"
+                enum: ["crypto_data_collection", "data_processing", "maintenance"]
+            - name: "limit"
+              in: "query"
+              schema:
+                type: "integer"
+                minimum: 1
+                maximum: 100
+                default: 20
+            - name: "offset"
+              in: "query"
+              schema:
+                type: "integer"
+                minimum: 0
+                default: 0
+          
+          response_schema:
+            type: "object"
+            properties:
+              workflows:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/WorkflowSummary"
+              pagination:
+                $ref: "#/components/schemas/PaginationInfo"
+                
+        workflow_execute:
+          path: "/workflows/{workflow_id}/execute"
+          method: "POST"
+          description: "Execute a workflow with optional parameters"
+          authentication: "required"
+          authorization: "workflow_execute"
+          
+          parameters:
+            - name: "workflow_id"
+              in: "path"
+              required: true
+              schema:
+                type: "string"
+                format: "uuid"
+          
+          request_schema:
+            type: "object"
+            properties:
+              parameters:
+                type: "object"
+                additionalProperties: true
+              priority:
+                type: "string"
+                enum: ["low", "medium", "high", "critical"]
+                default: "medium"
+              scheduled_for:
+                type: "string"
+                format: "date-time"
+                description: "Optional scheduled execution time"
+              notification_config:
+                type: "object"
+                properties:
+                  on_completion:
+                    type: "boolean"
+                  on_failure:
+                    type: "boolean"
+                  webhook_url:
+                    type: "string"
+                    format: "uri"
+          
+          response_schema:
+            type: "object"
+            properties:
+              execution_id:
+                type: "string"
+                format: "uuid"
+              workflow_id:
+                type: "string"
+                format: "uuid"
+              status:
+                type: "string"
+                enum: ["queued", "running", "completed", "failed", "cancelled"]
+              estimated_duration_seconds:
+                type: "integer"
+              execution_url:
+                type: "string"
+                format: "uri"
+              
+      execution_monitoring:
+        execution_status:
+          path: "/executions/{execution_id}"
+          method: "GET"
+          description: "Get detailed execution status and progress"
+          authentication: "required"
+          authorization: "workflow_read"
+          
+          parameters:
+            - name: "execution_id"
+              in: "path"
+              required: true
+              schema:
+                type: "string"
+                format: "uuid"
+          
+          response_schema:
+            type: "object"
+            properties:
+              execution_id:
+                type: "string"
+                format: "uuid"
+              workflow_id:
+                type: "string"
+                format: "uuid"
+              status:
+                type: "string"
+                enum: ["queued", "running", "completed", "failed", "cancelled"]
+              progress_percentage:
+                type: "number"
+                minimum: 0
+                maximum: 100
+              started_at:
+                type: "string"
+                format: "date-time"
+              completed_at:
+                type: "string"
+                format: "date-time"
+              task_executions:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/TaskExecution"
+              performance_metrics:
+                $ref: "#/components/schemas/ExecutionMetrics"
+              logs_url:
+                type: "string"
+                format: "uri"
+
+  s5cmd_operations_api:
+    base_path: "/api/v1/s5cmd"
+    description: "High-performance S3 operations API"
+    authentication: "bearer_token_jwt"
+    rate_limiting: "500_requests_per_minute_per_user"
+    
+    endpoints:
+      sync_operations:
+        sync_initiate:
+          path: "/sync"
+          method: "POST"
+          description: "Initiate high-performance S3 sync operation"
+          authentication: "required"
+          authorization: "s5cmd_execute"
+          
+          request_schema:
+            type: "object"
+            required: ["source", "destination", "operation_mode"]
+            properties:
+              source:
+                type: "object"
+                properties:
+                  bucket:
+                    type: "string"
+                  prefix:
+                    type: "string"
+                  region:
+                    type: "string"
+              destination:
+                type: "object"
+                properties:
+                  bucket:
+                    type: "string"
+                  prefix:
+                    type: "string"
+                  region:
+                    type: "string"
+              operation_mode:
+                type: "string"
+                enum: ["direct_sync", "hybrid", "traditional"]
+                description: "S5cmd operation mode for performance optimization"
+              configuration:
+                type: "object"
+                properties:
+                  max_concurrent:
+                    type: "integer"
+                    minimum: 1
+                    maximum: 64
+                    default: 16
+                  part_size_mb:
+                    type: "integer"
+                    minimum: 5
+                    maximum: 5000
+                    default: 50
+                  retry_count:
+                    type: "integer"
+                    minimum: 0
+                    maximum: 10
+                    default: 3
+                  enable_checksum_validation:
+                    type: "boolean"
+                    default: true
+                  delete_source_after_sync:
+                    type: "boolean"
+                    default: false
+              filters:
+                type: "object"
+                properties:
+                  include_patterns:
+                    type: "array"
+                    items:
+                      type: "string"
+                  exclude_patterns:
+                    type: "array"
+                    items:
+                      type: "string"
+                  file_size_min_bytes:
+                    type: "integer"
+                  file_size_max_bytes:
+                    type: "integer"
+              notification:
+                type: "object"
+                properties:
+                  webhook_url:
+                    type: "string"
+                    format: "uri"
+                  notify_on_progress:
+                    type: "boolean"
+                    default: false
+                  notify_on_completion:
+                    type: "boolean"
+                    default: true
+          
+          response_schema:
+            type: "object"
+            properties:
+              operation_id:
+                type: "string"
+                format: "uuid"
+              status:
+                type: "string"
+                enum: ["queued", "running", "completed", "failed", "cancelled"]
+              operation_mode:
+                type: "string"
+              estimated_duration_seconds:
+                type: "integer"
+              estimated_files_count:
+                type: "integer"
+              estimated_data_size_bytes:
+                type: "integer"
+              progress_url:
+                type: "string"
+                format: "uri"
+              logs_url:
+                type: "string"
+                format: "uri"
+        
+        operation_status:
+          path: "/operations/{operation_id}"
+          method: "GET"
+          description: "Get detailed operation status and progress"
+          authentication: "required"
+          authorization: "s5cmd_read"
+          
+          parameters:
+            - name: "operation_id"
+              in: "path"
+              required: true
+              schema:
+                type: "string"
+                format: "uuid"
+          
+          response_schema:
+            type: "object"
+            properties:
+              operation_id:
+                type: "string"
+                format: "uuid"
+              status:
+                type: "string"
+                enum: ["queued", "running", "completed", "failed", "cancelled"]
+              operation_mode:
+                type: "string"
+              progress:
+                type: "object"
+                properties:
+                  percentage:
+                    type: "number"
+                    minimum: 0
+                    maximum: 100
+                  files_processed:
+                    type: "integer"
+                  files_total:
+                    type: "integer"
+                  bytes_transferred:
+                    type: "integer"
+                  bytes_total:
+                    type: "integer"
+                  current_throughput_mbps:
+                    type: "number"
+                  average_throughput_mbps:
+                    type: "number"
+                  estimated_completion_time:
+                    type: "string"
+                    format: "date-time"
+              performance_metrics:
+                type: "object"
+                properties:
+                  start_time:
+                    type: "string"
+                    format: "date-time"
+                  end_time:
+                    type: "string"
+                    format: "date-time"
+                  total_duration_seconds:
+                    type: "number"
+                  peak_throughput_mbps:
+                    type: "number"
+                  error_count:
+                    type: "integer"
+                  retry_count:
+                    type: "integer"
+              errors:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    timestamp:
+                      type: "string"
+                      format: "date-time"
+                    error_code:
+                      type: "string"
+                    error_message:
+                      type: "string"
+                    file_path:
+                      type: "string"
+
+  minio_storage_api:
+    base_path: "/api/v1/storage"
+    description: "Storage management and administration API"
+    authentication: "bearer_token_jwt"
+    rate_limiting: "1000_requests_per_minute_per_user"
+    
+    endpoints:
+      bucket_management:
+        buckets_list:
+          path: "/buckets"
+          method: "GET"
+          description: "List storage buckets with metadata"
+          authentication: "required"
+          authorization: "storage_read"
+          
+          response_schema:
+            type: "object"
+            properties:
+              buckets:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    name:
+                      type: "string"
+                    creation_date:
+                      type: "string"
+                      format: "date-time"
+                    region:
+                      type: "string"
+                    storage_class:
+                      type: "string"
+                    encryption_status:
+                      type: "string"
+                      enum: ["enabled", "disabled"]
+                    versioning_status:
+                      type: "string"
+                      enum: ["enabled", "suspended", "disabled"]
+                    object_count:
+                      type: "integer"
+                    total_size_bytes:
+                      type: "integer"
+              cluster_info:
+                type: "object"
+                properties:
+                  total_capacity_bytes:
+                    type: "integer"
+                  used_capacity_bytes:
+                    type: "integer"
+                  available_capacity_bytes:
+                    type: "integer"
+                  utilization_percentage:
+                    type: "number"
+        
+        bucket_create:
+          path: "/buckets"
+          method: "POST"
+          description: "Create new storage bucket with configuration"
+          authentication: "required"
+          authorization: "storage_admin"
+          
+          request_schema:
+            type: "object"
+            required: ["name"]
+            properties:
+              name:
+                type: "string"
+                pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+                minLength: 3
+                maxLength: 63
+              region:
+                type: "string"
+                default: "us-east-1"
+              storage_class:
+                type: "string"
+                enum: ["STANDARD", "REDUCED_REDUNDANCY", "STANDARD_IA"]
+                default: "STANDARD"
+              encryption:
+                type: "object"
+                properties:
+                  enabled:
+                    type: "boolean"
+                    default: true
+                  algorithm:
+                    type: "string"
+                    enum: ["AES256", "aws:kms"]
+                    default: "AES256"
+              versioning:
+                type: "boolean"
+                default: true
+              lifecycle_policy:
+                type: "object"
+                properties:
+                  transition_rules:
+                    type: "array"
+                    items:
+                      type: "object"
+                      properties:
+                        days:
+                          type: "integer"
+                        storage_class:
+                          type: "string"
+          
+          response_schema:
+            type: "object"
+            properties:
+              bucket_name:
+                type: "string"
+              creation_status:
+                type: "string"
+                enum: ["created", "already_exists", "error"]
+              bucket_url:
+                type: "string"
+                format: "uri"
+              policies_applied:
+                type: "array"
+                items:
+                  type: "string"
+
+      storage_analytics:
+        usage_statistics:
+          path: "/analytics/usage"
+          method: "GET"
+          description: "Get storage usage analytics and trends"
+          authentication: "required"
+          authorization: "storage_read"
+          
+          parameters:
+            - name: "time_range"
+              in: "query"
+              schema:
+                type: "string"
+                enum: ["1h", "24h", "7d", "30d"]
+                default: "24h"
+            - name: "bucket_name"
+              in: "query"
+              schema:
+                type: "string"
+                description: "Optional bucket name filter"
+          
+          response_schema:
+            type: "object"
+            properties:
+              time_range:
+                type: "string"
+              bucket_filter:
+                type: "string"
+              metrics:
+                type: "object"
+                properties:
+                  storage_utilization:
+                    type: "object"
+                    properties:
+                      current_usage_bytes:
+                        type: "integer"
+                      trend_percentage:
+                        type: "number"
+                      projected_usage_bytes:
+                        type: "integer"
+                  request_metrics:
+                    type: "object"
+                    properties:
+                      get_requests:
+                        type: "integer"
+                      put_requests:
+                        type: "integer"
+                      delete_requests:
+                        type: "integer"
+                      average_response_time_ms:
+                        type: "number"
+                  bandwidth_metrics:
+                    type: "object"
+                    properties:
+                      ingress_bandwidth_mbps:
+                        type: "number"
+                      egress_bandwidth_mbps:
+                        type: "number"
+                      peak_bandwidth_mbps:
+                        type: "number"
+
+shared_schemas:
+  components:
+    schemas:
+      ComponentStatus:
+        type: "object"
+        properties:
+          status:
+            type: "string"
+            enum: ["healthy", "degraded", "unhealthy", "unknown"]
+          version:
+            type: "string"
+          uptime_seconds:
+            type: "integer"
+          last_health_check:
+            type: "string"
+            format: "date-time"
+          health_details:
+            type: "object"
+            additionalProperties: true
+      
+      ComponentEvent:
+        type: "object"
+        properties:
+          event_id:
+            type: "string"
+            format: "uuid"
+          timestamp:
+            type: "string"
+            format: "date-time"
+          event_type:
+            type: "string"
+          severity:
+            type: "string"
+            enum: ["info", "warning", "error", "critical"]
+          message:
+            type: "string"
+          details:
+            type: "object"
+            additionalProperties: true
+      
+      WorkflowSummary:
+        type: "object"
+        properties:
+          workflow_id:
+            type: "string"
+            format: "uuid"
+          name:
+            type: "string"
+          description:
+            type: "string"
+          workflow_type:
+            type: "string"
+          status:
+            type: "string"
+            enum: ["active", "inactive", "archived"]
+          last_execution:
+            type: "string"
+            format: "date-time"
+          success_rate_percentage:
+            type: "number"
+          average_duration_seconds:
+            type: "number"
+      
+      TaskExecution:
+        type: "object"
+        properties:
+          task_id:
+            type: "string"
+            format: "uuid"
+          task_name:
+            type: "string"
+          task_type:
+            type: "string"
+          status:
+            type: "string"
+            enum: ["pending", "running", "completed", "failed", "skipped"]
+          started_at:
+            type: "string"
+            format: "date-time"
+          completed_at:
+            type: "string"
+            format: "date-time"
+          duration_seconds:
+            type: "number"
+          retry_count:
+            type: "integer"
+          error_message:
+            type: "string"
+      
+      ExecutionMetrics:
+        type: "object"
+        properties:
+          total_tasks:
+            type: "integer"
+          completed_tasks:
+            type: "integer"
+          failed_tasks:
+            type: "integer"
+          average_task_duration_seconds:
+            type: "number"
+          total_data_processed_bytes:
+            type: "integer"
+          peak_memory_usage_mb:
+            type: "number"
+          peak_cpu_usage_percentage:
+            type: "number"
+      
+      PaginationInfo:
+        type: "object"
+        properties:
+          total_count:
+            type: "integer"
+          page_size:
+            type: "integer"
+          current_offset:
+            type: "integer"
+          has_more:
+            type: "boolean"
+          next_url:
+            type: "string"
+            format: "uri"
+      
+      ErrorResponse:
+        type: "object"
+        properties:
+          error:
+            type: "object"
+            properties:
+              code:
+                type: "string"
+              message:
+                type: "string"
+              details:
+                type: "object"
+                additionalProperties: true
+              timestamp:
+                type: "string"
+                format: "date-time"
+              trace_id:
+                type: "string"
+
+security_specifications:
+  authentication:
+    method: "oauth2_bearer_tokens"
+    token_format: "jwt"
+    token_expiration: "1_hour"
+    refresh_token_expiration: "7_days"
+    
+  authorization:
+    model: "role_based_access_control"
+    roles:
+      - role: "infrastructure_admin"
+        permissions: ["infrastructure:*", "workflow:*", "s5cmd:*", "storage:*"]
+      - role: "workflow_operator"
+        permissions: ["workflow:read", "workflow:execute", "s5cmd:execute", "storage:read"]
+      - role: "storage_admin"
+        permissions: ["storage:*", "workflow:read"]
+      - role: "readonly_user"
+        permissions: ["infrastructure:read", "workflow:read", "storage:read"]
+  
+  rate_limiting:
+    algorithm: "token_bucket"
+    default_limit: "1000_requests_per_minute"
+    burst_capacity: "100_requests"
+    rate_limit_headers: "enabled"
+  
+  input_validation:
+    request_validation: "json_schema_validation"
+    parameter_sanitization: "enabled"
+    sql_injection_protection: "enabled"
+    xss_protection: "enabled"
+
+monitoring_and_observability:
+  api_metrics:
+    request_rate: "requests_per_second_by_endpoint"
+    response_time: "response_time_histogram_by_endpoint"
+    error_rate: "error_rate_by_endpoint_and_status_code"
+    concurrent_requests: "active_requests_gauge"
+  
+  distributed_tracing:
+    trace_sampling: "10_percent_sampling"
+    trace_headers: "b3_propagation"
+    span_attributes: "http_method_url_status_code"
+  
+  logging:
+    log_format: "structured_json"
+    log_level: "info"
+    access_logs: "enabled"
+    error_logs: "enabled"
+    audit_logs: "enabled_for_write_operations"
+
+metadata:
+  design_author: "API Architect"
+  api_reviewer: "Principal Engineer"
+  created_date: "2025-07-20"
+  last_updated: "2025-07-20"
+  version: "1.0.0"
+  review_status: "draft"
+  api_specification_standard: "openapi_3.0.3"
+  estimated_implementation_effort: "6-8 weeks"

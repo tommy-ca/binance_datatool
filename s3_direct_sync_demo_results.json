@@ -1,0 +1,44 @@
+{
+  "traditional": {
+    "mode": "traditional",
+    "operations": [
+      "download_from_s3",
+      "local_processing",
+      "upload_to_s3"
+    ],
+    "operation_count": 3,
+    "download_time": 3.2,
+    "processing_time": 0.8,
+    "upload_time": 2.7,
+    "total_time": 6.7,
+    "local_storage_required": true,
+    "network_transfers": 2,
+    "estimated_data_transferred": "2x file size"
+  },
+  "direct_sync": {
+    "mode": "direct_sync",
+    "operations": [
+      "direct_s3_to_s3_copy"
+    ],
+    "operation_count": 1,
+    "transfer_time": 1.8,
+    "total_time": 1.8,
+    "local_storage_required": false,
+    "network_transfers": 1,
+    "estimated_data_transferred": "1x file size"
+  },
+  "improvements": {
+    "time_improvement_percent": 73.13432835820896,
+    "time_saved_seconds": 4.9,
+    "operation_reduction_count": 2,
+    "operation_reduction_percent": 66.66666666666666,
+    "network_transfer_reduction_percent": 50.0,
+    "local_storage_eliminated": true,
+    "efficiency_summary": {
+      "faster_by": "73.1%",
+      "fewer_operations": "2 operations reduced",
+      "less_network_usage": "50.0% reduction",
+      "storage_savings": "100% local storage eliminated"
+    }
+  }
+}

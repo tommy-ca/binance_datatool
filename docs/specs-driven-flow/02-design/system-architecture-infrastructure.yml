@@ -1,0 +1,483 @@
+---
+# System Architecture Design: Prefect + s5cmd + MinIO Infrastructure
+# Phase 2: System Architecture Design
+# Version: 1.0.0
+# Date: 2025-07-20
+---
+
+system_architecture:
+  name: "Crypto Data Processing Infrastructure"
+  version: "1.0.0"
+  description: "Integrated data processing infrastructure featuring Prefect workflow orchestration, s5cmd high-performance S3 operations, and MinIO object storage"
+  architecture_pattern: "microservices_with_kubernetes_orchestration"
+  deployment_model: "cloud_native_containers"
+  
+  design_principles:
+    - "separation_of_concerns"
+    - "scalability_by_design"
+    - "security_by_default"
+    - "observability_first"
+    - "fault_tolerance"
+    - "performance_optimization"
+    - "cost_effectiveness"
+
+  architectural_layers:
+    presentation_layer:
+      name: "User Interface and API Gateway"
+      components:
+        - component: "prefect_web_ui"
+          purpose: "Workflow monitoring and management interface"
+          technology: "React + FastAPI"
+          deployment: "kubernetes_service"
+          
+        - component: "api_gateway"
+          purpose: "Centralized API management and routing"
+          technology: "Istio Gateway + Virtual Services"
+          deployment: "service_mesh"
+          
+        - component: "minio_console"
+          purpose: "Storage management interface"
+          technology: "MinIO Console (Go)"
+          deployment: "kubernetes_service"
+      
+      responsibilities:
+        - "user_authentication_and_authorization"
+        - "api_request_routing_and_load_balancing"
+        - "rate_limiting_and_throttling"
+        - "request_validation_and_response_formatting"
+        - "user_interface_rendering"
+    
+    application_layer:
+      name: "Business Logic and Workflow Orchestration"
+      components:
+        - component: "prefect_server"
+          purpose: "Workflow orchestration and task scheduling"
+          technology: "Python + FastAPI + SQLAlchemy"
+          deployment: "kubernetes_deployment"
+          replicas: 3
+          
+        - component: "prefect_workers"
+          purpose: "Workflow task execution"
+          technology: "Python + Prefect Worker"
+          deployment: "kubernetes_job_and_deployment"
+          scaling: "horizontal_pod_autoscaler"
+          
+        - component: "s5cmd_executor_service"
+          purpose: "High-performance S3 operations orchestration"
+          technology: "Python wrapper + s5cmd binary"
+          deployment: "kubernetes_deployment"
+          optimization: "node_affinity_for_network_intensive_workloads"
+          
+        - component: "workflow_configuration_service"
+          purpose: "Centralized configuration management"
+          technology: "Python + FastAPI + ConfigMaps"
+          deployment: "kubernetes_deployment"
+      
+      responsibilities:
+        - "workflow_definition_and_scheduling"
+        - "task_execution_and_monitoring"
+        - "s5cmd_operation_orchestration"
+        - "configuration_management_and_validation"
+        - "business_logic_implementation"
+        - "error_handling_and_retry_logic"
+    
+    data_layer:
+      name: "Data Storage and Management"
+      components:
+        - component: "minio_cluster"
+          purpose: "S3-compatible object storage"
+          technology: "MinIO Distributed"
+          deployment: "statefulset_with_persistent_volumes"
+          nodes: 4
+          erasure_coding: "EC:4+2"
+          
+        - component: "postgresql_cluster"
+          purpose: "Prefect metadata and workflow state"
+          technology: "PostgreSQL with streaming replication"
+          deployment: "postgresql_operator"
+          high_availability: "primary_replica_setup"
+          
+        - component: "redis_cluster"
+          purpose: "Caching and session storage"
+          technology: "Redis Cluster"
+          deployment: "redis_operator"
+          persistence: "enabled_with_rdb_snapshots"
+      
+      responsibilities:
+        - "object_storage_with_high_availability"
+        - "workflow_metadata_persistence"
+        - "caching_and_session_management"
+        - "data_integrity_and_consistency"
+        - "backup_and_recovery"
+    
+    infrastructure_layer:
+      name: "Cross-cutting Infrastructure Services"
+      components:
+        - component: "monitoring_stack"
+          purpose: "Observability and monitoring"
+          technology: "Prometheus + Grafana + Jaeger"
+          deployment: "monitoring_namespace"
+          
+        - component: "logging_stack"
+          purpose: "Centralized logging"
+          technology: "Fluentd + Elasticsearch + Kibana"
+          deployment: "logging_namespace"
+          
+        - component: "service_mesh"
+          purpose: "Service-to-service communication"
+          technology: "Istio"
+          deployment: "istio_system_namespace"
+          
+        - component: "secrets_management"
+          purpose: "Secure secrets handling"
+          technology: "External Secrets Operator + Vault"
+          deployment: "security_namespace"
+          
+        - component: "networking"
+          purpose: "Network policies and ingress"
+          technology: "Calico + NGINX Ingress"
+          deployment: "kube_system_namespace"
+      
+      responsibilities:
+        - "monitoring_and_alerting"
+        - "centralized_logging_and_audit"
+        - "service_mesh_security_and_observability"
+        - "secrets_management_and_rotation"
+        - "network_policies_and_ingress_control"
+
+  component_architecture:
+    prefect_orchestration_cluster:
+      architecture_pattern: "primary_replica_with_load_balancing"
+      components:
+        prefect_server:
+          replicas: 3
+          resource_requirements:
+            cpu: "2 cores"
+            memory: "4Gi"
+            storage: "20Gi"
+          dependencies:
+            - "postgresql_cluster"
+            - "redis_cluster"
+          health_checks:
+            liveness_probe: "/api/health"
+            readiness_probe: "/api/ready"
+            startup_probe: "/api/startup"
+          
+        prefect_worker_pools:
+          - name: "crypto_data_pool"
+            worker_type: "kubernetes"
+            max_workers: 10
+            node_selector: "workload=general"
+            scaling_policy: "horizontal_pod_autoscaler"
+            
+          - name: "s5cmd_optimized_pool"
+            worker_type: "kubernetes"
+            max_workers: 20
+            node_selector: "workload=data_intensive"
+            scaling_policy: "vertical_pod_autoscaler"
+            resource_requirements:
+              cpu: "4 cores"
+              memory: "8Gi"
+              network: "high_bandwidth"
+    
+    minio_storage_cluster:
+      architecture_pattern: "distributed_with_erasure_coding"
+      deployment_configuration:
+        nodes: 4
+        drives_per_node: 4
+        erasure_coding: "EC:4+2"
+        total_capacity: "100TB"
+        redundancy: "2_node_failure_tolerance"
+        
+      performance_optimization:
+        cache_drives: "NVMe SSD"
+        data_drives: "High-capacity HDD"
+        network: "10Gbps per node"
+        memory: "32GB per node"
+        
+      data_protection:
+        encryption_at_rest: "AES-256-GCM"
+        encryption_in_transit: "TLS 1.3"
+        versioning: "enabled"
+        object_locking: "governance_mode"
+        lifecycle_policies: "automated_tiering"
+    
+    s5cmd_execution_architecture:
+      design_pattern: "microservice_with_binary_integration"
+      components:
+        s5cmd_executor_service:
+          purpose: "Orchestrate s5cmd operations"
+          implementation: "Python FastAPI service"
+          s5cmd_integration: "subprocess_with_monitoring"
+          
+        s5cmd_binary_management:
+          version: "v2.2.2"
+          distribution: "embedded_in_container_image"
+          checksum_validation: "enabled"
+          fallback_strategy: "aws_cli_compatibility"
+          
+        operation_modes:
+          - mode: "direct_sync"
+            use_case: "S3_to_S3_direct_transfer"
+            performance_gain: "60-75%"
+            configuration:
+              max_concurrent: 32
+              part_size: "50MB"
+              multipart_threshold: "100MB"
+              
+          - mode: "hybrid"
+            use_case: "mixed_operations_with_fallback"
+            performance_gain: "30-50%"
+            configuration:
+              intelligent_mode_selection: "enabled"
+              fallback_threshold: "3_consecutive_failures"
+              
+          - mode: "traditional"
+            use_case: "compatibility_and_fallback"
+            performance_gain: "baseline"
+            configuration:
+              download_upload_workflow: "enabled"
+              local_storage_management: "automatic_cleanup"
+
+  integration_architecture:
+    service_communication:
+      pattern: "service_mesh_with_mtls"
+      implementation: "istio_service_mesh"
+      authentication: "mutual_tls_certificates"
+      authorization: "istio_authorization_policies"
+      
+      communication_flows:
+        - source: "prefect_server"
+          destination: "postgresql_cluster"
+          protocol: "TCP/5432"
+          encryption: "TLS"
+          authentication: "username_password"
+          
+        - source: "prefect_workers"
+          destination: "s5cmd_executor_service"
+          protocol: "HTTP/HTTPS"
+          encryption: "mTLS"
+          authentication: "service_account_tokens"
+          
+        - source: "s5cmd_executor_service"
+          destination: "minio_cluster"
+          protocol: "S3_API/HTTPS"
+          encryption: "TLS"
+          authentication: "aws_signature_v4"
+    
+    data_flow_architecture:
+      crypto_data_ingestion_flow:
+        source: "external_s3_binance_public"
+        processing_path:
+          - "prefect_workflow_scheduling"
+          - "s5cmd_direct_sync_execution"
+          - "minio_storage_persistence"
+          - "metadata_tracking_in_postgresql"
+        destination: "minio_bronze_zone"
+        
+      workflow_execution_flow:
+        trigger: "scheduled_or_manual"
+        execution_path:
+          - "prefect_server_workflow_dispatch"
+          - "worker_pool_task_assignment"
+          - "s5cmd_executor_operation"
+          - "result_aggregation_and_logging"
+        monitoring: "real_time_through_service_mesh"
+    
+    external_integrations:
+      - integration: "binance_public_s3"
+        purpose: "crypto_data_source"
+        access_method: "s3_no_sign_request"
+        authentication: "anonymous"
+        rate_limiting: "respected"
+        
+      - integration: "monitoring_and_alerting"
+        purpose: "operational_observability"
+        components: ["prometheus", "grafana", "alertmanager"]
+        data_collection: "service_mesh_metrics"
+        
+      - integration: "external_secrets"
+        purpose: "secure_credentials_management"
+        implementation: "external_secrets_operator"
+        backends: ["vault", "aws_secrets_manager"]
+
+  deployment_architecture:
+    kubernetes_cluster_design:
+      cluster_configuration:
+        kubernetes_version: "v1.28+"
+        node_pools:
+          - name: "control_plane"
+            node_count: 3
+            machine_type: "general_purpose"
+            role: "control_plane"
+            
+          - name: "general_workload"
+            node_count: "3-10"
+            machine_type: "general_purpose"
+            role: "worker"
+            scaling: "cluster_autoscaler"
+            
+          - name: "data_intensive"
+            node_count: "2-5"
+            machine_type: "high_network_bandwidth"
+            role: "worker"
+            node_selector: "workload=data_intensive"
+            
+          - name: "storage"
+            node_count: 4
+            machine_type: "storage_optimized"
+            role: "worker"
+            node_selector: "workload=storage"
+      
+      namespace_organization:
+        - namespace: "prefect"
+          purpose: "prefect_orchestration_components"
+          network_policies: "restrictive"
+          resource_quotas: "enabled"
+          
+        - namespace: "minio"
+          purpose: "object_storage_cluster"
+          network_policies: "storage_specific"
+          security_policies: "pod_security_standards"
+          
+        - namespace: "s5cmd"
+          purpose: "s5cmd_execution_services"
+          network_policies: "data_processing"
+          resource_limits: "high_network_bandwidth"
+          
+        - namespace: "monitoring"
+          purpose: "observability_stack"
+          network_policies: "monitoring_access"
+          persistence: "enabled"
+          
+        - namespace: "security"
+          purpose: "secrets_and_security_services"
+          network_policies: "highly_restrictive"
+          access_control: "rbac_strict"
+    
+    container_architecture:
+      base_image_strategy: "distroless_for_security"
+      image_scanning: "continuous_vulnerability_scanning"
+      image_signing: "cosign_signatures"
+      
+      container_specifications:
+        prefect_server:
+          base_image: "python:3.11-slim"
+          security_context: "non_root_user"
+          resource_limits:
+            cpu: "2000m"
+            memory: "4Gi"
+          health_checks: "comprehensive"
+          
+        s5cmd_executor:
+          base_image: "alpine:latest"
+          s5cmd_binary: "embedded_and_verified"
+          security_context: "minimal_privileges"
+          resource_limits:
+            cpu: "4000m"
+            memory: "8Gi"
+            network: "high_bandwidth"
+          
+        minio:
+          base_image: "minio/minio:latest"
+          security_context: "storage_specific"
+          persistent_storage: "required"
+          resource_limits:
+            cpu: "2000m"
+            memory: "4Gi"
+            storage: "25TB_per_node"
+
+  security_architecture:
+    defense_in_depth:
+      network_security:
+        - "kubernetes_network_policies"
+        - "istio_authorization_policies"
+        - "ingress_controller_with_waf"
+        - "pod_to_pod_mtls"
+        
+      identity_and_access:
+        - "rbac_with_least_privilege"
+        - "service_account_tokens"
+        - "external_identity_provider_integration"
+        - "multi_factor_authentication"
+        
+      data_protection:
+        - "encryption_at_rest_and_in_transit"
+        - "secrets_management_with_rotation"
+        - "data_classification_and_handling"
+        - "backup_encryption"
+        
+      runtime_security:
+        - "pod_security_standards"
+        - "admission_controllers"
+        - "runtime_security_monitoring"
+        - "container_image_scanning"
+    
+    compliance_framework:
+      standards_compliance:
+        - "iso_27001_controls_implementation"
+        - "soc_2_type_ii_requirements"
+        - "gdpr_data_protection_measures"
+        - "nist_cybersecurity_framework"
+        
+      audit_and_monitoring:
+        - "comprehensive_audit_logging"
+        - "security_event_correlation"
+        - "compliance_monitoring_automation"
+        - "incident_response_automation"
+
+  performance_architecture:
+    scalability_design:
+      horizontal_scaling:
+        - component: "prefect_workers"
+          scaling_trigger: "workflow_queue_depth"
+          min_replicas: 2
+          max_replicas: 20
+          
+        - component: "s5cmd_executors"
+          scaling_trigger: "cpu_and_network_utilization"
+          min_replicas: 1
+          max_replicas: 10
+          
+      vertical_scaling:
+        - component: "minio_nodes"
+          scaling_method: "manual_capacity_planning"
+          resource_monitoring: "storage_and_iops"
+          
+        - component: "database_cluster"
+          scaling_method: "read_replicas"
+          performance_monitoring: "query_performance"
+    
+    performance_optimization:
+      network_optimization:
+        - "high_bandwidth_node_selection"
+        - "network_policy_optimization"
+        - "service_mesh_performance_tuning"
+        - "ingress_load_balancing"
+        
+      storage_optimization:
+        - "ssd_cache_for_metadata"
+        - "erasure_coding_optimization"
+        - "data_locality_awareness"
+        - "compression_and_deduplication"
+        
+      compute_optimization:
+        - "cpu_and_memory_profiling"
+        - "garbage_collection_tuning"
+        - "parallel_processing_optimization"
+        - "resource_request_optimization"
+
+metadata:
+  design_author: "Senior Platform Architect"
+  technical_reviewer: "Principal Engineer"
+  created_date: "2025-07-20"
+  last_updated: "2025-07-20"
+  version: "1.0.0"
+  review_status: "draft"
+  based_on_specifications:
+    - "infrastructure-prefect-s5cmd-minio.yml"
+    - "technical-requirements-infrastructure.yml"
+    - "performance-requirements-infrastructure.yml"
+    - "security-requirements-infrastructure.yml"
+  design_complexity: "high"
+  estimated_implementation_effort: "8-12 weeks"

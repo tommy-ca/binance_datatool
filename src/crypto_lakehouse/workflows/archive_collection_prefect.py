@@ -33,6 +33,7 @@ from ..core.models import (
 from ..storage.factory import create_storage
 from ..storage.base import BaseStorage
 from ..ingestion.bulk_downloader import BulkDownloader
+from ..ingestion.s3_direct_sync import EnhancedBulkDownloader
 
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,23 @@ async def validate_archive_configuration_task(config: WorkflowConfig) -> bool:
         'markets', 'symbols', 'data_types'
     ]
     missing_fields = [field for field in required_fields if not config.get(field)]
+    
+    # S5cmd direct sync configuration validation
+    if config.get('enable_s3_direct_sync', False):
+        s3_direct_config = config.get('s3_direct_sync_config', {})
+        required_s3_fields = ['destination_bucket']
+        missing_s3_fields = [field for field in required_s3_fields if not s3_direct_config.get(field)]
+        
+        if missing_s3_fields:
+            raise ConfigurationError(f"Missing S3 direct sync configuration: {missing_s3_fields}")
+        
+        # Validate operation mode
+        operation_mode = s3_direct_config.get('operation_mode', 'auto')
+        valid_modes = ['auto', 'direct_sync', 'hybrid', 'traditional']
+        if operation_mode not in valid_modes:
+            raise ConfigurationError(f"Invalid operation mode '{operation_mode}'. Valid modes: {valid_modes}")
+        
+        logger.info(f"S5cmd direct sync enabled with operation mode: {operation_mode}")
     
     if missing_fields:
         raise ConfigurationError(f"Missing required configuration: {missing_fields}")
@@ -537,19 +555,52 @@ async def archive_collection_flow(
         storage_settings = Settings(config.to_dict())
         storage = create_storage(storage_settings)
         
-        downloader_config = {
-            'base_url': 's3://data.binance.vision/data/',  # Use S3 with proper no-sign-request
-            'timeout_seconds': config.get('timeout_seconds', 300),
-            'verify_checksums': config.get('download_checksum', True),
-            'storage': storage,
-            'batch_size': config.get('batch_size', 100),  # Increased for better performance
-            'max_concurrent': config.get('max_parallel_downloads', 8),  # Increased for multiple markets
-            'part_size_mb': config.get('part_size_mb', 50),
-            'enable_batch_mode': config.get('enable_batch_mode', True),
-            'enable_resume': config.get('enable_resume', True),
-            's5cmd_extra_args': config.get('s5cmd_extra_args', ['--no-sign-request', '--retry-count=3'])
-        }
-        bulk_downloader = BulkDownloader(downloader_config)
+        # Initialize downloader based on S5cmd direct sync configuration
+        if config.get('enable_s3_direct_sync', False):
+            # Use Enhanced Bulk Downloader with S5cmd direct sync
+            s3_direct_config = config.get('s3_direct_sync_config', {})
+            
+            enhanced_config = {
+                'base_url': 's3://data.binance.vision/data/',
+                'timeout_seconds': config.get('timeout_seconds', 300),
+                'verify_checksums': config.get('download_checksum', True),
+                'storage': storage,
+                'batch_size': s3_direct_config.get('batch_size', 100),
+                'max_concurrent': s3_direct_config.get('max_concurrent', 16),
+                'part_size_mb': s3_direct_config.get('part_size_mb', 50),
+                'enable_batch_mode': s3_direct_config.get('enable_batch_mode', True),
+                'enable_resume': s3_direct_config.get('enable_resume', True),
+                's5cmd_extra_args': s3_direct_config.get('s5cmd_extra_args', ['--no-sign-request', '--retry-count=3']),
+                
+                # S5cmd direct sync specific configuration
+                'enable_s3_direct_sync': True,
+                'destination_bucket': s3_direct_config['destination_bucket'],
+                'operation_mode': s3_direct_config.get('operation_mode', 'auto'),
+                'cross_region_optimization': s3_direct_config.get('cross_region_optimization', True),
+                'enable_incremental': s3_direct_config.get('enable_incremental', True),
+                'sync_delete': s3_direct_config.get('sync_delete', False),
+                'preserve_metadata': s3_direct_config.get('preserve_metadata', True),
+                'enable_progress_tracking': s3_direct_config.get('enable_progress_tracking', True)
+            }
+            
+            bulk_downloader = EnhancedBulkDownloader(enhanced_config)
+            logger.info(f"Initialized Enhanced Bulk Downloader with S5cmd direct sync mode: {enhanced_config['operation_mode']}")
+        else:
+            # Use traditional bulk downloader
+            downloader_config = {
+                'base_url': 's3://data.binance.vision/data/',
+                'timeout_seconds': config.get('timeout_seconds', 300),
+                'verify_checksums': config.get('download_checksum', True),
+                'storage': storage,
+                'batch_size': config.get('batch_size', 100),
+                'max_concurrent': config.get('max_parallel_downloads', 8),
+                'part_size_mb': config.get('part_size_mb', 50),
+                'enable_batch_mode': config.get('enable_batch_mode', True),
+                'enable_resume': config.get('enable_resume', True),
+                's5cmd_extra_args': config.get('s5cmd_extra_args', ['--no-sign-request', '--retry-count=3'])
+            }
+            bulk_downloader = BulkDownloader(downloader_config)
+            logger.info("Initialized traditional Bulk Downloader")
         
         # Step 6: Execute downloads (batch or individual)
         download_results = await execute_batch_downloads_task(

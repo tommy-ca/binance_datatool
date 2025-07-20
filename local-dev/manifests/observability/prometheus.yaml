@@ -1,0 +1,308 @@
+---
+# Prometheus ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: observability
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'crypto-lakehouse-local'
+        environment: 'local'
+
+    rule_files:
+      - "*.rules.yml"
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+
+    scrape_configs:
+      # Prometheus itself
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # OpenTelemetry Collector
+      - job_name: 'otel-collector'
+        static_configs:
+          - targets: ['otel-collector.observability:8888']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+
+      # OTel exported metrics
+      - job_name: 'otel-exported-metrics'
+        static_configs:
+          - targets: ['otel-collector.observability:8889']
+        metrics_path: '/metrics'
+        scrape_interval: 30s
+
+      # Prefect Server
+      - job_name: 'prefect-server'
+        static_configs:
+          - targets: ['prefect-server.prefect:4200']
+        metrics_path: '/api/metrics'
+        scrape_interval: 30s
+
+      # MinIO
+      - job_name: 'minio'
+        static_configs:
+          - targets: ['minio-service.minio:9000']
+        metrics_path: '/minio/v2/metrics/cluster'
+        scrape_interval: 30s
+
+      # s5cmd Executor
+      - job_name: 's5cmd-executor'
+        static_configs:
+          - targets: ['s5cmd-executor.s5cmd:8080']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+
+      # Jaeger
+      - job_name: 'jaeger'
+        static_configs:
+          - targets: ['jaeger-collector.observability:14269']
+        metrics_path: '/metrics'
+        scrape_interval: 30s
+
+      # Kubernetes API Server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names:
+            - default
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: default;kubernetes;https
+
+      # Kubernetes Nodes
+      - job_name: 'kubernetes-nodes'
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+        - role: node
+        relabel_configs:
+        - action: labelmap
+          regex: __meta_kubernetes_node_label_(.+)
+
+      # Kubernetes Pods with annotations
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+        - role: pod
+        relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+          action: replace
+          target_label: __metrics_path__
+          regex: (.+)
+        - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+          action: replace
+          regex: ([^:]+)(?::\d+)?;(\d+)
+          replacement: $1:$2
+          target_label: __address__
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+        - source_labels: [__meta_kubernetes_namespace]
+          action: replace
+          target_label: kubernetes_namespace
+        - source_labels: [__meta_kubernetes_pod_name]
+          action: replace
+          target_label: kubernetes_pod_name
+
+  # Custom recording rules for crypto lakehouse
+  crypto-lakehouse.rules.yml: |
+    groups:
+    - name: crypto-lakehouse.rules
+      interval: 30s
+      rules:
+      # s5cmd performance metrics
+      - record: s5cmd:operation_duration_seconds:rate5m
+        expr: rate(s5cmd_operation_duration_seconds_sum[5m]) / rate(s5cmd_operation_duration_seconds_count[5m])
+      
+      - record: s5cmd:operations_per_second
+        expr: rate(s5cmd_operations_total[5m])
+      
+      - record: s5cmd:throughput_mbps
+        expr: rate(s5cmd_bytes_transferred_total[5m]) / 1024 / 1024
+      
+      # Prefect workflow metrics
+      - record: prefect:workflow_success_rate
+        expr: rate(prefect_workflow_runs_completed_total[5m]) / rate(prefect_workflow_runs_total[5m])
+      
+      - record: prefect:active_workflows
+        expr: prefect_workflow_runs_running_total
+      
+      - record: prefect:task_duration_p95
+        expr: histogram_quantile(0.95, rate(prefect_task_duration_seconds_bucket[5m]))
+      
+      # MinIO storage metrics
+      - record: minio:storage_utilization_percent
+        expr: (minio_cluster_capacity_usable_total_bytes - minio_cluster_capacity_usable_free_bytes) / minio_cluster_capacity_usable_total_bytes * 100
+      
+      - record: minio:requests_per_second
+        expr: rate(minio_s3_requests_total[5m])
+      
+      - record: minio:bandwidth_mbps
+        expr: rate(minio_s3_traffic_received_bytes[5m]) / 1024 / 1024
+
+---
+# Prometheus Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app: prometheus
+    component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.47.0
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus/'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--storage.tsdb.retention.time=30d'
+        - '--web.enable-lifecycle'
+        - '--web.enable-admin-api'
+        
+        ports:
+        - containerPort: 9090
+          name: web
+          
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+            
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/prometheus
+        - name: storage-volume
+          mountPath: /prometheus
+          
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          
+      volumes:
+      - name: config-volume
+        configMap:
+          name: prometheus-config
+      - name: storage-volume
+        emptyDir: {}
+
+---
+# Prometheus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: observability
+  labels:
+    app: prometheus
+    component: server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: web
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceAccount for Prometheus
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: observability
+
+---
+# ClusterRole for Prometheus
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+
+---
+# ClusterRoleBinding for Prometheus
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: observability

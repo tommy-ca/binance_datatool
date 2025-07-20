@@ -1,0 +1,580 @@
+---
+# Deployment Architecture Design: Prefect + s5cmd + MinIO Infrastructure
+# Phase 2: Deployment and Infrastructure Patterns
+# Version: 1.0.0
+# Date: 2025-07-20
+---
+
+deployment_architecture:
+  name: "Kubernetes-Native Cloud Infrastructure Deployment"
+  deployment_strategy: "infrastructure_as_code_with_gitops"
+  orchestration_platform: "kubernetes_with_operators"
+  deployment_model: "multi_environment_with_promotion_pipeline"
+  
+  design_principles:
+    - "immutable_infrastructure"
+    - "declarative_configuration_management"
+    - "environment_parity_and_consistency"
+    - "automated_deployment_and_rollback"
+    - "zero_downtime_deployments"
+    - "security_by_default"
+    - "observability_and_monitoring_built_in"
+    - "cost_optimization_and_resource_efficiency"
+
+kubernetes_cluster_architecture:
+  cluster_specifications:
+    kubernetes_version: "v1.28.0"
+    control_plane_configuration:
+      high_availability: true
+      control_plane_nodes: 3
+      etcd_configuration: "external_etcd_cluster"
+      api_server_configuration:
+        audit_logging: "enabled"
+        admission_controllers: ["PodSecurityPolicy", "NamespaceLifecycle", "ResourceQuota"]
+        anonymous_auth: "disabled"
+        
+    node_pools:
+      control_plane_pool:
+        name: "control-plane"
+        node_count: 3
+        machine_type: "general_purpose_4_cpu_8gb_ram"
+        taints:
+          - key: "node-role.kubernetes.io/control-plane"
+            effect: "NoSchedule"
+        labels:
+          node-role: "control-plane"
+          
+      general_workload_pool:
+        name: "general-workload"
+        node_count_range: "3-10"
+        machine_type: "general_purpose_4_cpu_16gb_ram"
+        auto_scaling: "cluster_autoscaler"
+        labels:
+          workload: "general"
+          node-role: "worker"
+        taints: []
+        
+      data_intensive_pool:
+        name: "data-intensive"
+        node_count_range: "2-8"
+        machine_type: "compute_optimized_8_cpu_32gb_ram_high_network"
+        auto_scaling: "cluster_autoscaler"
+        labels:
+          workload: "data-intensive"
+          node-role: "worker"
+          network-performance: "high"
+        taints:
+          - key: "workload"
+            value: "data-intensive"
+            effect: "NoSchedule"
+            
+      storage_pool:
+        name: "storage-nodes"
+        node_count: 4
+        machine_type: "storage_optimized_4_cpu_16gb_ram_high_storage"
+        auto_scaling: "disabled"
+        labels:
+          workload: "storage"
+          node-role: "storage"
+        taints:
+          - key: "workload"
+            value: "storage"
+            effect: "NoSchedule"
+        storage_configuration:
+          local_storage: "nvme_ssd_500gb_cache_drive"
+          attached_storage: "sata_hdd_10tb_data_drives"
+          storage_class: "local_storage_provisioner"
+          
+    networking:
+      cni: "calico"
+      service_cidr: "10.96.0.0/12"
+      pod_cidr: "10.244.0.0/16"
+      network_policies: "enabled_by_default"
+      ingress_controller: "nginx_ingress_controller"
+      load_balancer: "metallb_with_external_ips"
+
+namespace_organization:
+  namespace_strategy: "environment_and_workload_based_separation"
+  
+  namespaces:
+    infrastructure_namespaces:
+      kube_system:
+        name: "kube-system"
+        purpose: "kubernetes_system_components"
+        resource_quotas: "unlimited"
+        network_policies: "system_default"
+        
+      istio_system:
+        name: "istio-system"
+        purpose: "service_mesh_infrastructure"
+        resource_quotas: "high_limits"
+        network_policies: "service_mesh_specific"
+        
+      monitoring:
+        name: "monitoring"
+        purpose: "observability_stack"
+        resource_quotas: "monitoring_specific"
+        network_policies: "monitoring_access"
+        
+      security:
+        name: "security"
+        purpose: "security_tools_and_secrets"
+        resource_quotas: "medium_limits"
+        network_policies: "highly_restrictive"
+        
+    application_namespaces:
+      prefect_production:
+        name: "prefect-prod"
+        purpose: "prefect_production_workloads"
+        resource_quotas: "production_limits"
+        network_policies: "prefect_specific"
+        environment: "production"
+        
+      prefect_staging:
+        name: "prefect-staging"
+        purpose: "prefect_staging_workloads"
+        resource_quotas: "staging_limits"
+        network_policies: "prefect_specific"
+        environment: "staging"
+        
+      minio_production:
+        name: "minio-prod"
+        purpose: "minio_production_cluster"
+        resource_quotas: "storage_optimized"
+        network_policies: "storage_specific"
+        environment: "production"
+        
+      minio_staging:
+        name: "minio-staging"
+        purpose: "minio_staging_cluster"
+        resource_quotas: "staging_storage_limits"
+        network_policies: "storage_specific"
+        environment: "staging"
+        
+      s5cmd_production:
+        name: "s5cmd-prod"
+        purpose: "s5cmd_production_executors"
+        resource_quotas: "data_processing_limits"
+        network_policies: "data_transfer_optimized"
+        environment: "production"
+        
+      s5cmd_staging:
+        name: "s5cmd-staging"
+        purpose: "s5cmd_staging_executors"
+        resource_quotas: "staging_data_limits"
+        network_policies: "data_transfer_optimized"
+        environment: "staging"
+
+infrastructure_as_code:
+  iac_stack: "terraform_with_kubernetes_manifests"
+  configuration_management: "helm_charts_with_kustomize"
+  gitops_implementation: "argocd_with_git_repositories"
+  
+  terraform_infrastructure:
+    cloud_provider_configuration:
+      provider: "multi_cloud_compatible"
+      regions: ["primary_region", "secondary_region_for_dr"]
+      availability_zones: "all_available_in_region"
+      
+    network_infrastructure:
+      vpc_configuration:
+        cidr_block: "10.0.0.0/16"
+        public_subnets: "10.0.1.0/24,10.0.2.0/24,10.0.3.0/24"
+        private_subnets: "10.0.10.0/24,10.0.11.0/24,10.0.12.0/24"
+        database_subnets: "10.0.20.0/24,10.0.21.0/24"
+        
+      security_groups:
+        kubernetes_cluster_sg:
+          ingress_rules:
+            - protocol: "tcp"
+              from_port: 6443
+              to_port: 6443
+              source: "administrative_networks"
+            - protocol: "tcp"
+              from_port: 80
+              to_port: 80
+              source: "0.0.0.0/0"
+            - protocol: "tcp"
+              from_port: 443
+              to_port: 443
+              source: "0.0.0.0/0"
+              
+    compute_infrastructure:
+      node_groups_configuration:
+        managed_node_groups: "eks_managed_node_groups"
+        instance_types: "optimized_for_workload_type"
+        ami_type: "AL2_x86_64_optimized"
+        
+    storage_infrastructure:
+      block_storage:
+        storage_class: "gp3_optimized"
+        encryption: "enabled_with_kms"
+        backup_policy: "automated_daily_snapshots"
+        
+      object_storage:
+        bucket_configuration: "minio_backend_buckets"
+        versioning: "enabled"
+        lifecycle_policies: "automated_tiering"
+        
+  helm_chart_management:
+    chart_repository_strategy: "private_helm_repository"
+    
+    custom_helm_charts:
+      prefect_chart:
+        chart_name: "crypto-lakehouse-prefect"
+        version: "1.0.0"
+        dependencies:
+          - name: "postgresql"
+            version: "12.0.0"
+            repository: "bitnami"
+          - name: "redis"
+            version: "17.0.0"
+            repository: "bitnami"
+        values_files:
+          - "values.yaml"
+          - "values-production.yaml"
+          - "values-staging.yaml"
+          
+      minio_chart:
+        chart_name: "crypto-lakehouse-minio"
+        version: "1.0.0"
+        dependencies:
+          - name: "minio"
+            version: "5.0.0"
+            repository: "minio"
+        configuration:
+          distributed_deployment: true
+          erasure_coding: "enabled"
+          
+      s5cmd_chart:
+        chart_name: "crypto-lakehouse-s5cmd"
+        version: "1.0.0"
+        custom_implementation: true
+        binary_management: "embedded_in_image"
+        
+  gitops_configuration:
+    git_repository_structure:
+      infrastructure_repo: "crypto-lakehouse-infrastructure"
+      application_configs_repo: "crypto-lakehouse-configs"
+      
+    argocd_applications:
+      infrastructure_application:
+        name: "infrastructure-components"
+        source:
+          repo_url: "git@github.com:crypto-lakehouse/infrastructure.git"
+          path: "kubernetes/infrastructure"
+          target_revision: "main"
+        destination:
+          server: "https://kubernetes.default.svc"
+          namespace: "argocd"
+        sync_policy:
+          automated: true
+          self_heal: true
+          prune: true
+          
+      prefect_application:
+        name: "prefect-orchestration"
+        source:
+          repo_url: "git@github.com:crypto-lakehouse/configs.git"
+          path: "prefect"
+          target_revision: "main"
+        destination:
+          server: "https://kubernetes.default.svc"
+          namespace: "prefect-prod"
+        sync_policy:
+          automated: false
+          manual_sync_required: true
+
+container_deployment_specifications:
+  container_registry: "private_container_registry"
+  image_management_strategy: "semantic_versioning_with_immutable_tags"
+  
+  container_specifications:
+    prefect_server_container:
+      base_image: "python:3.11-slim"
+      final_image_name: "crypto-lakehouse/prefect-server"
+      image_size_target: "< 500MB"
+      build_strategy: "multi_stage_build"
+      
+      dockerfile_optimization:
+        base_stage: "python:3.11-slim as base"
+        dependencies_stage: "separate_dependency_installation"
+        application_stage: "minimal_application_layer"
+        
+      security_configuration:
+        user: "non_root_user_uid_1000"
+        read_only_filesystem: true
+        dropped_capabilities: "all_except_required"
+        no_new_privileges: true
+        
+      resource_configuration:
+        requests:
+          cpu: "1000m"
+          memory: "2Gi"
+        limits:
+          cpu: "2000m"
+          memory: "4Gi"
+        
+    minio_container:
+      base_image: "minio/minio:RELEASE.2025-07-20T00-00-00Z"
+      customization: "minimal_configuration_overlay"
+      
+      persistent_storage:
+        storage_class: "local_storage_provisioner"
+        access_mode: "ReadWriteOnce"
+        size_per_instance: "25Ti"
+        
+      security_configuration:
+        security_context:
+          run_as_user: 1000
+          run_as_group: 1000
+          fs_group: 1000
+        volume_mounts:
+          - name: "data"
+            mount_path: "/data"
+            read_only: false
+            
+    s5cmd_executor_container:
+      base_image: "alpine:3.18"
+      custom_build: true
+      s5cmd_version: "v2.2.2"
+      
+      build_process:
+        s5cmd_installation: "download_and_verify_checksum"
+        python_runtime: "python_3_11_alpine"
+        additional_tools: ["curl", "jq", "ca-certificates"]
+        
+      runtime_configuration:
+        working_directory: "/app"
+        entrypoint: ["python", "main.py"]
+        environment_variables:
+          - name: "S5CMD_LOG_LEVEL"
+            value: "info"
+          - name: "S5CMD_STATS"
+            value: "true"
+
+deployment_strategies:
+  blue_green_deployment:
+    strategy_name: "blue_green_with_service_switching"
+    implementation: "kubernetes_services_with_selector_switching"
+    
+    deployment_process:
+      preparation_phase:
+        - "deploy_new_version_to_green_environment"
+        - "run_health_checks_and_smoke_tests"
+        - "verify_database_migration_compatibility"
+        
+      switch_phase:
+        - "update_service_selectors_to_green_pods"
+        - "monitor_application_metrics_and_logs"
+        - "verify_user_traffic_routing"
+        
+      cleanup_phase:
+        - "monitor_green_environment_for_stability_period"
+        - "cleanup_blue_environment_resources"
+        - "update_deployment_status_and_documentation"
+        
+  rolling_deployment:
+    strategy_name: "rolling_update_with_readiness_checks"
+    implementation: "kubernetes_native_rolling_update"
+    
+    configuration:
+      max_unavailable: "25%"
+      max_surge: "25%"
+      min_ready_seconds: 30
+      progress_deadline_seconds: 600
+      
+  canary_deployment:
+    strategy_name: "canary_with_traffic_splitting"
+    implementation: "istio_traffic_management"
+    
+    traffic_distribution:
+      initial_canary_percentage: "5%"
+      increment_steps: ["5%", "25%", "50%", "100%"]
+      promotion_criteria:
+        error_rate_threshold: "< 1%"
+        response_time_threshold: "< 200ms"
+        success_rate_threshold: "> 99%"
+
+environment_configurations:
+  development_environment:
+    cluster_size: "minimal_single_node_or_minikube"
+    resource_allocation: "development_optimized"
+    
+    configuration_overrides:
+      replica_counts:
+        prefect_server: 1
+        minio_nodes: 1
+        s5cmd_executors: 1
+      resource_limits:
+        cpu_limit_multiplier: "0.5x"
+        memory_limit_multiplier: "0.5x"
+      storage_configuration:
+        storage_size_multiplier: "0.1x"
+        storage_class: "local_storage"
+        
+  staging_environment:
+    cluster_size: "production_like_scaled_down"
+    resource_allocation: "staging_optimized"
+    
+    configuration_overrides:
+      replica_counts:
+        prefect_server: 2
+        minio_nodes: 2
+        s5cmd_executors: 2
+      resource_limits:
+        cpu_limit_multiplier: "0.75x"
+        memory_limit_multiplier: "0.75x"
+      data_management:
+        data_refresh_strategy: "weekly_production_subset"
+        retention_policy: "30_days"
+        
+  production_environment:
+    cluster_size: "full_scale_high_availability"
+    resource_allocation: "production_optimized"
+    
+    configuration_overrides:
+      replica_counts:
+        prefect_server: 3
+        minio_nodes: 4
+        s5cmd_executors: "auto_scaling_2_to_10"
+      resource_limits:
+        cpu_limit_multiplier: "1.0x"
+        memory_limit_multiplier: "1.0x"
+      high_availability:
+        multi_az_deployment: true
+        disaster_recovery: "enabled"
+        backup_strategy: "continuous_with_point_in_time_recovery"
+
+monitoring_and_observability_deployment:
+  monitoring_stack_deployment:
+    prometheus_configuration:
+      deployment: "prometheus_operator"
+      retention_period: "30_days"
+      storage_size: "100Gi"
+      scrape_interval: "15s"
+      
+      service_monitors:
+        - prefect_server_metrics
+        - minio_cluster_metrics
+        - s5cmd_executor_metrics
+        - kubernetes_cluster_metrics
+        - istio_service_mesh_metrics
+        
+    grafana_configuration:
+      deployment: "grafana_operator"
+      persistence: "enabled"
+      dashboards: "configmap_based_provisioning"
+      
+      dashboard_sets:
+        - infrastructure_overview_dashboard
+        - prefect_workflows_dashboard
+        - s5cmd_performance_dashboard
+        - minio_storage_dashboard
+        - kubernetes_cluster_dashboard
+        
+    jaeger_configuration:
+      deployment: "jaeger_operator"
+      storage_backend: "elasticsearch"
+      trace_retention: "7_days"
+      sampling_strategy: "adaptive_sampling"
+      
+  logging_stack_deployment:
+    log_aggregation: "fluentd_with_elasticsearch"
+    log_retention: "90_days"
+    log_shipping: "structured_json_logs"
+    
+    log_sources:
+      - kubernetes_audit_logs
+      - application_logs
+      - access_logs
+      - security_events
+      
+  alerting_configuration:
+    alertmanager_deployment: "prometheus_alertmanager"
+    notification_channels:
+      - slack_integration
+      - email_notifications
+      - pagerduty_critical_alerts
+      
+    alert_rules:
+      infrastructure_alerts:
+        - node_down_alert
+        - disk_space_alert
+        - memory_pressure_alert
+        - cpu_high_utilization_alert
+      application_alerts:
+        - workflow_failure_rate_alert
+        - s5cmd_operation_latency_alert
+        - minio_storage_capacity_alert
+        - api_response_time_alert
+
+security_deployment_configuration:
+  network_security:
+    network_policies: "calico_network_policies"
+    service_mesh_security: "istio_authorization_policies"
+    ingress_security: "nginx_ingress_with_waf"
+    
+    security_policies:
+      default_deny_all: "enabled"
+      namespace_isolation: "enforced"
+      pod_to_pod_encryption: "automatic_mtls"
+      
+  secrets_management:
+    secrets_store: "external_secrets_operator"
+    secret_backends: ["hashicorp_vault", "aws_secrets_manager"]
+    secret_rotation: "automated_rotation_policy"
+    
+    secret_types:
+      database_credentials: "auto_rotated_monthly"
+      api_keys: "manual_rotation_quarterly"
+      tls_certificates: "auto_rotation_before_expiry"
+      
+  pod_security:
+    pod_security_standards: "restricted_profile"
+    admission_controllers: "pod_security_policy_and_opa_gatekeeper"
+    
+    security_contexts:
+      run_as_non_root: "enforced"
+      read_only_file_system: "preferred"
+      privilege_escalation: "disallowed"
+
+disaster_recovery_and_backup:
+  backup_strategy:
+    infrastructure_backup:
+      etcd_backup: "automated_daily_snapshots"
+      persistent_volume_backup: "velero_with_restic"
+      configuration_backup: "git_based_version_control"
+      
+    application_data_backup:
+      database_backup: "pg_dump_with_wal_archiving"
+      object_storage_backup: "cross_region_replication"
+      
+  disaster_recovery:
+    rto_target: "30_minutes"
+    rpo_target: "5_minutes"
+    
+    disaster_recovery_procedures:
+      infrastructure_recovery: "terraform_based_rebuild"
+      application_recovery: "helm_based_restoration"
+      data_recovery: "backup_restoration_with_point_in_time"
+      
+  business_continuity:
+    multi_region_deployment: "active_passive_configuration"
+    failover_automation: "automated_with_manual_confirmation"
+    data_synchronization: "real_time_replication"
+
+metadata:
+  design_author: "DevOps Architect"
+  infrastructure_reviewer: "Principal Infrastructure Engineer"
+  created_date: "2025-07-20"
+  last_updated: "2025-07-20"
+  version: "1.0.0"
+  review_status: "draft"
+  deployment_complexity: "high"
+  estimated_implementation_effort: "12-16 weeks"
+  prerequisites:
+    - "kubernetes_cluster_available"
+    - "container_registry_access"
+    - "git_repository_setup"
+    - "cloud_provider_permissions"

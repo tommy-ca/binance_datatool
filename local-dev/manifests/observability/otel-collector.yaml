@@ -1,0 +1,285 @@
+---
+# OpenTelemetry Collector for Local Development
+# Crypto Lakehouse Observability Stack
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observability
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      
+      prometheus:
+        config:
+          scrape_configs:
+          - job_name: 'otel-collector'
+            scrape_interval: 15s
+            static_configs:
+            - targets: ['localhost:8888']
+          
+          - job_name: 'prefect-server'
+            scrape_interval: 30s
+            static_configs:
+            - targets: ['prefect-server.prefect:4200']
+            metrics_path: '/api/metrics'
+            
+          - job_name: 'minio'
+            scrape_interval: 30s
+            static_configs:
+            - targets: ['minio-service.minio:9000']
+            metrics_path: '/minio/v2/metrics/cluster'
+            
+          - job_name: 's5cmd-executor'
+            scrape_interval: 15s
+            static_configs:
+            - targets: ['s5cmd-executor.s5cmd:8080']
+            metrics_path: '/metrics'
+
+      hostmetrics:
+        collection_interval: 30s
+        scrapers:
+          cpu:
+            metrics:
+              system.cpu.utilization:
+                enabled: true
+          memory:
+            metrics:
+              system.memory.utilization:
+                enabled: true
+          disk:
+            metrics:
+              system.disk.io:
+                enabled: true
+          network:
+            metrics:
+              system.network.io:
+                enabled: true
+
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+        
+      memory_limiter:
+        limit_mib: 512
+        spike_limit_mib: 128
+        check_interval: 5s
+        
+      resource:
+        attributes:
+        - key: environment
+          value: local
+          action: upsert
+        - key: cluster
+          value: crypto-lakehouse-local
+          action: upsert
+        - key: version
+          value: "1.0.0"
+          action: upsert
+
+      # Add service name for traces without one
+      resource/traces:
+        attributes:
+        - key: service.name
+          value: "unknown-service"
+          action: insert
+
+    exporters:
+      # Jaeger exporter for traces
+      jaeger:
+        endpoint: jaeger-collector.observability:14250
+        tls:
+          insecure: true
+      
+      # Prometheus exporter for metrics
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: crypto_lakehouse
+        const_labels:
+          environment: local
+          cluster: crypto-lakehouse-local
+        
+      # Logging exporter for debugging
+      logging:
+        loglevel: info
+        sampling_initial: 5
+        sampling_thereafter: 200
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      pprof:
+        endpoint: 0.0.0.0:1777
+      zpages:
+        endpoint: 0.0.0.0:55679
+
+    service:
+      extensions: [health_check, pprof, zpages]
+      
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource/traces, batch]
+          exporters: [jaeger, logging]
+          
+        metrics:
+          receivers: [otlp, prometheus, hostmetrics]
+          processors: [memory_limiter, resource, batch]
+          exporters: [prometheus, logging]
+          
+      telemetry:
+        logs:
+          level: "info"
+        metrics:
+          address: 0.0.0.0:8888
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+    component: collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+        component: collector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: otel-collector
+        image: otel/opentelemetry-collector-contrib:0.88.0
+        args:
+        - --config=/etc/otel-collector-config/config.yaml
+        ports:
+        - containerPort: 4317   # OTLP gRPC
+          name: otlp-grpc
+        - containerPort: 4318   # OTLP HTTP
+          name: otlp-http
+        - containerPort: 8888   # Prometheus metrics
+          name: metrics
+        - containerPort: 8889   # Prometheus export
+          name: prom-export
+        - containerPort: 13133  # Health check
+          name: health
+        - containerPort: 1777   # pprof
+          name: pprof
+        - containerPort: 55679  # zpages
+          name: zpages
+        
+        env:
+        - name: GOGC
+          value: "80"
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+            
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/otel-collector-config
+          
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 13133
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          
+      volumes:
+      - name: config-volume
+        configMap:
+          name: otel-collector-config
+          
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+    component: collector
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8888"
+    prometheus.io/path: "/metrics"
+spec:
+  selector:
+    app: otel-collector
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+    protocol: TCP
+  - name: otlp-http
+    port: 4318
+    targetPort: 4318
+    protocol: TCP
+  - name: metrics
+    port: 8888
+    targetPort: 8888
+    protocol: TCP
+  - name: prom-export
+    port: 8889
+    targetPort: 8889
+    protocol: TCP
+  - name: health
+    port: 13133
+    targetPort: 13133
+    protocol: TCP
+  - name: zpages
+    port: 55679
+    targetPort: 55679
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Service Monitor for Prometheus Operator (if available)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: observability
+  labels:
+    app: otel-collector
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics

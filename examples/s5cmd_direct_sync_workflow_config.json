@@ -1,0 +1,75 @@
+{
+  "workflow_name": "Enhanced Archive Collection with S5cmd Direct Sync",
+  "description": "Example configuration for Prefect workflow with S5cmd direct sync capabilities",
+  "version": "2.0.0",
+  
+  "workflow_type": "archive_samples",
+  "matrix_path": "data/binance_data_availability_matrix.json",
+  "output_directory": "output/enhanced_archive_collection",
+  
+  "markets": ["spot", "futures_um"],
+  "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
+  "data_types": ["klines", "trades"],
+  "intervals": ["1m", "5m", "15m", "1h"],
+  
+  "date_range": {
+    "start": "2025-07-15",
+    "end": "2025-07-15"
+  },
+  
+  "enable_s3_direct_sync": true,
+  "s3_direct_sync_config": {
+    "destination_bucket": "crypto-lakehouse-bronze",
+    "operation_mode": "auto",
+    "batch_size": 100,
+    "max_concurrent": 16,
+    "part_size_mb": 50,
+    "enable_batch_mode": true,
+    "enable_resume": true,
+    "cross_region_optimization": true,
+    "enable_incremental": true,
+    "sync_delete": false,
+    "preserve_metadata": true,
+    "enable_progress_tracking": true,
+    "s5cmd_extra_args": [
+      "--no-sign-request",
+      "--retry-count=3",
+      "--numworkers=16",
+      "--stat"
+    ]
+  },
+  
+  "performance_optimization": {
+    "timeout_seconds": 300,
+    "download_checksum": true,
+    "enable_monitoring": true,
+    "max_memory_usage_mb": 500,
+    "enable_metrics_collection": true
+  },
+  
+  "error_handling": {
+    "retry_attempts": 3,
+    "retry_delay_seconds": 60,
+    "enable_graceful_degradation": true,
+    "fallback_to_traditional": true
+  },
+  
+  "environment": "production",
+  "dry_run": false,
+  "verbose": true,
+  
+  "storage_config": {
+    "provider": "s3",
+    "bucket": "crypto-lakehouse-bronze",
+    "region": "us-east-1",
+    "enable_encryption": true,
+    "storage_class": "STANDARD_IA"
+  },
+  
+  "monitoring": {
+    "enable_real_time_metrics": true,
+    "metrics_collection_interval": 30,
+    "enable_performance_alerts": true,
+    "log_level": "INFO"
+  }
+}

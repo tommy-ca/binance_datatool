@@ -1,0 +1,574 @@
+---
+# Component Architecture Design: Prefect + s5cmd + MinIO Infrastructure
+# Phase 2: Component Design and Integration Patterns
+# Version: 1.0.0
+# Date: 2025-07-20
+---
+
+component_architecture:
+  design_philosophy: "modular_microservices_with_clear_boundaries"
+  integration_strategy: "api_first_with_event_driven_communication"
+  deployment_model: "kubernetes_native_with_operators"
+  
+components:
+  prefect_orchestration_suite:
+    prefect_server:
+      component_type: "orchestration_engine"
+      responsibilities:
+        - "workflow_definition_storage_and_validation"
+        - "task_scheduling_and_dependency_management"
+        - "worker_pool_coordination"
+        - "execution_state_tracking"
+        - "api_endpoint_provision"
+        - "web_ui_backend_services"
+      
+      technical_specification:
+        runtime: "python_3_11"
+        framework: "fastapi_with_sqlalchemy"
+        deployment: "kubernetes_deployment"
+        replicas: 3
+        load_balancing: "round_robin_with_session_affinity"
+        
+      interfaces:
+        rest_api:
+          base_path: "/api/v1"
+          authentication: "bearer_token_jwt"
+          rate_limiting: "1000_requests_per_minute"
+          endpoints:
+            - path: "/flows"
+              methods: ["GET", "POST", "PUT", "DELETE"]
+              description: "Workflow management"
+            - path: "/flow-runs"
+              methods: ["GET", "POST", "PUT"]
+              description: "Execution management"
+            - path: "/task-runs"
+              methods: ["GET", "PUT"]
+              description: "Task execution tracking"
+            - path: "/work-pools"
+              methods: ["GET", "POST", "PUT", "DELETE"]
+              description: "Worker pool management"
+            - path: "/deployments"
+              methods: ["GET", "POST", "PUT", "DELETE"]
+              description: "Deployment management"
+              
+        database_interface:
+          connection_type: "postgresql_async"
+          connection_pool: "sqlalchemy_async_pool"
+          transaction_management: "automatic_with_rollback"
+          schema_migration: "alembic_automated"
+          
+        cache_interface:
+          connection_type: "redis_cluster"
+          usage_patterns: ["session_storage", "result_caching", "rate_limiting"]
+          serialization: "json_with_compression"
+          
+      configuration:
+        environment_variables:
+          - name: "PREFECT_SERVER_DATABASE_CONNECTION_URL"
+            description: "PostgreSQL connection string"
+            secret: true
+          - name: "PREFECT_SERVER_ANALYTICS_ENABLED"
+            description: "Analytics collection toggle"
+            default: "false"
+          - name: "PREFECT_LOGGING_LEVEL"
+            description: "Logging verbosity"
+            default: "INFO"
+            
+        resource_requirements:
+          requests:
+            cpu: "1000m"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+            
+        health_checks:
+          liveness_probe:
+            path: "/api/health"
+            initial_delay: "30s"
+            period: "10s"
+          readiness_probe:
+            path: "/api/ready"
+            initial_delay: "5s"
+            period: "5s"
+            
+      monitoring_and_observability:
+        metrics_exposition: "prometheus_format"
+        custom_metrics:
+          - "prefect_active_flows_total"
+          - "prefect_task_execution_duration_seconds"
+          - "prefect_api_request_duration_seconds"
+          - "prefect_worker_pool_utilization"
+        logging_configuration:
+          format: "structured_json"
+          level: "INFO"
+          output: "stdout_for_kubernetes"
+          
+    prefect_worker_pools:
+      crypto_data_worker_pool:
+        component_type: "task_execution_engine"
+        specialization: "general_purpose_crypto_data_processing"
+        
+        technical_specification:
+          worker_type: "kubernetes_worker"
+          max_concurrent_tasks: 10
+          scaling_policy: "horizontal_pod_autoscaler"
+          node_selector: "workload=general"
+          
+        resource_configuration:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+            
+        task_execution_environment:
+          base_image: "python:3.11-slim"
+          additional_tools: ["curl", "jq", "aws-cli"]
+          security_context: "non_root_user"
+          
+      s5cmd_optimized_worker_pool:
+        component_type: "high_performance_data_transfer_engine"
+        specialization: "s5cmd_optimized_data_operations"
+        
+        technical_specification:
+          worker_type: "kubernetes_worker"
+          max_concurrent_tasks: 20
+          scaling_policy: "vertical_pod_autoscaler"
+          node_selector: "workload=data_intensive"
+          
+        resource_configuration:
+          requests:
+            cpu: "2000m"
+            memory: "4Gi"
+          limits:
+            cpu: "4000m"
+            memory: "8Gi"
+          network_requirements: "high_bandwidth"
+          
+        specialized_capabilities:
+          s5cmd_integration: "embedded_binary"
+          network_optimization: "enabled"
+          concurrent_transfers: 32
+          
+    prefect_database_cluster:
+      component_type: "persistent_metadata_storage"
+      implementation: "postgresql_with_high_availability"
+      
+      cluster_configuration:
+        topology: "primary_replica_with_streaming_replication"
+        instances:
+          primary: 1
+          replicas: 2
+        failover: "automatic_with_patroni"
+        
+      technical_specification:
+        version: "postgresql_15"
+        storage_engine: "ext4_on_ssd"
+        backup_strategy: "continuous_wal_archiving"
+        
+      resource_configuration:
+        per_instance:
+          cpu: "2000m"
+          memory: "4Gi"
+          storage: "100Gi_ssd"
+          
+      performance_optimization:
+        connection_pooling: "pgbouncer"
+        query_optimization: "auto_vacuum_enabled"
+        monitoring: "pg_stat_statements"
+        
+    prefect_redis_cache:
+      component_type: "distributed_cache_and_session_store"
+      implementation: "redis_cluster"
+      
+      cluster_configuration:
+        nodes: 3
+        replication_factor: 1
+        persistence: "rdb_snapshots"
+        
+      technical_specification:
+        version: "redis_7"
+        memory_policy: "allkeys_lru"
+        max_memory: "2Gi_per_node"
+
+  minio_storage_cluster:
+    minio_distributed_cluster:
+      component_type: "s3_compatible_object_storage"
+      deployment_pattern: "distributed_with_erasure_coding"
+      
+      cluster_topology:
+        nodes: 4
+        drives_per_node: 4
+        total_drives: 16
+        erasure_coding: "EC:4+2"
+        redundancy: "2_node_failure_tolerance"
+        
+      technical_specification:
+        version: "minio_latest_stable"
+        deployment: "kubernetes_statefulset"
+        service_type: "headless_service"
+        
+      storage_configuration:
+        drive_configuration:
+          cache_drives: "nvme_ssd_500gb"
+          data_drives: "sata_hdd_10tb"
+        total_capacity: "100TB_usable"
+        performance_tier: "hot_data_access"
+        
+      resource_requirements:
+        per_node:
+          cpu: "2000m"
+          memory: "4Gi"
+          network: "10gbps"
+          storage: "25TB_raw"
+          
+      s3_api_configuration:
+        api_version: "s3v4"
+        supported_operations:
+          - "GetObject"
+          - "PutObject"
+          - "DeleteObject"
+          - "ListBucket"
+          - "CopyObject"
+          - "MultipartUpload"
+          - "SelectObjectContent"
+        authentication: "aws_signature_v4"
+        
+      advanced_features:
+        versioning: "enabled_globally"
+        object_locking: "governance_mode"
+        lifecycle_management: "automated_tiering"
+        server_side_encryption: "sse_s3_with_kms"
+        compression: "enabled_for_compressible_data"
+        
+      monitoring_and_metrics:
+        prometheus_metrics: "enabled"
+        audit_logging: "comprehensive"
+        performance_monitoring: "real_time"
+        
+    minio_management_console:
+      component_type: "storage_administration_interface"
+      
+      technical_specification:
+        deployment: "kubernetes_deployment"
+        replicas: 2
+        load_balancing: "enabled"
+        
+      features:
+        bucket_management: "create_delete_configure"
+        user_management: "iam_policies_and_groups"
+        monitoring_dashboard: "real_time_metrics"
+        log_viewer: "structured_log_access"
+
+  s5cmd_execution_infrastructure:
+    s5cmd_executor_service:
+      component_type: "high_performance_s3_operations_orchestrator"
+      deployment_pattern: "microservice_with_embedded_binary"
+      
+      technical_specification:
+        runtime: "python_3_11"
+        framework: "fastapi_async"
+        s5cmd_version: "v2.2.2"
+        binary_distribution: "embedded_in_container"
+        
+      api_specification:
+        base_path: "/api/v1/s5cmd"
+        authentication: "jwt_service_tokens"
+        endpoints:
+          - path: "/sync"
+            method: "POST"
+            description: "Initiate S3 sync operation"
+            request_schema: "SyncOperationRequest"
+            response_schema: "OperationResponse"
+          - path: "/copy"
+            method: "POST"
+            description: "High-performance S3 copy"
+            request_schema: "CopyOperationRequest"
+            response_schema: "OperationResponse"
+          - path: "/operations/{operation_id}"
+            method: "GET"
+            description: "Get operation status"
+            response_schema: "OperationStatusResponse"
+          - path: "/operations/{operation_id}/logs"
+            method: "GET"
+            description: "Get operation logs"
+            response_schema: "OperationLogsResponse"
+            
+      operation_modes:
+        direct_sync_mode:
+          description: "Direct S3 to S3 transfers"
+          configuration:
+            max_concurrent_operations: 32
+            part_size: "50MB"
+            multipart_threshold: "100MB"
+            retry_count: 3
+            timeout: "300s"
+          performance_characteristics:
+            expected_improvement: "60-75%"
+            memory_usage: "constant_low"
+            local_storage: "zero_requirement"
+            
+        hybrid_mode:
+          description: "Intelligent mode selection with fallback"
+          configuration:
+            mode_selection_criteria: "file_size_and_network_conditions"
+            fallback_threshold: "3_consecutive_failures"
+            performance_monitoring: "real_time"
+          performance_characteristics:
+            expected_improvement: "30-50%"
+            adaptability: "high"
+            reliability: "enhanced_with_fallback"
+            
+        traditional_mode:
+          description: "Download-then-upload for compatibility"
+          configuration:
+            local_storage_management: "automatic_cleanup"
+            concurrent_downloads: 8
+            staging_area: "ephemeral_storage"
+          performance_characteristics:
+            performance_baseline: "100%"
+            compatibility: "maximum"
+            resource_usage: "higher_storage_requirement"
+            
+      resource_configuration:
+        requests:
+          cpu: "1000m"
+          memory: "2Gi"
+        limits:
+          cpu: "4000m"
+          memory: "8Gi"
+        network_requirements: "high_bandwidth_priority"
+        
+      monitoring_and_observability:
+        operation_tracking: "real_time_progress"
+        performance_metrics: "throughput_latency_error_rates"
+        integration_monitoring: "s5cmd_process_health"
+        
+    s5cmd_binary_management:
+      component_type: "binary_lifecycle_manager"
+      
+      distribution_strategy:
+        primary: "container_image_embedding"
+        verification: "sha256_checksum_validation"
+        fallback: "runtime_download_with_caching"
+        
+      version_management:
+        current_version: "v2.2.2"
+        update_strategy: "blue_green_deployment"
+        compatibility_testing: "automated_validation"
+        
+      security_considerations:
+        binary_signing: "gpg_signature_verification"
+        supply_chain_security: "sbom_tracking"
+        runtime_integrity: "file_system_immutability"
+
+  integration_and_communication:
+    service_mesh_integration:
+      implementation: "istio_service_mesh"
+      
+      traffic_management:
+        load_balancing: "round_robin_with_circuit_breaker"
+        retry_policy: "exponential_backoff"
+        timeout_configuration: "service_specific"
+        
+      security_policies:
+        authentication: "mutual_tls_between_services"
+        authorization: "rbac_with_service_accounts"
+        encryption: "automatic_tls_for_all_traffic"
+        
+      observability:
+        distributed_tracing: "jaeger_integration"
+        metrics_collection: "prometheus_with_custom_metrics"
+        access_logging: "structured_logs_with_correlation_ids"
+        
+    event_driven_communication:
+      message_broker: "kafka_for_async_communication"
+      
+      event_patterns:
+        workflow_events:
+          - "workflow_started"
+          - "workflow_completed"
+          - "workflow_failed"
+        task_events:
+          - "task_queued"
+          - "task_started"
+          - "task_completed"
+          - "task_failed"
+        s5cmd_events:
+          - "operation_initiated"
+          - "operation_progress"
+          - "operation_completed"
+          - "operation_failed"
+          
+      event_schema:
+        standard_fields:
+          - "event_id"
+          - "timestamp"
+          - "source_service"
+          - "event_type"
+          - "correlation_id"
+        payload: "service_specific_data"
+        
+    api_gateway_configuration:
+      implementation: "istio_gateway_with_virtual_services"
+      
+      routing_rules:
+        prefect_api:
+          path_prefix: "/api/prefect"
+          destination: "prefect_server_service"
+          load_balancing: "round_robin"
+          
+        s5cmd_api:
+          path_prefix: "/api/s5cmd"
+          destination: "s5cmd_executor_service"
+          load_balancing: "least_connection"
+          
+        minio_api:
+          path_prefix: "/api/storage"
+          destination: "minio_service"
+          load_balancing: "consistent_hash"
+          
+      security_configuration:
+        authentication: "oauth2_with_jwt_validation"
+        rate_limiting: "token_bucket_algorithm"
+        cors_policy: "restrictive_origins"
+
+  monitoring_and_observability_stack:
+    prometheus_monitoring:
+      component_type: "metrics_collection_and_alerting"
+      
+      deployment_configuration:
+        retention_period: "30_days"
+        storage_size: "100Gi"
+        scrape_interval: "15s"
+        
+      monitored_services:
+        - "prefect_server_metrics"
+        - "minio_cluster_metrics"
+        - "s5cmd_executor_metrics"
+        - "kubernetes_cluster_metrics"
+        - "istio_service_mesh_metrics"
+        
+      custom_alerts:
+        - alert: "WorkflowFailureRate"
+          condition: "rate(workflow_failures[5m]) > 0.1"
+          severity: "warning"
+        - alert: "S5cmdOperationLatency"
+          condition: "s5cmd_operation_duration_95th_percentile > 300"
+          severity: "critical"
+        - alert: "MinioStorageCapacity"
+          condition: "minio_storage_utilization > 80"
+          severity: "warning"
+          
+    grafana_visualization:
+      component_type: "metrics_visualization_and_dashboards"
+      
+      dashboard_configuration:
+        - dashboard: "Infrastructure Overview"
+          panels: ["cluster_health", "resource_utilization", "service_status"]
+        - dashboard: "Prefect Workflows"
+          panels: ["workflow_execution_rate", "task_success_rate", "worker_utilization"]
+        - dashboard: "S5cmd Performance"
+          panels: ["transfer_throughput", "operation_latency", "error_rates"]
+        - dashboard: "MinIO Storage"
+          panels: ["storage_utilization", "iops", "network_throughput"]
+          
+    jaeger_tracing:
+      component_type: "distributed_tracing_system"
+      
+      configuration:
+        trace_sampling: "adaptive_sampling"
+        retention_period: "7_days"
+        storage_backend: "elasticsearch"
+        
+      traced_operations:
+        - "end_to_end_workflow_execution"
+        - "s5cmd_operation_lifecycle"
+        - "api_request_processing"
+        - "database_query_execution"
+
+data_models_and_schemas:
+  workflow_execution_model:
+    entities:
+      - entity: "WorkflowExecution"
+        attributes:
+          - "execution_id: UUID"
+          - "workflow_definition_id: UUID"
+          - "status: ExecutionStatus"
+          - "started_at: timestamp"
+          - "completed_at: timestamp"
+          - "configuration: JSON"
+          - "result_summary: JSON"
+        relationships:
+          - "has_many: TaskExecution"
+          - "belongs_to: WorkflowDefinition"
+          
+      - entity: "TaskExecution"
+        attributes:
+          - "task_id: UUID"
+          - "execution_id: UUID"
+          - "task_type: TaskType"
+          - "s5cmd_operation_id: UUID"
+          - "status: TaskStatus"
+          - "started_at: timestamp"
+          - "completed_at: timestamp"
+          - "performance_metrics: JSON"
+        relationships:
+          - "belongs_to: WorkflowExecution"
+          - "has_one: S5cmdOperation"
+          
+  s5cmd_operation_model:
+    entities:
+      - entity: "S5cmdOperation"
+        attributes:
+          - "operation_id: UUID"
+          - "operation_type: OperationType"
+          - "source_path: string"
+          - "destination_path: string"
+          - "operation_mode: OperationMode"
+          - "configuration: JSON"
+          - "status: OperationStatus"
+          - "progress_percentage: integer"
+          - "throughput_mbps: float"
+          - "started_at: timestamp"
+          - "completed_at: timestamp"
+        relationships:
+          - "belongs_to: TaskExecution"
+          - "has_many: TransferStatistics"
+          
+  storage_management_model:
+    entities:
+      - entity: "StorageBucket"
+        attributes:
+          - "bucket_name: string"
+          - "region: string"
+          - "encryption_configuration: JSON"
+          - "lifecycle_policies: JSON"
+          - "access_policies: JSON"
+        relationships:
+          - "has_many: StorageObject"
+          
+      - entity: "StorageObject"
+        attributes:
+          - "object_key: string"
+          - "bucket_name: string"
+          - "size_bytes: bigint"
+          - "content_type: string"
+          - "etag: string"
+          - "last_modified: timestamp"
+          - "storage_class: string"
+        relationships:
+          - "belongs_to: StorageBucket"
+
+metadata:
+  design_author: "Senior Platform Architect"
+  component_reviewer: "Principal Engineer"
+  created_date: "2025-07-20"
+  last_updated: "2025-07-20"
+  version: "1.0.0"
+  review_status: "draft"
+  design_complexity: "high"
+  integration_complexity: "complex"
+  estimated_implementation_effort: "10-14 weeks"
