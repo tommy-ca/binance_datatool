@@ -1,0 +1,389 @@
+# Core Module Refactoring Specifications
+# Version: 1.0.0 | Specs-Driven Development Flow
+# ================================================================
+
+specs_metadata:
+  title: "Core Module Cleanup and Refactoring"
+  version: "1.0.0"
+  author: "Hive Mind Swarm"
+  created: "2025-07-23"
+  methodology: "specs_driven_development"
+  phase: "01-specs"
+
+# ================================================================
+# FUNCTIONAL REQUIREMENTS
+# ================================================================
+
+functional_requirements:
+  
+  FR001:
+    id: "FR001"
+    title: "Observability Module Consolidation"
+    description: "Consolidate multiple OpenTelemetry and observability files into unified structure"
+    business_value: "Simplified maintenance and reduced complexity"
+    priority: "high"
+    complexity: "moderate"
+    acceptance_criteria:
+      - "All OpenTelemetry functionality preserved during consolidation"
+      - "Single entry point for observability configuration"
+      - "Backward compatibility maintained for existing imports"
+      - "Performance overhead reduced through optimized imports"
+    validation_method: "automated"
+    
+  FR002:
+    id: "FR002" 
+    title: "Configuration Management Cleanup"
+    description: "Remove deprecated config files and standardize configuration interface"
+    business_value: "Consistent configuration patterns across platform"
+    priority: "high"
+    complexity: "simple"
+    acceptance_criteria:
+      - "Deprecated config_old.py removed"
+      - "Single WorkflowConfig interface maintained"
+      - "All configuration validation consolidated"
+      - "Environment-specific configuration supported"
+    validation_method: "automated"
+    
+  FR003:
+    id: "FR003"
+    title: "Core Interface Standardization"
+    description: "Standardize core interfaces and reduce circular dependencies"
+    business_value: "Improved modularity and testability"
+    priority: "medium"
+    complexity: "moderate"
+    acceptance_criteria:
+      - "Clear separation of concerns between modules"
+      - "Minimal circular dependencies"
+      - "Consistent interface patterns"
+      - "Enhanced dependency injection support"
+    validation_method: "automated"
+    
+  FR004:
+    id: "FR004"
+    title: "Import Optimization"
+    description: "Optimize import structure and reduce startup overhead"
+    business_value: "Faster application startup and reduced memory usage"
+    priority: "medium"
+    complexity: "simple"
+    acceptance_criteria:
+      - "Lazy imports for optional components"
+      - "Reduced import graph complexity"
+      - "Startup time improved by >20%"
+      - "Memory usage reduced during initialization"
+    validation_method: "automated"
+
+# ================================================================  
+# TECHNICAL REQUIREMENTS
+# ================================================================
+
+technical_requirements:
+
+  TR001:
+    id: "TR001"
+    title: "Observability Architecture Consolidation"
+    description: "Consolidate OpenTelemetry components into organized submodules"
+    implementation_approach: "Create observability/ subpackage with specialized modules"
+    architecture_pattern: "Module consolidation with facade pattern"
+    technology_stack: ["python", "opentelemetry-sdk", "typing"]
+    components:
+      - "observability/config.py - Unified configuration"
+      - "observability/logging.py - Consolidated logging functionality" 
+      - "observability/metrics.py - Metrics collection and export"
+      - "observability/tracing.py - Tracing and spans management"
+      - "observability/__init__.py - Unified public interface"
+    dependencies:
+      internal: ["base", "exceptions", "utils"]
+      external: ["opentelemetry-sdk", "opentelemetry-exporter-otlp"]
+      
+  TR002:
+    id: "TR002"
+    title: "Configuration Standardization"
+    description: "Standardize configuration management with single source of truth"
+    implementation_approach: "Enhanced WorkflowConfig with validation and type safety"
+    architecture_pattern: "Configuration factory with validation pipeline"
+    technology_stack: ["pydantic", "typing", "pathlib"]
+    components:
+      - "config.py - Enhanced WorkflowConfig implementation"
+      - "validation.py - Configuration validation rules"
+    file_operations:
+      remove: ["config_old.py"]
+      consolidate: ["otel_config.py -> observability/config.py"]
+      
+  TR003:
+    id: "TR003"
+    title: "Core Interface Optimization"
+    description: "Optimize core module interfaces and dependency management"
+    implementation_approach: "Dependency injection with clear interface contracts"
+    architecture_pattern: "Interface segregation with dependency injection"
+    technology_stack: ["abc", "typing", "functools"]
+    components:
+      - "interfaces.py - Core interface definitions"
+      - "base.py - Enhanced base workflow with DI support"
+      - "__init__.py - Optimized public API"
+
+# ================================================================
+# PERFORMANCE REQUIREMENTS  
+# ================================================================
+
+performance_requirements:
+
+  PR001:
+    id: "PR001"
+    title: "Import Performance Optimization"
+    targets:
+      startup_time_reduction: ">20%"
+      memory_usage_reduction: ">15%"
+      import_graph_complexity: "<50% current"
+    measurement_approach: "Automated benchmarking with memory profiling"
+    
+  PR002:
+    id: "PR002" 
+    title: "Module Loading Optimization"
+    targets:
+      lazy_import_coverage: ">80%"
+      cold_start_time: "<500ms"
+      hot_reload_time: "<100ms"
+    measurement_approach: "Performance profiling with test scenarios"
+
+# ================================================================
+# SECURITY REQUIREMENTS
+# ================================================================
+
+security_requirements:
+
+  SR001:
+    id: "SR001"
+    title: "Secure Configuration Management"
+    requirements:
+      - "No hardcoded secrets or credentials"
+      - "Environment variable validation"
+      - "Configuration sanitization"
+      - "Secure defaults for all options"
+    validation_approach: "Security scanning and code review"
+    
+  SR002:
+    id: "SR002"
+    title: "Safe Import Practices"  
+    requirements:
+      - "No dynamic imports from user input"
+      - "Validated module loading"
+      - "Import isolation for optional components"
+      - "Exception handling for missing dependencies"
+    validation_approach: "Static analysis and security review"
+
+# ================================================================
+# ACCEPTANCE CRITERIA
+# ================================================================
+
+acceptance_criteria:
+
+  overall_success:
+    - "All existing functionality preserved"
+    - "No breaking changes to public APIs" 
+    - "Performance improvements achieved"
+    - "Code organization significantly improved"
+    - "Maintainability enhanced"
+    
+  quality_gates:
+    - "Test coverage ≥95% maintained"
+    - "Code quality score ≥8.5/10"
+    - "No security vulnerabilities introduced"
+    - "Documentation updated and accurate"
+    - "Backward compatibility 100% maintained"
+    
+  performance_validation:
+    - "Startup time reduced by >20%"
+    - "Memory usage reduced by >15%"
+    - "Import performance improved"
+    - "No runtime performance degradation"
+    
+  organizational_improvement:
+    - "Clear module boundaries established"
+    - "Dependency graph simplified" 
+    - "Import structure optimized"
+    - "Development experience enhanced"
+
+# ================================================================
+# REFACTORING STRATEGY
+# ================================================================
+
+refactoring_strategy:
+
+  phase_1_observability_consolidation:
+    description: "Consolidate OpenTelemetry components into observability subpackage"
+    files_affected:
+      create:
+        - "observability/__init__.py"
+        - "observability/config.py" 
+        - "observability/logging.py"
+        - "observability/metrics.py"
+        - "observability/tracing.py"
+      consolidate:
+        - "otel_*.py -> observability/"
+        - "unified_*.py -> observability/"
+        - "*_instrumentation.py -> observability/"
+      remove:
+        - "auto_instrumentation.py"
+        - "manual_instrumentation.py"
+        - "context_propagation.py"
+        - "crypto_workflow_tracing.py" 
+        - "performance_monitoring.py"
+      
+  phase_2_configuration_cleanup:
+    description: "Standardize configuration management"
+    files_affected:
+      remove:
+        - "config_old.py"
+      enhance:
+        - "config.py - Add validation and type safety"
+      update:
+        - "__init__.py - Remove old config exports"
+        
+  phase_3_interface_optimization:
+    description: "Optimize core interfaces and imports"
+    files_affected:
+      create:
+        - "interfaces.py"
+      enhance:
+        - "base.py - Add dependency injection"
+        - "__init__.py - Optimize exports"
+        - "utils.py - Add interface utilities"
+
+# ================================================================
+# BACKWARD COMPATIBILITY
+# ================================================================
+
+backward_compatibility:
+
+  import_compatibility:
+    strategy: "Import aliases with deprecation warnings"
+    implementation: "Use __getattr__ for legacy imports"
+    timeline: "6 month deprecation period"
+    
+  api_compatibility:
+    strategy: "Maintain all public method signatures"
+    implementation: "Wrapper functions where needed"
+    validation: "Comprehensive API compatibility tests"
+    
+  configuration_compatibility:
+    strategy: "Support both old and new configuration formats"
+    implementation: "Configuration migration utilities"
+    validation: "Configuration compatibility test suite"
+
+# ================================================================
+# VALIDATION STRATEGY
+# ================================================================
+
+validation_strategy:
+
+  unit_testing:
+    coverage_target: "≥95%"
+    test_categories:
+      - "Functionality preservation tests"
+      - "Performance regression tests"
+      - "Backward compatibility tests"
+      - "Configuration validation tests"
+      
+  integration_testing:
+    test_scenarios:
+      - "Full observability stack integration"
+      - "Configuration loading and validation"
+      - "Cross-module dependency resolution"
+      - "Import performance validation"
+      
+  performance_testing:
+    metrics:
+      - "Import time measurement"
+      - "Memory usage profiling"
+      - "Startup time benchmarking"
+      - "Runtime performance validation"
+
+# ================================================================
+# SUCCESS METRICS
+# ================================================================
+
+success_metrics:
+
+  code_quality:
+    - "Lines of code reduction: Target >20%"
+    - "Cyclomatic complexity reduction: Target >15%"
+    - "Import dependency reduction: Target >30%"
+    - "Duplicate code elimination: Target 100%"
+    
+  performance_improvement:
+    - "Startup time: >20% improvement"
+    - "Memory usage: >15% reduction"
+    - "Import graph: >50% simplification"
+    - "Cold start: <500ms target"
+    
+  maintainability_enhancement:
+    - "Module cohesion: Significantly improved"
+    - "Coupling reduction: >40%"
+    - "Documentation coverage: 100%"
+    - "Developer onboarding: <50% time reduction"
+
+# ================================================================
+# RISK ASSESSMENT
+# ================================================================
+
+risk_assessment:
+
+  high_risk:
+    - risk: "Breaking existing imports"
+      impact: "high"
+      probability: "low"
+      mitigation: "Comprehensive backward compatibility strategy"
+      
+  medium_risk:
+    - risk: "Performance regression during refactoring"
+      impact: "medium" 
+      probability: "medium"
+      mitigation: "Continuous performance monitoring and validation"
+      
+  low_risk:
+    - risk: "Documentation lag during transition"
+      impact: "low"
+      probability: "medium"
+      mitigation: "Automated documentation generation and validation"
+
+# ================================================================
+# TIMELINE AND MILESTONES
+# ================================================================
+
+timeline:
+
+  milestone_1_analysis_complete:
+    duration: "1 day"
+    deliverables: ["Specifications complete", "Design approved"]
+    
+  milestone_2_observability_consolidated:
+    duration: "2 days"
+    deliverables: ["Observability subpackage", "Tests passing"]
+    
+  milestone_3_configuration_standardized:
+    duration: "1 day" 
+    deliverables: ["Configuration cleanup", "Validation updated"]
+    
+  milestone_4_interfaces_optimized:
+    duration: "1 day"
+    deliverables: ["Interface optimization", "Performance validated"]
+    
+  milestone_5_validation_complete:
+    duration: "1 day"
+    deliverables: ["All tests passing", "Performance targets met"]
+
+total_estimated_duration: "6 days"
+confidence_level: "high"
+
+# ================================================================
+# COMPLETION CRITERIA
+# ================================================================
+
+completion_criteria:
+  - "All functional requirements satisfied"
+  - "Performance targets achieved"
+  - "Backward compatibility maintained"
+  - "Quality gates passed"
+  - "Documentation updated"
+  - "Team approval obtained"
+  - "Production deployment ready"

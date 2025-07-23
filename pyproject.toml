@@ -76,6 +76,30 @@ orchestration = [
     "prefect>=3.0.0",
     "dagster>=1.8.0",
 ]
+observability = [
+    "opentelemetry-api>=1.35.0",
+    "opentelemetry-sdk>=1.35.0", 
+    "opentelemetry-instrumentation>=0.46b0",
+    "opentelemetry-instrumentation-requests>=0.46b0",
+    "opentelemetry-instrumentation-aiohttp-client>=0.46b0",
+    "opentelemetry-instrumentation-boto3sqs>=0.46b0",
+    "opentelemetry-instrumentation-psycopg2>=0.46b0",
+    "opentelemetry-instrumentation-redis>=0.46b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
+    "opentelemetry-exporter-otlp>=1.35.0",
+    "opentelemetry-exporter-prometheus>=0.46b0",
+    "opentelemetry-semantic-conventions>=0.46b0",
+    "opentelemetry-propagator-b3>=1.35.0",
+    # OpenTelemetry Logging SDK dependencies
+    "opentelemetry-exporter-otlp-proto-grpc>=1.35.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.35.0",
+    # Performance monitoring for logging overhead
+    "psutil>=5.9.0",
+    # Optimized JSON processing for structured logs
+    "orjson>=3.9.0",
+    "opentelemetry-propagator-jaeger>=1.35.0",
+    "psutil>=5.9.0",
+]
 
 [project.scripts]
 crypto-lakehouse = "crypto_lakehouse.cli:app"

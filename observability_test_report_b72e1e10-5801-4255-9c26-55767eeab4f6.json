@@ -1,0 +1,217 @@
+{
+  "test_session_id": "b72e1e10-5801-4255-9c26-55767eeab4f6",
+  "summary": {
+    "total_tests": 8,
+    "passed_tests": 8,
+    "failed_tests": 0,
+    "error_tests": 0,
+    "total_duration_ms": 718.6942100524902
+  },
+  "test_results": [
+    {
+      "test_name": "unified_observability_initialization",
+      "status": "success",
+      "duration_ms": 560.0755214691162,
+      "details": {
+        "initialization_duration_ms": 40.22860527038574,
+        "components_count": 5,
+        "auto_instrumentation_enabled": false,
+        "resource_attributes_count": 22
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "cross_pillar_correlation",
+      "status": "success",
+      "duration_ms": 0.4456043243408203,
+      "details": {
+        "crypto_context_keys": 6,
+        "workflow_name": "correlation_test_workflow",
+        "market": "binance",
+        "symbols_processed": "2",
+        "span_attributes_set": true,
+        "metrics_recorded": true
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "concurrent_workflow_contexts",
+      "status": "success",
+      "duration_ms": 3.744840621948242,
+      "details": {
+        "concurrent_workflows": 10,
+        "successful_workflows": 10,
+        "total_duration_ms": 3.7262439727783203,
+        "avg_workflow_duration_ms": 0.37262439727783203,
+        "operations_per_workflow": 10,
+        "total_operations": 100
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "performance_under_load",
+      "status": "success",
+      "duration_ms": 7.7457427978515625,
+      "details": {
+        "contexts_created": 1000,
+        "context_creation_total_ms": 1.0089874267578125,
+        "context_creation_per_ms": 0.0010089874267578125,
+        "contexts_used": 100,
+        "context_usage_total_ms": 6.729841232299805,
+        "context_usage_per_ms": 0.06729841232299805,
+        "throughput_contexts_per_second": 991092.6275992439,
+        "performance_requirement_met": true
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "crypto_workflow_scenarios",
+      "status": "success",
+      "duration_ms": 143.41163635253906,
+      "details": {
+        "scenarios_tested": 4,
+        "successful_scenarios": 4,
+        "total_operations": 14,
+        "avg_scenario_duration_ms": 35.845816135406494,
+        "scenario_details": [
+          {
+            "workflow": "binance_archive_collection",
+            "market": "binance",
+            "data_type": "klines",
+            "symbols_count": 3,
+            "operations_count": 3,
+            "duration_ms": 30.551433563232422,
+            "success": true
+          },
+          {
+            "workflow": "coinbase_streaming_ingestion",
+            "market": "coinbase",
+            "data_type": "trades",
+            "symbols_count": 2,
+            "operations_count": 4,
+            "duration_ms": 41.182756423950195,
+            "success": true
+          },
+          {
+            "workflow": "funding_rate_analysis",
+            "market": "binance",
+            "data_type": "funding_rates",
+            "symbols_count": 3,
+            "operations_count": 4,
+            "duration_ms": 41.04018211364746,
+            "success": true
+          },
+          {
+            "workflow": "multi_market_arbitrage",
+            "market": "multiple",
+            "data_type": "order_books",
+            "symbols_count": 3,
+            "operations_count": 3,
+            "duration_ms": 30.6088924407959,
+            "success": true
+          }
+        ]
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "error_handling_resilience",
+      "status": "success",
+      "duration_ms": 1.9810199737548828,
+      "details": {
+        "error_scenarios_tested": 3,
+        "gracefully_handled": 3,
+        "resilience_score": 100.0,
+        "error_details": [
+          {
+            "scenario": "context_exception_handling",
+            "error_type": "ValueError",
+            "handled_gracefully": true,
+            "error_message": "Test error for resilience validation"
+          },
+          {
+            "scenario": "invalid_parameters",
+            "error_type": "none",
+            "handled_gracefully": true,
+            "error_message": "Empty parameters handled gracefully"
+          },
+          {
+            "scenario": "resource_exhaustion_simulation",
+            "error_type": "none",
+            "handled_gracefully": true,
+            "error_message": "Resource exhaustion handled without errors"
+          }
+        ]
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "health_monitoring_capabilities",
+      "status": "success",
+      "duration_ms": 0.011920928955078125,
+      "details": {
+        "health_check_duration_ms": 0.00476837158203125,
+        "overall_status": "healthy",
+        "components_healthy": 3,
+        "total_components": 4,
+        "initialization_duration_ms": 40.17949104309082,
+        "components_initialized": 3,
+        "auto_instrumentation_status": "disabled",
+        "performance_metrics": {
+          "initialization_duration_ms": 40.17949104309082,
+          "components_initialized": 3,
+          "auto_instrumentation_enabled": false,
+          "initialization_timestamp": 1753030787.8915427
+        },
+        "health_check_available": true
+      },
+      "error_message": null
+    },
+    {
+      "test_name": "resource_attributes_compliance",
+      "status": "success",
+      "duration_ms": 0.012874603271484375,
+      "details": {
+        "total_attributes": 22,
+        "standard_attributes_present": 4,
+        "crypto_attributes_present": 3,
+        "infrastructure_attributes_present": 2,
+        "service_name": "test-crypto-lakehouse",
+        "service_version": "2.0.0",
+        "environment": "observability_test",
+        "observability_framework": "opentelemetry",
+        "crypto_platform_type": "data_lakehouse",
+        "compliance_score": 100.0
+      },
+      "error_message": null
+    }
+  ],
+  "performance_summary": {
+    "avg_test_duration_ms": 89.67864513397217,
+    "total_contexts_created": 1110,
+    "total_operations": 114,
+    "performance_tests_passed": 1
+  },
+  "correlation_evidence": [
+    {
+      "test": "cross_pillar_correlation",
+      "trace_context_available": true,
+      "crypto_context": {
+        "crypto.workflow_name": "correlation_test_workflow",
+        "crypto.market": "binance",
+        "crypto.data_type": "klines",
+        "crypto.timestamp": "1753030787",
+        "crypto.symbols": "BTCUSDT,ETHUSDT",
+        "crypto.symbol_count": "2"
+      },
+      "span_context_type": "<class 'opentelemetry.sdk.trace._Span'>",
+      "metrics_context_type": "<class 'crypto_lakehouse.core.otel_metrics.CryptoLakehouseMetrics'>"
+    }
+  ],
+  "recommendations": [
+    "All tests passed - observability stack is production ready",
+    "Consider enabling monitoring dashboards and alerting",
+    "Set up automated observability testing in CI/CD pipeline",
+    "Performance requirements met - ready for high-load scenarios"
+  ]
+}

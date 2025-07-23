@@ -1,0 +1,543 @@
+---
+# Enhanced Observability Requirements: OpenTelemetry Complete Integration
+# Phase 1: Enhanced Specifications for Metrics, Logging, and Traces
+# Version: 2.0.0
+# Date: 2025-07-20
+---
+
+observability_architecture:
+  framework: "opentelemetry_sdk_complete"
+  version: "1.35.0"
+  deployment_model: "unified_observability_stack"
+  
+  components:
+    - "opentelemetry-api"
+    - "opentelemetry-sdk"
+    - "opentelemetry-instrumentation"
+    - "opentelemetry-exporter-otlp"
+    - "opentelemetry-exporter-prometheus"
+    - "opentelemetry-collector"
+    - "openobserve-integration"
+  
+  observability_pillars:
+    metrics:
+      implementation: "opentelemetry_metrics_api"
+      coverage: "comprehensive_crypto_workflows"
+      cardinality_control: "high_value_low_cardinality"
+      aggregation: "delta_and_cumulative"
+    
+    logging:
+      implementation: "opentelemetry_logs_api"
+      structured_format: "json_with_otel_context"
+      correlation: "trace_and_span_correlation"
+      sampling: "adaptive_log_sampling"
+    
+    traces:
+      implementation: "opentelemetry_tracing_api"
+      distributed_tracing: "end_to_end_workflow_tracing"
+      sampling: "tail_based_sampling"
+      context_propagation: "w3c_trace_context"
+
+metrics_specifications:
+  instrument_types:
+    counters:
+      - name: "crypto_lakehouse.data.records_ingested_total"
+        description: "Total number of crypto data records ingested"
+        unit: "records"
+        attributes:
+          - "market: string"
+          - "data_type: string"
+          - "symbol: string"
+          - "timeframe: string"
+      
+      - name: "crypto_lakehouse.workflow.executions_total"
+        description: "Total workflow executions"
+        unit: "executions"
+        attributes:
+          - "workflow_name: string"
+          - "workflow_type: string"
+          - "status: string"
+      
+      - name: "crypto_lakehouse.api.requests_total"
+        description: "Total API requests to crypto exchanges"
+        unit: "requests"
+        attributes:
+          - "endpoint: string"
+          - "method: string"
+          - "status_code: string"
+          - "market: string"
+      
+      - name: "crypto_lakehouse.errors_total"
+        description: "Total number of errors by type"
+        unit: "errors"
+        attributes:
+          - "error_type: string"
+          - "operation: string"
+          - "workflow_name: string"
+          - "severity: string"
+    
+    histograms:
+      - name: "crypto_lakehouse.processing.duration_ms"
+        description: "Time taken to process crypto data"
+        unit: "ms"
+        buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+        attributes:
+          - "operation: string"
+          - "data_type: string"
+          - "symbol: string"
+      
+      - name: "crypto_lakehouse.workflow.duration_ms"
+        description: "Workflow execution duration"
+        unit: "ms"
+        buckets: [100, 500, 1000, 5000, 10000, 30000, 60000, 120000, 300000]
+        attributes:
+          - "workflow_name: string"
+          - "workflow_type: string"
+      
+      - name: "crypto_lakehouse.api.response_duration_ms"
+        description: "API response time"
+        unit: "ms"
+        buckets: [1, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000]
+        attributes:
+          - "endpoint: string"
+          - "market: string"
+      
+      - name: "crypto_lakehouse.storage.operation_duration_ms"
+        description: "Storage operation duration"
+        unit: "ms"
+        buckets: [10, 50, 100, 500, 1000, 5000, 10000, 30000]
+        attributes:
+          - "operation_type: string"
+          - "storage_tier: string"
+          - "file_size_category: string"
+    
+    up_down_counters:
+      - name: "crypto_lakehouse.storage.size_bytes"
+        description: "Current size of stored crypto data"
+        unit: "bytes"
+        attributes:
+          - "storage_type: string"
+          - "data_tier: string"
+          - "market: string"
+      
+      - name: "crypto_lakehouse.connections.active"
+        description: "Number of active connections"
+        unit: "connections"
+        attributes:
+          - "connection_type: string"
+          - "service: string"
+      
+      - name: "crypto_lakehouse.queue.size"
+        description: "Current queue size"
+        unit: "items"
+        attributes:
+          - "queue_type: string"
+          - "priority: string"
+      
+      - name: "crypto_lakehouse.workers.active"
+        description: "Number of active workers"
+        unit: "workers"
+        attributes:
+          - "worker_pool: string"
+          - "worker_type: string"
+  
+  resource_attributes:
+    service_identification:
+      - "service.name: crypto-lakehouse"
+      - "service.version: 2.0.0"
+      - "service.namespace: crypto-data"
+      - "deployment.environment: [local|staging|production]"
+    
+    crypto_specific:
+      - "crypto.market: [binance|coinbase|kraken]"
+      - "crypto.data_type: [klines|funding_rates|trades|order_books]"
+      - "crypto.workflow_type: [batch_processing|streaming|archive_collection]"
+    
+    infrastructure:
+      - "k8s.cluster.name: string"
+      - "k8s.namespace.name: string"
+      - "k8s.pod.name: string"
+      - "k8s.deployment.name: string"
+  
+  export_configuration:
+    otlp_exporter:
+      endpoint: "http://otel-collector.observability:4317"
+      protocol: "grpc"
+      compression: "gzip"
+      timeout: "10s"
+      retry_config:
+        enabled: true
+        initial_interval: "5s"
+        max_interval: "30s"
+        max_elapsed_time: "120s"
+    
+    prometheus_exporter:
+      endpoint: "/metrics"
+      namespace: "crypto_lakehouse"
+      constLabels:
+        version: "2.0.0"
+        environment: "${ENVIRONMENT}"
+    
+    export_intervals:
+      metrics: "15s"
+      batch_timeout: "5s"
+      max_export_batch_size: 512
+
+logging_specifications:
+  opentelemetry_logs_integration:
+    logs_api_usage: true
+    log_record_processor: "BatchLogRecordProcessor"
+    log_exporter: "OTLPLogExporter"
+    
+    log_levels:
+      - "TRACE"
+      - "DEBUG" 
+      - "INFO"
+      - "WARN"
+      - "ERROR"
+      - "FATAL"
+    
+    structured_logging:
+      format: "json"
+      required_fields:
+        - "timestamp"
+        - "level"
+        - "message"
+        - "service.name"
+        - "trace_id"
+        - "span_id"
+        - "resource"
+      
+      crypto_specific_fields:
+        - "crypto.operation"
+        - "crypto.symbol"
+        - "crypto.market"
+        - "crypto.workflow_id"
+        - "crypto.data_type"
+        - "crypto.processing_stage"
+  
+  log_correlation:
+    trace_correlation: true
+    span_correlation: true
+    baggage_propagation: true
+    
+    correlation_fields:
+      - "trace_id"
+      - "span_id"
+      - "parent_span_id"
+      - "trace_flags"
+      - "trace_state"
+  
+  log_sampling:
+    strategy: "adaptive_sampling"
+    error_logs: "always_sample"
+    warn_logs: "always_sample"
+    info_logs: "sample_rate_10_percent"
+    debug_logs: "sample_rate_1_percent"
+    trace_logs: "disabled_in_production"
+  
+  log_enrichment:
+    automatic_enrichment:
+      - "kubernetes_metadata"
+      - "process_metadata"
+      - "host_metadata"
+      - "deployment_metadata"
+    
+    crypto_enrichment:
+      - "market_session_info"
+      - "data_freshness_indicators"
+      - "processing_pipeline_stage"
+      - "workflow_execution_context"
+  
+  export_configuration:
+    otlp_log_exporter:
+      endpoint: "http://otel-collector.observability:4318"
+      protocol: "http"
+      compression: "gzip"
+      headers:
+        "X-Source": "crypto-lakehouse"
+    
+    batch_processor:
+      max_queue_size: 2048
+      export_timeout: "5s"
+      export_interval: "10s"
+      max_export_batch_size: 512
+
+tracing_specifications:
+  opentelemetry_tracing_integration:
+    tracer_provider: "TracerProvider"
+    span_processor: "BatchSpanProcessor"
+    span_exporter: "OTLPSpanExporter"
+    
+    trace_configuration:
+      max_attributes_per_span: 128
+      max_events_per_span: 128
+      max_links_per_span: 128
+      max_attribute_value_length: 1024
+  
+  instrumentation_scope:
+    crypto_workflows:
+      - scope: "crypto_lakehouse.workflows"
+        version: "2.0.0"
+        spans:
+          - "workflow_execution"
+          - "task_execution" 
+          - "data_processing"
+          - "storage_operations"
+      
+      - scope: "crypto_lakehouse.api"
+        version: "2.0.0"
+        spans:
+          - "api_request"
+          - "authentication"
+          - "rate_limiting"
+          - "response_processing"
+      
+      - scope: "crypto_lakehouse.data"
+        version: "2.0.0"
+        spans:
+          - "data_ingestion"
+          - "data_validation"
+          - "data_transformation"
+          - "data_storage"
+    
+    external_services:
+      - scope: "binance_api"
+        instrumentation: "automatic"
+        spans:
+          - "rest_api_calls"
+          - "websocket_connections"
+      
+      - scope: "storage_services"
+        instrumentation: "manual"
+        spans:
+          - "s3_operations"
+          - "minio_operations"
+          - "local_file_operations"
+  
+  span_attributes:
+    crypto_specific:
+      - "crypto.operation_type: string"
+      - "crypto.symbol: string" 
+      - "crypto.market: string"
+      - "crypto.timeframe: string"
+      - "crypto.data_size_bytes: int64"
+      - "crypto.record_count: int64"
+      - "crypto.processing_stage: string"
+    
+    workflow_specific:
+      - "workflow.name: string"
+      - "workflow.id: string"
+      - "workflow.type: string"
+      - "workflow.stage: string"
+      - "workflow.batch_size: int64"
+    
+    performance_specific:
+      - "processing.cpu_usage_percent: float64"
+      - "processing.memory_usage_bytes: int64"
+      - "processing.duration_ms: int64"
+      - "processing.throughput_records_per_sec: float64"
+  
+  sampling_configuration:
+    sampler: "TraceIdRatioBased"
+    sampling_strategies:
+      default_strategy:
+        type: "probabilistic"
+        param: 0.1  # 10% sampling
+      
+      per_service_strategies:
+        - service: "crypto-lakehouse"
+          type: "probabilistic"
+          param: 0.2  # 20% sampling
+        
+        - service: "archive-collection"
+          type: "adaptive"
+          max_traces_per_second: 100
+      
+      operation_strategies:
+        - operation: "workflow_execution"
+          type: "probabilistic"
+          param: 1.0  # 100% sampling
+        
+        - operation: "data_ingestion"
+          type: "rate_limiting"
+          max_traces_per_second: 50
+  
+  context_propagation:
+    propagators:
+      - "tracecontext"  # W3C Trace Context
+      - "baggage"       # W3C Baggage
+      - "b3"            # B3 (Zipkin)
+    
+    baggage_propagation:
+      crypto_context:
+        - "crypto.workflow_id"
+        - "crypto.market"
+        - "crypto.processing_stage"
+      
+      performance_context:
+        - "performance.target_throughput"
+        - "performance.priority_level"
+  
+  export_configuration:
+    otlp_span_exporter:
+      endpoint: "http://otel-collector.observability:4317"
+      protocol: "grpc"
+      compression: "gzip"
+      timeout: "10s"
+    
+    batch_span_processor:
+      max_queue_size: 2048
+      export_timeout: "30s"
+      export_interval: "5s"
+      max_export_batch_size: 512
+
+unified_observability_configuration:
+  resource_configuration:
+    global_resource_attributes:
+      service.name: "crypto-lakehouse"
+      service.version: "2.0.0"
+      service.namespace: "crypto-data"
+      deployment.environment: "${ENVIRONMENT}"
+      k8s.cluster.name: "${K8S_CLUSTER_NAME}"
+      crypto.market: "binance"
+      crypto.data_type: "archive"
+  
+  sdk_configuration:
+    auto_instrumentation:
+      enabled: true
+      modules:
+        - "requests"
+        - "aiohttp"
+        - "boto3"
+        - "psycopg2"
+        - "redis"
+    
+    manual_instrumentation:
+      crypto_workflows: true
+      data_processing: true
+      storage_operations: true
+      api_integrations: true
+  
+  collector_configuration:
+    receivers:
+      - "otlp/grpc:4317"
+      - "otlp/http:4318"
+      - "prometheus:8888"
+    
+    processors:
+      - "batch"
+      - "memory_limiter"
+      - "resource"
+      - "attributes"
+      - "span"
+      - "metric"
+    
+    exporters:
+      - "otlp/openobserve"
+      - "prometheus/metrics"
+      - "logging/debug"
+    
+    pipelines:
+      metrics:
+        receivers: ["otlp", "prometheus"]
+        processors: ["memory_limiter", "batch", "resource"]
+        exporters: ["otlp/openobserve", "prometheus/metrics"]
+      
+      traces:
+        receivers: ["otlp"]
+        processors: ["memory_limiter", "batch", "resource", "span"]
+        exporters: ["otlp/openobserve"]
+      
+      logs:
+        receivers: ["otlp"]
+        processors: ["memory_limiter", "batch", "resource", "attributes"]
+        exporters: ["otlp/openobserve"]
+
+performance_requirements:
+  observability_overhead:
+    cpu_overhead: "< 5%"
+    memory_overhead: "< 10%"
+    network_overhead: "< 2%"
+    storage_overhead: "< 1%"
+  
+  latency_targets:
+    metric_recording: "< 1ms"
+    span_creation: "< 100μs"
+    log_emission: "< 500μs"
+    export_latency: "< 5s"
+  
+  throughput_targets:
+    metrics_per_second: "10k+"
+    spans_per_second: "1k+"
+    logs_per_second: "5k+"
+    concurrent_traces: "100+"
+  
+  resource_limits:
+    memory_limit_per_component: "512MB"
+    cpu_limit_per_component: "500m"
+    export_batch_size: "512"
+    queue_size: "2048"
+
+compliance_and_standards:
+  opentelemetry_compliance:
+    api_version: "1.35.0"
+    semantic_conventions: "1.26.0"
+    specification_compliance: "full"
+    
+  crypto_industry_standards:
+    data_governance: "implemented"
+    audit_requirements: "comprehensive_logging"
+    regulatory_compliance: "configurable_data_retention"
+  
+  security_requirements:
+    data_encryption: "tls_1_3_in_transit"
+    credential_management: "kubernetes_secrets"
+    access_control: "rbac_based"
+    audit_logging: "security_events_traced"
+
+testing_and_validation:
+  unit_testing:
+    observability_components: "100% coverage"
+    metric_instruments: "comprehensive_validation"
+    trace_spans: "context_propagation_tests"
+    log_correlation: "trace_log_correlation_tests"
+  
+  integration_testing:
+    end_to_end_observability: "workflow_to_dashboard"
+    collector_integration: "all_pipelines_tested"
+    openobserve_integration: "data_flow_validation"
+    performance_testing: "overhead_measurement"
+  
+  validation_criteria:
+    functional_validation:
+      - "all_metrics_exported_correctly"
+      - "trace_context_propagated_properly"
+      - "logs_correlated_with_traces"
+      - "resource_attributes_attached"
+    
+    performance_validation:
+      - "overhead_within_limits"
+      - "export_latency_acceptable"
+      - "no_data_loss_under_load"
+      - "graceful_degradation"
+    
+    compliance_validation:
+      - "opentelemetry_spec_compliance"
+      - "semantic_conventions_followed"
+      - "security_requirements_met"
+
+metadata:
+  specification_author: "Hive Mind Collective Intelligence"
+  technical_reviewer: "Observability Architect"
+  created_date: "2025-07-20"
+  last_updated: "2025-07-20"
+  version: "2.0.0"
+  review_status: "active_development"
+  related_documents:
+    - "technical-requirements-infrastructure.yml"
+    - "opentelemetry-implementation-plan.md"
+    - "observability-architecture-design.yml"
+  estimated_implementation_effort: "4-6 weeks"
+  complexity_rating: "high"
+  priority: "high"

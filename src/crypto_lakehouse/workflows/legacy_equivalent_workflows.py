@@ -14,8 +14,8 @@ import polars as pl
 from prefect import flow
 from prefect.logging import get_run_logger
 
-from crypto_lakehouse.core.config import Config
-from crypto_lakehouse.core.models import DataType, MarketType, WorkflowResult
+from crypto_lakehouse.core.config import WorkflowConfig
+from crypto_lakehouse.core.models import DataType, TradeType, WorkflowResult
 from crypto_lakehouse.ingestion.binance import BinanceIngestion
 from crypto_lakehouse.processing.data_processor import DataProcessor
 from crypto_lakehouse.storage.s3_storage import S3Storage
@@ -55,9 +55,9 @@ class LegacyWorkflowResult(WorkflowResult):
 
 @flow(name="AWS Download Workflow")
 async def aws_download_workflow(
-    config: Config,
+    config: WorkflowConfig,
     data_types: List[DataType],
-    market_types: List[MarketType],
+    market_types: List[TradeType],
     interval: str = "1m",
     verify: bool = True,
     max_concurrent: int = 10,
@@ -91,7 +91,7 @@ async def aws_download_workflow(
         results = []
 
         # Process each market type in parallel (enhancement)
-        async def process_market_type(market_type: MarketType):
+        async def process_market_type(market_type: TradeType):
             market_results = []
 
             for data_type in data_types:
@@ -172,9 +172,9 @@ async def aws_download_workflow(
 
 @flow(name="AWS Parse Workflow")
 async def aws_parse_workflow(
-    config: Config,
+    config: WorkflowConfig,
     data_types: List[DataType],
-    market_types: List[MarketType],
+    market_types: List[TradeType],
     interval: str = "1m",
     validate_data: bool = True,
     compute_technical_indicators: bool = True,
@@ -206,7 +206,7 @@ async def aws_parse_workflow(
         results = []
 
         # Process each combination in parallel
-        async def process_data_type(market_type: MarketType, data_type: DataType):
+        async def process_data_type(market_type: TradeType, data_type: DataType):
             logger.info(f"Parsing {data_type.value} for {market_type.value}")
 
             # Parse raw data
@@ -288,9 +288,9 @@ async def aws_parse_workflow(
 
 @flow(name="API Download Workflow")
 async def api_download_workflow(
-    config: Config,
+    config: WorkflowConfig,
     data_types: List[DataType],
-    market_types: List[MarketType],
+    market_types: List[TradeType],
     interval: str = "1m",
     gap_detection: bool = True,
     recent_only: bool = False,
@@ -411,8 +411,8 @@ async def api_download_workflow(
 
 @flow(name="Generate Kline Workflow")
 async def gen_kline_workflow(
-    config: Config,
-    market_type: MarketType,
+    config: WorkflowConfig,
+    market_type: TradeType,
     interval: str = "1m",
     split_gaps: bool = True,
     with_vwap: bool = True,
@@ -481,7 +481,7 @@ async def gen_kline_workflow(
 
         # Join funding rates if enabled
         funding_rates_joined = False
-        if with_funding_rates and market_type in [MarketType.UM_FUTURES, MarketType.CM_FUTURES]:
+        if with_funding_rates and market_type in [TradeType.UM_FUTURES, TradeType.CM_FUTURES]:
             funding_data = await storage.load_processed_data(
                 market_type=market_type, data_type=DataType.FUNDING_RATE, layer="silver"
             )
@@ -567,8 +567,8 @@ async def gen_kline_workflow(
 
 @flow(name="Resample Workflow")
 async def resample_workflow(
-    config: Config,
-    market_type: MarketType,
+    config: WorkflowConfig,
+    market_type: TradeType,
     source_interval: str = "1m",
     target_interval: str = "1h",
     target_intervals: Optional[List[str]] = None,
@@ -702,8 +702,8 @@ async def resample_workflow(
 
 @flow(name="Complete Pipeline Workflow")
 async def complete_pipeline_workflow(
-    config: Config,
-    market_types: List[MarketType],
+    config: WorkflowConfig,
+    market_types: List[TradeType],
     data_types: List[DataType],
     interval: str = "1m",
     download_aws: bool = True,
@@ -844,7 +844,7 @@ async def complete_pipeline_workflow(
                             interval=interval,
                             split_gaps=True,
                             with_vwap=True,
-                            with_funding_rates=(market_type != MarketType.SPOT),
+                            with_funding_rates=(market_type != TradeType.SPOT),
                             compute_technical_indicators=technical_indicators,
                             data_quality_checks=data_quality_checks,
                         )

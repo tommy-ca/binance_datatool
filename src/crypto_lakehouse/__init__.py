@@ -21,11 +21,11 @@ Key Features:
 - Cloud storage integration capabilities
 
 Usage:
-    from crypto_lakehouse.workflows import ArchiveCollectionWorkflow
+    from crypto_lakehouse.workflows import UnifiedArchiveCollectionWorkflow
     from crypto_lakehouse.core import WorkflowConfig
     
     config = WorkflowConfig.from_file("config.json")
-    workflow = ArchiveCollectionWorkflow(config)
+    workflow = UnifiedArchiveCollectionWorkflow(config)
     results = workflow.execute()
 """
 
@@ -40,7 +40,7 @@ from .core.metrics import MetricsCollector, WorkflowMetrics
 from .core.exceptions import ValidationError
 
 # Workflow exports
-from .workflows.archive_collection import ArchiveCollectionWorkflow
+from .workflows import ArchiveCollectionWorkflow
 
 __all__ = [
     # Core Framework
