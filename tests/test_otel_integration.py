@@ -5,8 +5,8 @@ import os
 import time
 from unittest.mock import patch, MagicMock
 
-from crypto_lakehouse.core.otel_config import OpenTelemetryConfig, get_otel_config, get_meter
-from crypto_lakehouse.core.otel_metrics import (
+from crypto_lakehouse.core.legacy.otel_config import OpenTelemetryConfig, get_otel_config, get_meter
+from crypto_lakehouse.core.legacy.otel_metrics import (
     CryptoLakehouseMetrics,
     BackwardCompatibleMetricsCollector,
     get_metrics_collector,

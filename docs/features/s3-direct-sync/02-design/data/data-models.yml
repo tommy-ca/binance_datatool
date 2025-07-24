@@ -1,0 +1,532 @@
+# S3 Direct Sync - Data Models
+# Phase 2: Design | Data Models and Schema Design
+# ================================================================
+
+data_models:
+  # Feature identification
+  feature_id: "FEAT001"
+  feature_name: "S3 Direct Sync"
+  version: "2.1.0"
+  created_date: "2025-07-23"
+  created_by: "Data Architecture Team"
+  
+  # Data model overview
+  modeling_approach: "Domain-Driven Design with Pydantic validation"
+  validation_strategy: "Schema-first with runtime validation"
+  serialization_format: "JSON with type safety"
+  
+  # Core domain entities
+  domain_entities:
+    - entity_name: "TransferOperation"
+      entity_type: "Aggregate Root"
+      description: "Core entity representing a complete transfer operation with lifecycle management"
+      
+      attributes:
+        - name: "operation_id"
+          type: "UUID"
+          constraints: ["required", "unique", "immutable"]
+          description: "Unique identifier for the transfer operation"
+          
+        - name: "source_config"
+          type: "S3Location"
+          constraints: ["required", "valid_s3_url"]
+          description: "Source S3 location configuration"
+          
+        - name: "destination_config"
+          type: "S3Location"
+          constraints: ["required", "valid_s3_url"]
+          description: "Destination S3 location configuration"
+          
+        - name: "transfer_mode"
+          type: "TransferMode"
+          constraints: ["required", "enum"]
+          description: "Selected transfer mode (direct_sync, traditional, auto)"
+          
+        - name: "status"
+          type: "TransferStatus"
+          constraints: ["required", "enum"]
+          description: "Current status of the transfer operation"
+          
+        - name: "created_at"
+          type: "datetime"
+          constraints: ["required", "immutable"]
+          description: "Operation creation timestamp"
+          
+        - name: "started_at"
+          type: "Optional[datetime]"
+          constraints: ["nullable"]
+          description: "Transfer start timestamp"
+          
+        - name: "completed_at"
+          type: "Optional[datetime]"
+          constraints: ["nullable"]
+          description: "Transfer completion timestamp"
+          
+        - name: "performance_metrics"
+          type: "PerformanceMetrics"
+          constraints: ["optional"]
+          description: "Collected performance metrics for the operation"
+          
+        - name: "error_details"
+          type: "Optional[ErrorDetails]"
+          constraints: ["nullable"]
+          description: "Error information if transfer failed"
+      
+      business_rules:
+        - rule: "operation_id must be unique across all transfer operations"
+        - rule: "source_config and destination_config must be different S3 locations"
+        - rule: "status transitions must follow valid lifecycle: pending → running → completed/failed"
+        - rule: "performance_metrics only available after successful completion"
+      
+      invariants:
+        - invariant: "If status is completed, completed_at must be set"
+        - invariant: "If status is failed, error_details must be provided"
+        - invariant: "started_at must be after created_at when set"
+        - invariant: "completed_at must be after started_at when set"
+    
+    - entity_name: "TransferBatch"
+      entity_type: "Entity"
+      description: "Collection of files to be transferred together for optimization"
+      
+      attributes:
+        - name: "batch_id"
+          type: "UUID"
+          constraints: ["required", "unique"]
+          description: "Unique identifier for the batch"
+          
+        - name: "files"
+          type: "List[FileTransferSpec]"
+          constraints: ["required", "min_length=1", "max_length=500"]
+          description: "List of files to transfer in this batch"
+          
+        - name: "batch_size_bytes"
+          type: "int"
+          constraints: ["required", "positive"]
+          description: "Total size of all files in the batch"
+          
+        - name: "estimated_duration"
+          type: "Optional[float]"
+          constraints: ["positive"]
+          description: "Estimated transfer duration in seconds"
+          
+        - name: "optimization_strategy"
+          type: "BatchOptimizationStrategy"
+          constraints: ["required", "enum"]
+          description: "Strategy used for batch optimization"
+      
+      business_rules:
+        - rule: "batch cannot exceed 500 files for performance optimization"
+        - rule: "batch_size_bytes must match sum of individual file sizes"
+        - rule: "all files in batch must have same source and destination bucket"
+      
+      invariants:
+        - invariant: "files list cannot be empty"
+        - invariant: "batch_size_bytes equals sum of file sizes"
+        - invariant: "all files must have valid S3 paths"
+  
+  # Value objects
+  value_objects:
+    - value_object_name: "S3Location"
+      description: "Immutable S3 location specification with validation"
+      
+      attributes:
+        - name: "bucket"
+          type: "str"
+          constraints: ["required", "s3_bucket_name_format"]
+          description: "S3 bucket name"
+          
+        - name: "key_prefix"
+          type: "str"
+          constraints: ["required"]
+          description: "S3 key prefix or full key path"
+          
+        - name: "region"
+          type: "Optional[str]"
+          constraints: ["aws_region_format"]
+          description: "AWS region (auto-detected if not provided)"
+          
+        - name: "endpoint_url"
+          type: "Optional[str]"
+          constraints: ["url_format"]
+          description: "Custom S3 endpoint URL (for S3-compatible services)"
+      
+      validation_rules:
+        - rule: "bucket name must comply with S3 naming conventions"
+        - rule: "key_prefix cannot start with '/'"
+        - rule: "region must be valid AWS region code when provided"
+        - rule: "endpoint_url must be valid HTTPS URL when provided"
+      
+      methods:
+        - method: "to_s3_url() -> str"
+          description: "Convert to standard S3 URL format"
+        - method: "validate_access() -> bool"
+          description: "Validate access permissions to this location"
+    
+    - value_object_name: "FileTransferSpec"
+      description: "Specification for individual file transfer"
+      
+      attributes:
+        - name: "source_key"
+          type: "str"
+          constraints: ["required", "s3_key_format"]
+          description: "Source S3 object key"
+          
+        - name: "destination_key"
+          type: "str"
+          constraints: ["required", "s3_key_format"]
+          description: "Destination S3 object key"
+          
+        - name: "file_size_bytes"
+          type: "int"
+          constraints: ["required", "non_negative"]
+          description: "File size in bytes"
+          
+        - name: "content_type"
+          type: "Optional[str]"
+          constraints: ["mime_type_format"]
+          description: "MIME type of the file"
+          
+        - name: "metadata"
+          type: "Dict[str, str]"
+          constraints: ["optional"]
+          description: "Additional file metadata"
+      
+      validation_rules:
+        - rule: "source_key and destination_key must be different"
+        - rule: "file_size_bytes must be non-negative"
+        - rule: "content_type must be valid MIME type when provided"
+        - rule: "metadata keys must follow S3 metadata naming conventions"
+    
+    - value_object_name: "PerformanceMetrics"
+      description: "Performance metrics collected during transfer operations"
+      
+      attributes:
+        - name: "total_duration_seconds"
+          type: "float"
+          constraints: ["required", "positive"]
+          description: "Total operation duration"
+          
+        - name: "transfer_duration_seconds"
+          type: "float"
+          constraints: ["required", "positive"]
+          description: "Actual transfer time excluding setup"
+          
+        - name: "files_transferred"
+          type: "int"
+          constraints: ["required", "non_negative"]
+          description: "Number of files successfully transferred"
+          
+        - name: "bytes_transferred"
+          type: "int"
+          constraints: ["required", "non_negative"]
+          description: "Total bytes transferred"
+          
+        - name: "operation_count"
+          type: "int"
+          constraints: ["required", "positive"]
+          description: "Number of network operations performed"
+          
+        - name: "average_throughput_mbps"
+          type: "float"
+          constraints: ["required", "positive"]
+          description: "Average throughput in megabits per second"
+          
+        - name: "efficiency_improvement"
+          type: "Optional[float]"
+          constraints: ["percentage"]
+          description: "Efficiency improvement over traditional mode"
+      
+      computed_properties:
+        - property: "files_per_second -> float"
+          formula: "files_transferred / total_duration_seconds"
+        - property: "operations_per_file -> float"
+          formula: "operation_count / files_transferred"
+        - property: "bytes_per_second -> float"
+          formula: "bytes_transferred / transfer_duration_seconds"
+  
+  # Enumerations
+  enumerations:
+    - enum_name: "TransferMode"
+      description: "Available transfer modes for S3 operations"
+      values:
+        - value: "DIRECT_SYNC"
+          description: "Direct S3 to S3 transfer using s5cmd"
+        - value: "TRADITIONAL"
+          description: "Traditional download then upload mode"
+        - value: "AUTO"
+          description: "Automatic mode selection based on availability"
+      
+    - enum_name: "TransferStatus"
+      description: "Transfer operation lifecycle status"
+      values:
+        - value: "PENDING"
+          description: "Operation created but not started"
+        - value: "RUNNING"
+          description: "Transfer in progress"
+        - value: "COMPLETED"
+          description: "Transfer completed successfully"
+        - value: "FAILED"
+          description: "Transfer failed with errors"
+        - value: "CANCELLED"
+          description: "Transfer cancelled by user or system"
+      
+    - enum_name: "BatchOptimizationStrategy"
+      description: "Strategies for optimizing file batches"
+      values:
+        - value: "SIZE_BASED"
+          description: "Optimize batches based on total size"
+        - value: "COUNT_BASED"
+          description: "Optimize batches based on file count"
+        - value: "MIXED"
+          description: "Combined size and count optimization"
+        - value: "SINGLE_FILE"
+          description: "Process files individually"
+  
+  # Data transfer objects (DTOs)
+  transfer_objects:
+    - dto_name: "TransferRequest"
+      description: "Request object for initiating transfer operations"
+      
+      attributes:
+        - name: "source_url"
+          type: "str"
+          constraints: ["required", "s3_url_format"]
+          description: "Source S3 URL"
+          
+        - name: "destination_url"
+          type: "str"
+          constraints: ["required", "s3_url_format"]
+          description: "Destination S3 URL"
+          
+        - name: "transfer_mode"
+          type: "Optional[TransferMode]"
+          constraints: ["enum"]
+          description: "Requested transfer mode (defaults to AUTO)"
+          
+        - name: "batch_size"
+          type: "Optional[int]"
+          constraints: ["positive", "max_value=500"]
+          description: "Maximum files per batch"
+          
+        - name: "performance_tracking"
+          type: "bool"
+          constraints: ["required"]
+          description: "Enable detailed performance metrics collection"
+          default: true
+      
+      validation_rules:
+        - rule: "source_url and destination_url must be different"
+        - rule: "both URLs must be valid S3 URLs"
+        - rule: "user must have read access to source and write access to destination"
+    
+    - dto_name: "TransferResponse"
+      description: "Response object for transfer operation requests"
+      
+      attributes:
+        - name: "operation_id"
+          type: "UUID"
+          constraints: ["required"]
+          description: "Unique identifier for the transfer operation"
+          
+        - name: "status"
+          type: "TransferStatus"
+          constraints: ["required"]
+          description: "Current operation status"
+          
+        - name: "files_processed"
+          type: "int"
+          constraints: ["required", "non_negative"]
+          description: "Number of files processed"
+          
+        - name: "performance_summary"
+          type: "Optional[PerformanceMetrics]"
+          constraints: ["conditional"]
+          description: "Performance metrics (when operation completed)"
+          
+        - name: "error_message"
+          type: "Optional[str]"
+          constraints: ["conditional"]
+          description: "Error message (when operation failed)"
+    
+    - dto_name: "BatchTransferRequest"
+      description: "Request for batch transfer operations"
+      
+      attributes:
+        - name: "transfers"
+          type: "List[TransferRequest]"
+          constraints: ["required", "min_length=1", "max_length=100"]
+          description: "List of individual transfer requests"
+          
+        - name: "batch_optimization"
+          type: "BatchOptimizationStrategy"
+          constraints: ["required"]
+          description: "Strategy for batch optimization"
+          
+        - name: "parallel_execution"
+          type: "bool"
+          constraints: ["required"]
+          description: "Enable parallel batch execution"
+          default: true
+      
+      validation_rules:
+        - rule: "all transfers must have same source and destination buckets"
+        - rule: "total number of files across all transfers cannot exceed 1000"
+  
+  # Configuration models
+  configuration_models:
+    - config_name: "S3DirectSyncConfig"
+      description: "Configuration for S3 Direct Sync functionality"
+      
+      attributes:
+        - name: "enable_s3_direct_sync"
+          type: "bool"
+          constraints: ["required"]
+          description: "Global enable/disable for direct sync"
+          default: true
+          
+        - name: "s5cmd_path"
+          type: "Optional[str]"
+          constraints: ["file_path"]
+          description: "Custom path to s5cmd executable"
+          
+        - name: "operation_mode"
+          type: "TransferMode"
+          constraints: ["enum"]
+          description: "Default operation mode"
+          default: "AUTO"
+          
+        - name: "max_concurrent_transfers"
+          type: "int"
+          constraints: ["positive", "max_value=32"]
+          description: "Maximum concurrent transfer operations"
+          default: 8
+          
+        - name: "default_batch_size"
+          type: "int"
+          constraints: ["positive", "max_value=500"]
+          description: "Default batch size for file transfers"
+          default: 100
+          
+        - name: "performance_monitoring"
+          type: "PerformanceMonitoringConfig"
+          constraints: ["required"]
+          description: "Performance monitoring configuration"
+          
+        - name: "fallback_config"
+          type: "FallbackConfig"
+          constraints: ["required"]
+          description: "Fallback behavior configuration"
+      
+      validation_rules:
+        - rule: "s5cmd_path must exist and be executable when provided"
+        - rule: "max_concurrent_transfers must not exceed system limits"
+        - rule: "performance_monitoring must be properly configured"
+    
+    - config_name: "PerformanceMonitoringConfig"
+      description: "Configuration for performance monitoring and metrics"
+      
+      attributes:
+        - name: "enable_metrics_collection"
+          type: "bool"
+          constraints: ["required"]
+          description: "Enable performance metrics collection"
+          default: true
+          
+        - name: "metrics_export_interval"
+          type: "int"
+          constraints: ["positive"]
+          description: "Metrics export interval in seconds"
+          default: 60
+          
+        - name: "detailed_timing"
+          type: "bool"
+          constraints: ["required"]
+          description: "Enable detailed timing measurements"
+          default: false
+          
+        - name: "performance_thresholds"
+          type: "PerformanceThresholds"
+          constraints: ["required"]
+          description: "Performance alert thresholds"
+      
+    - config_name: "FallbackConfig"
+      description: "Configuration for fallback behavior"
+      
+      attributes:
+        - name: "enable_automatic_fallback"
+          type: "bool"
+          constraints: ["required"]
+          description: "Enable automatic fallback to traditional mode"
+          default: true
+          
+        - name: "fallback_timeout_seconds"
+          type: "int"
+          constraints: ["positive"]
+          description: "Timeout before triggering fallback"
+          default: 30
+          
+        - name: "retry_attempts"
+          type: "int"
+          constraints: ["non_negative", "max_value=5"]
+          description: "Number of retry attempts before fallback"
+          default: 2
+
+# Schema evolution
+schema_evolution:
+  versioning_strategy: "Semantic versioning with backward compatibility"
+  migration_approach: "Automated schema migration with validation"
+  
+  version_history:
+    - version: "2.1.0"
+      date: "2025-07-23"
+      changes: "Initial comprehensive data model design"
+      breaking_changes: false
+      migration_required: false
+  
+  compatibility_matrix:
+    - model_version: "2.1.0"
+      api_versions: ["2.1.0"]
+      backward_compatible: true
+      forward_compatible: false
+
+# Data validation framework
+validation_framework:
+  validation_approach: "Schema-first with runtime validation"
+  validation_library: "Pydantic with custom validators"
+  
+  custom_validators:
+    - validator_name: "s3_url_validator"
+      description: "Validates S3 URL format and accessibility"
+      implementation: "Regex validation + AWS SDK accessibility check"
+      
+    - validator_name: "aws_region_validator"
+      description: "Validates AWS region codes"
+      implementation: "Check against official AWS region list"
+      
+    - validator_name: "performance_threshold_validator"
+      description: "Validates performance threshold configurations"
+      implementation: "Range validation with business rule enforcement"
+  
+  error_handling:
+    validation_error_format: "Structured error messages with field paths"
+    aggregation_strategy: "Collect all validation errors before failing"
+    user_friendly_messages: "Convert technical errors to actionable messages"
+
+# Next phase preparation
+next_phase_inputs:
+  implementation_requirements:
+    - "Pydantic model implementations with custom validators"
+    - "Database schema design for operation persistence"
+    - "Serialization/deserialization utilities"
+    - "Configuration management with environment variable support"
+    
+  integration_specifications:
+    - "ORM mapping for TransferOperation persistence"
+    - "API serialization for TransferRequest/Response objects"
+    - "Configuration loading and validation pipeline"
+    
+  testing_requirements:
+    - "Model validation test suite"
+    - "Schema migration testing"
+    - "Performance impact testing for validation overhead"
+    - "Integration testing with actual S3 operations"

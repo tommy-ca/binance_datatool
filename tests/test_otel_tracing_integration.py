@@ -419,7 +419,7 @@ class TestOpenTelemetryIntegration:
     
     def test_sampling_behavior(self):
         """Test adaptive sampling behavior."""
-        from crypto_lakehouse.core.otel_tracing import AdaptiveSampler
+        from crypto_lakehouse.core.legacy.otel_tracing import AdaptiveSampler
         
         sampler = AdaptiveSampler(
             default_ratio=0.1,

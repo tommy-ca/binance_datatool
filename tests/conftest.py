@@ -35,12 +35,7 @@ def test_settings():
     with tempfile.TemporaryDirectory() as temp_dir:
         settings = Settings(
             environment="test",
-            debug=True,
-            local_data_dir=Path(temp_dir),
-            storage__base_path=f"file://{temp_dir}",
-            s3__bucket_name="test-bucket",
-            workflow__concurrency_limit=2,
-            processing__batch_size=100,
+            local_data_dir=Path(temp_dir)
         )
         yield settings
 

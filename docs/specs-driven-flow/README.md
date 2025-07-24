@@ -93,6 +93,12 @@ Each phase has dedicated documentation and templates:
 - **Tools**: Automated feature creation script and development commands
 - **Usage**: Step-by-step feature development following specs-driven flow
 
+### [Feature Examples](../features/)
+- **Purpose**: Production-ready examples of complete specs-driven features
+- **Coverage**: 5 major platform features with full documentation
+- **Reference**: S3 Direct Sync (100% complete), Architecture patterns, Integration examples
+- **Usage**: Reference implementations for new feature development
+
 ## 🚀 Quick Start
 
 ### Initialize New Feature

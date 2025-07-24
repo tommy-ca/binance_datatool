@@ -82,10 +82,10 @@ class TestWorkflowTasks:
         """Test client setup task."""
         with (
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.BinanceIngestionClient"
+                "crypto_lakehouse.workflows.prefect_workflows.BinanceIngestionClient"
             ) as mock_ingestion,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.S3LakehouseStorage"
+                "crypto_lakehouse.workflows.prefect_workflows.S3LakehouseStorage"
             ) as mock_storage,
         ):
 
@@ -148,7 +148,7 @@ class TestWorkflowTasks:
         incremental_data = sample_kline_data[2:]  # Some overlap
 
         with patch(
-            "src.crypto_lakehouse.workflows.prefect_workflows.DataMerger"
+            "crypto_lakehouse.workflows.prefect_workflows.DataMerger"
         ) as mock_merger_class:
             mock_merger = Mock()
             mock_merge_result = Mock()
@@ -189,22 +189,22 @@ class TestWorkflowIntegration:
         # Mock all the components
         with (
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.BinanceIngestionClient"
+                "crypto_lakehouse.workflows.prefect_workflows.BinanceIngestionClient"
             ) as mock_ingestion_class,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.S3LakehouseStorage"
+                "crypto_lakehouse.workflows.prefect_workflows.S3LakehouseStorage"
             ) as mock_storage_class,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.GapDetector"
+                "crypto_lakehouse.workflows.prefect_workflows.GapDetector"
             ) as mock_gap_detector_class,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.DataMerger"
+                "crypto_lakehouse.workflows.prefect_workflows.DataMerger"
             ) as mock_merger_class,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.KlineProcessor"
+                "crypto_lakehouse.workflows.prefect_workflows.KlineProcessor"
             ) as mock_processor_class,
             patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.DataResampler"
+                "crypto_lakehouse.workflows.prefect_workflows.DataResampler"
             ) as mock_resampler_class,
         ):
 
@@ -243,7 +243,7 @@ class TestWorkflowIntegration:
 
             # Mock Prefect artifacts
             with patch(
-                "src.crypto_lakehouse.workflows.prefect_workflows.create_markdown_artifact"
+                "crypto_lakehouse.workflows.prefect_workflows.create_markdown_artifact"
             ) as mock_artifact:
                 mock_artifact.return_value = AsyncMock()
 
@@ -274,7 +274,7 @@ class TestWorkflowIntegration:
 
         # Mock the data_ingestion_pipeline function
         with patch(
-            "src.crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
+            "crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
         ) as mock_pipeline:
             mock_pipeline.return_value = {
                 "symbol": "BTCUSDT",
@@ -307,7 +307,7 @@ class TestWorkflowIntegration:
 
         # Mock the data_ingestion_pipeline function
         with patch(
-            "src.crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
+            "crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
         ) as mock_pipeline:
             mock_pipeline.return_value = {
                 "symbol": "BTCUSDT",
@@ -361,7 +361,7 @@ class TestErrorHandling:
             return {"symbol": symbol, "processed_records": 100, "quality_score": 0.95}
 
         with patch(
-            "src.crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
+            "crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
         ) as mock_pipeline:
             mock_pipeline.side_effect = mock_pipeline_side_effect
 
@@ -399,7 +399,7 @@ class TestPerformance:
             return {"symbol": symbol, "processed_records": 100, "quality_score": 0.95}
 
         with patch(
-            "src.crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
+            "crypto_lakehouse.workflows.prefect_workflows.data_ingestion_pipeline"
         ) as mock_pipeline:
             mock_pipeline.side_effect = mock_pipeline_with_delay
 

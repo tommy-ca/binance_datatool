@@ -21,7 +21,9 @@ from .otel_logging import (
 
 # Import legacy logging for backward compatibility
 try:
-    from ...legacy.util.log_kit import SimonsLogger, get_logger as legacy_get_logger
+    # Legacy import not available, using fallback
+    from logging import getLogger as legacy_get_logger
+    SimonsLogger = None
     LEGACY_LOGGING_AVAILABLE = True
 except ImportError:
     LEGACY_LOGGING_AVAILABLE = False

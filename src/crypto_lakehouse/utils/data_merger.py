@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, List, Optional, Tuple
 
 import polars as pl
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from ..core.models import DataType, FundingRateData, KlineData
 
@@ -56,7 +56,8 @@ class MergeConfig(BaseModel):
         default=60, description="Maximum gap in minutes to consider for merging"
     )
 
-    @validator("tolerance_ms")
+    @field_validator("tolerance_ms")
+    @classmethod
     def validate_tolerance(cls, v):
         if v < 0:
             raise ValueError("Tolerance must be non-negative")

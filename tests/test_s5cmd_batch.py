@@ -12,11 +12,13 @@ from typing import Dict, Any, List
 # Simple BulkDownloader test without full imports
 class TestBulkDownloader:
     """Simplified test version of BulkDownloader for s5cmd testing."""
+    # Note: Removed __init__ constructor to make pytest-compatible
     
-    def __init__(self, config: Dict[str, Any]):
-        self.max_concurrent = config.get('max_concurrent', 4)
-        self.batch_size = config.get('batch_size', 10)
-        self.enable_batch_mode = config.get('enable_batch_mode', True)
+    def setup_method(self):
+        """Setup for each test method."""
+        self.max_concurrent = 4
+        self.batch_size = 10
+        self.enable_batch_mode = True
         self.s5cmd_available = None
         self.stats = {
             'files_downloaded': 0,

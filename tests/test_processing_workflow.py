@@ -20,7 +20,7 @@ sys.path.append('.')
 from src.crypto_lakehouse.core.config import Settings, WorkflowConfig
 from src.crypto_lakehouse.core.models import DataType, DataZone, Exchange, TradeType
 from src.crypto_lakehouse.processing import KlineProcessor, FundingRateProcessor
-from src.crypto_lakehouse.workflows.processing_flow import processing_flow
+from crypto_lakehouse.workflows.processing_flow import processing_flow
 from src.crypto_lakehouse.storage.factory import create_storage
 
 

@@ -35,7 +35,7 @@ __description__ = "Unified cryptocurrency data lakehouse platform"
 
 # Core exports
 from .core.base import BaseWorkflow
-from .core.config import WorkflowConfig
+from .core.config import Settings, WorkflowConfig, S3Config, StorageConfig, DataZone
 from .core.metrics import MetricsCollector, WorkflowMetrics
 from .core.exceptions import ValidationError
 
@@ -45,7 +45,11 @@ from .workflows import ArchiveCollectionWorkflow
 __all__ = [
     # Core Framework
     "BaseWorkflow",
+    "Settings",
     "WorkflowConfig", 
+    "S3Config",
+    "StorageConfig",
+    "DataZone",
     "MetricsCollector",
     "WorkflowMetrics",
     "ValidationError",

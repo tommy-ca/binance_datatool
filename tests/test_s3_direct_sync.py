@@ -17,7 +17,8 @@ import pytest
 class TestS3DirectSync:
     """Test suite for S3 direct sync functionality."""
     
-    def __init__(self):
+    def setup_method(self):
+        """Setup test configuration for each test method."""
         self.test_config = {
             'enable_s3_direct_sync': True,
             'destination_bucket': 'test-crypto-lakehouse-bronze',

@@ -10,7 +10,7 @@ from opentelemetry import metrics
 from opentelemetry.metrics import Counter, Histogram, UpDownCounter
 
 from .otel_config import get_meter
-from .metrics import MetricsCollector as LegacyMetricsCollector  # Backward compatibility
+from ..metrics import MetricsCollector as LegacyMetricsCollector  # Backward compatibility
 
 logger = logging.getLogger(__name__)
 

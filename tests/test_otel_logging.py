@@ -26,7 +26,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, ConsoleSpanExpor
 from opentelemetry.trace import set_tracer_provider
 
 # Test imports
-from crypto_lakehouse.core.otel_logging import (
+from crypto_lakehouse.core.legacy.otel_logging import (
     OpenTelemetryLoggingConfig,
     CryptoContextInjector,
     LogSamplingConfig,

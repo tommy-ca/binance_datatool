@@ -13,9 +13,9 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.append('.')
 
-from src.crypto_lakehouse.core.config import WorkflowConfig
-from src.crypto_lakehouse.core.metrics import MetricsCollector
-from src.crypto_lakehouse.workflows.archive_collection_prefect import archive_collection_flow
+from crypto_lakehouse.core.config import WorkflowConfig
+from crypto_lakehouse.core.metrics import MetricsCollector
+from crypto_lakehouse.workflows.archive_collection_unified import unified_archive_collection_flow as archive_collection_flow
 
 
 async def test_simple_download():
@@ -101,7 +101,7 @@ def check_prefect_status():
     try:
         # Check if we can import everything
         from src.crypto_lakehouse.core.config import WorkflowConfig
-        from src.crypto_lakehouse.workflows.archive_collection_prefect import PrefectArchiveCollectionWorkflow
+        from crypto_lakehouse.workflows.archive_collection_prefect import PrefectArchiveCollectionWorkflow
         
         logger.info("✅ All imports successful")
         

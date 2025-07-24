@@ -17,7 +17,7 @@ sys.path.append('.')
 
 from src.crypto_lakehouse.core.config import WorkflowConfig
 from src.crypto_lakehouse.core.metrics import MetricsCollector
-from src.crypto_lakehouse.workflows.archive_collection_prefect import (
+from crypto_lakehouse.workflows.archive_collection_prefect import (
     validate_archive_configuration_task,
     load_archive_matrix_task,
     generate_ingestion_tasks_task
@@ -124,7 +124,7 @@ async def test_url_generation():
     logger.info("🔗 Testing URL Generation")
     
     # Import the URL generation function
-    from src.crypto_lakehouse.workflows.archive_collection_prefect import _generate_task_paths
+    from crypto_lakehouse.workflows.archive_collection_prefect import _generate_task_paths
     from src.crypto_lakehouse.core.models import DataIngestionTask, Exchange, DataType, TradeType, DataZone
     from src.crypto_lakehouse.core.config import Settings
     from src.crypto_lakehouse.storage.factory import create_storage

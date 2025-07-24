@@ -1,0 +1,417 @@
+# S3 Direct Sync - System Architecture
+# Phase 2: Design | System Architecture Design
+# ================================================================
+
+system_architecture:
+  # Feature identification
+  feature_id: "FEAT001"
+  feature_name: "S3 Direct Sync"
+  version: "2.1.0"
+  created_date: "2025-07-23"
+  created_by: "Architecture Team"
+  
+  # Architecture overview
+  architecture_style: "Layered Architecture with Plugin Pattern"
+  architecture_pattern: "Strategy Pattern with Fallback Chain"
+  
+  # Quality attributes mapping
+  quality_attributes:
+    performance:
+      response_time: "< 1.3s per batch (60% improvement)"
+      throughput: "> 500 files per batch"
+      scalability_target: "Linear scaling with file count"
+      
+    reliability:
+      availability: "99.9%"
+      fault_tolerance: "Graceful fallback to traditional mode"
+      recovery_time: "< 1 second fallback time"
+      
+    security:
+      authentication: "AWS IAM roles and S3 bucket policies"
+      authorization: "Least privilege access control"
+      data_protection: "In-transit encryption via S3 HTTPS"
+      
+    maintainability:
+      modularity: "High cohesion, low coupling with plugin architecture"
+      testability: "> 95% test coverage with mock s5cmd integration"
+      extensibility: "Plugin-based transfer strategy pattern"
+  
+  # Architectural layers
+  architectural_layers:
+    presentation:
+      description: "API interface and configuration management for S3 Direct Sync"
+      components:
+        - name: "S3DirectSyncController"
+          type: "API Controller"
+          responsibilities:
+            - "Transfer request validation and routing"
+            - "Configuration parameter processing"
+            - "Response formatting and error handling"
+          
+        - name: "ConfigurationValidator"
+          type: "Validation Component"
+          responsibilities:
+            - "S3 URL validation and parsing"
+            - "Permission validation"
+            - "Configuration schema validation"
+      
+      patterns:
+        - pattern: "Request-Response with validation pipeline"
+        - pattern: "Configuration-driven behavior"
+      
+      technologies:
+        - "Pydantic for configuration validation"
+        - "Python dataclasses for request/response models"
+        
+    application:
+      description: "Business logic orchestration and transfer strategy management"
+      components:
+        - name: "TransferOrchestrator"
+          type: "Application Service"
+          responsibilities:
+            - "Transfer strategy selection and execution"
+            - "Batch processing coordination"
+            - "Performance metrics collection"
+          
+        - name: "ModeSelectionService"
+          type: "Strategy Service"
+          responsibilities:
+            - "Intelligent mode selection algorithm"
+            - "Availability detection and validation"
+            - "Fallback decision logic"
+      
+      patterns:
+        - pattern: "Strategy Pattern for transfer modes"
+        - pattern: "Chain of Responsibility for fallback"
+      
+      technologies:
+        - "Python 3.12 with type hints"
+        - "AsyncIO for concurrent operations"
+        
+    domain:
+      description: "Core transfer domain logic and business rules"
+      components:
+        - name: "TransferOperation"
+          type: "Domain Entity"
+          responsibilities:
+            - "Transfer state management"
+            - "Business rule enforcement"
+            - "Transfer lifecycle coordination"
+          
+        - name: "TransferStrategy"
+          type: "Strategy Interface"
+          responsibilities:
+            - "Abstract transfer operation definition"
+            - "Strategy-specific configuration"
+            - "Performance contract enforcement"
+      
+      patterns:
+        - pattern: "Domain Model with rich entities"
+        - pattern: "Strategy Pattern implementation"
+      
+      technologies:
+        - "Python dataclasses with validation"
+        - "ABC (Abstract Base Class) for strategy interface"
+        
+    infrastructure:
+      description: "External system integrations and technical implementations"
+      components:
+        - name: "S5cmdTransferAdapter"
+          type: "External Service Adapter"
+          responsibilities:
+            - "s5cmd command execution and management"
+            - "Process lifecycle management"
+            - "Error handling and retry logic"
+          
+        - name: "TraditionalTransferAdapter"
+          type: "Fallback Adapter"
+          responsibilities:
+            - "Traditional download/upload operations"
+            - "Local storage management"
+            - "Legacy compatibility maintenance"
+      
+      patterns:
+        - pattern: "Adapter Pattern for external tools"
+        - pattern: "Command Pattern for process execution"
+      
+      technologies:
+        - "subprocess for s5cmd execution"
+        - "boto3 for AWS S3 operations"
+  
+  # Cross-cutting concerns
+  cross_cutting_concerns:
+    logging:
+      strategy: "Structured logging with correlation IDs and performance metrics"
+      level: "INFO"
+      format: "JSON with OpenTelemetry integration"
+      destinations: ["stdout", "OpenObserve", "CloudWatch"]
+      
+    monitoring:
+      strategy: "Real-time performance metrics and health monitoring"
+      metrics: ["transfer_duration", "operation_count", "fallback_rate", "error_rate"]
+      tools: ["OpenTelemetry", "Prometheus", "Grafana"]
+      
+    error_handling:
+      strategy: "Graceful degradation with intelligent fallback"
+      patterns: ["Circuit Breaker for s5cmd", "Retry with Exponential Backoff"]
+      
+    caching:
+      strategy: "Configuration and availability caching"
+      levels: ["Strategy availability cache", "Configuration validation cache"]
+      technologies: ["In-memory TTL cache", "Redis for distributed caching"]
+      
+    security:
+      strategy: "Defense in depth with least privilege"
+      controls: ["IAM role validation", "S3 bucket policy enforcement", "Configuration sanitization"]
+      
+    configuration:
+      strategy: "Environment-based with runtime validation"
+      sources: ["Environment variables", "Configuration files", "Runtime parameters"]
+      validation: "Pydantic schema validation with AWS credential verification"
+  
+  # Component interactions
+  component_interactions:
+    - interaction_id: "INT001"
+      source: "S3DirectSyncController"
+      target: "TransferOrchestrator"
+      interaction_type: "Synchronous call"
+      protocol: "In-process method call"
+      data_format: "Python transfer request objects"
+      
+      flow_description: "Controller validates request, creates transfer configuration, delegates to orchestrator"
+      error_handling: "Exception propagation with error mapping to HTTP responses"
+      performance_considerations: "Direct method call with minimal serialization overhead"
+      
+    - interaction_id: "INT002"
+      source: "TransferOrchestrator"
+      target: "ModeSelectionService"
+      interaction_type: "Synchronous call"
+      protocol: "In-process method call"
+      data_format: "Transfer context and configuration objects"
+      
+      flow_description: "Orchestrator requests optimal transfer strategy based on context and availability"
+      error_handling: "Service exceptions handled with fallback to default strategy"
+      performance_considerations: "Fast strategy selection with cached availability checks"
+      
+    - interaction_id: "INT003"
+      source: "ModeSelectionService"
+      target: "S5cmdTransferAdapter"
+      interaction_type: "Conditional synchronous call"
+      protocol: "Process execution via subprocess"
+      data_format: "Command line arguments and environment variables"
+      
+      flow_description: "Service executes s5cmd availability check and transfer operations"
+      error_handling: "Process failure handling with automatic fallback initiation"
+      performance_considerations: "Subprocess overhead managed through batch operations"
+  
+  # Data flow architecture
+  data_flow:
+    request_flow:
+      - step: 1
+        component: "S3DirectSyncController"
+        action: "Receive and validate transfer request"
+        data: "TransferRequest with source/destination URLs"
+        
+      - step: 2
+        component: "TransferOrchestrator"
+        action: "Initialize transfer operation and select strategy"
+        data: "TransferOperation with validated configuration"
+        
+      - step: 3
+        component: "ModeSelectionService"
+        action: "Determine optimal transfer strategy"
+        data: "StrategySelection with mode and parameters"
+        
+      - step: 4
+        component: "S5cmdTransferAdapter"
+        action: "Execute direct S3 to S3 transfer"
+        data: "s5cmd process execution with file batch"
+    
+    response_flow:
+      - step: 1
+        component: "S5cmdTransferAdapter"
+        action: "Return transfer results and performance metrics"
+        data: "TransferResult with timing and status information"
+        
+      - step: 2
+        component: "TransferOrchestrator"
+        action: "Aggregate results and collect metrics"
+        data: "AggregatedTransferResult with performance analysis"
+        
+      - step: 3
+        component: "S3DirectSyncController"
+        action: "Format response and log performance metrics"
+        data: "HTTP response with transfer summary"
+    
+    error_flow:
+      - step: 1
+        component: "S5cmdTransferAdapter"
+        action: "Detect s5cmd failure and initiate fallback"
+        data: "TransferException with failure context"
+        
+      - step: 2
+        component: "ModeSelectionService"
+        action: "Select fallback strategy (traditional mode)"
+        data: "FallbackStrategy with traditional transfer configuration"
+        
+      - step: 3
+        component: "TraditionalTransferAdapter"
+        action: "Execute fallback transfer operation"
+        data: "Traditional download/upload operation"
+  
+  # Deployment architecture
+  deployment_architecture:
+    environments:
+      - name: "Development"
+        purpose: "Feature development and testing with mock s5cmd"
+        characteristics:
+          - "Local s5cmd simulation for testing"
+          - "Mock S3 endpoints using MinIO"
+          - "Debug logging and performance profiling enabled"
+        
+      - name: "Production"
+        purpose: "High-performance data transfer operations"
+        characteristics:
+          - "Real s5cmd integration with AWS S3"
+          - "Cross-region transfer optimization"
+          - "Production monitoring and alerting"
+    
+    infrastructure:
+      compute:
+        - component: "Transfer Workers"
+          type: "Container (Docker)"
+          specifications: "4 CPU, 8GB RAM for high-throughput operations"
+          scaling: "Horizontal auto-scaling based on transfer queue depth"
+          
+      storage:
+        - component: "Configuration Store"
+          type: "Redis"
+          specifications: "High-availability cluster for strategy caching"
+          backup: "Real-time replication with point-in-time recovery"
+          
+      networking:
+        - component: "S3 Transfer Endpoints"
+          type: "AWS S3 Transfer Acceleration"
+          configuration: "Global edge locations for optimized transfer performance"
+    
+    deployment_strategy:
+      approach: "Blue-Green deployment with canary testing"
+      automation: "GitHub Actions with automated performance validation"
+      rollback: "Automated rollback on performance regression detection"
+      monitoring: "Real-time deployment metrics with transfer performance tracking"
+
+# Architecture decisions
+architecture_decisions:
+  - decision_id: "AD001"
+    title: "Use s5cmd for Direct S3 to S3 Transfers"
+    status: "Accepted"
+    date: "2025-07-23"
+    
+    context: "Need high-performance S3 transfer capability that eliminates local storage requirements"
+    decision: "Integrate s5cmd as primary transfer mechanism for direct S3 to S3 operations"
+    rationale: "s5cmd provides native S3 to S3 transfer capability with superior performance compared to download/upload cycles"
+    
+    alternatives_considered:
+      - alternative: "AWS CLI s3 sync"
+        pros: ["Native AWS integration", "Wide compatibility"]
+        cons: ["Lower performance", "Limited batch optimization"]
+        
+      - alternative: "Custom boto3 implementation"
+        pros: ["Full Python integration", "Custom optimization potential"]
+        cons: ["Complex implementation", "No direct S3 to S3 capability"]
+        
+    consequences:
+      positive: ["60%+ performance improvement", "Eliminated local storage", "Reduced bandwidth usage"]
+      negative: ["External dependency on s5cmd", "Additional error handling complexity"]
+      
+    implementation_notes: "Implement robust fallback to traditional mode when s5cmd unavailable"
+    
+  - decision_id: "AD002"
+    title: "Strategy Pattern for Transfer Mode Selection"
+    status: "Accepted"
+    date: "2025-07-23"
+    
+    context: "Need flexible transfer mode selection with intelligent fallback capabilities"
+    decision: "Implement Strategy Pattern with Chain of Responsibility for mode selection and fallback"
+    rationale: "Provides clean separation of transfer strategies with extensible fallback mechanisms"
+    
+    alternatives_considered:
+      - alternative: "Simple if/else conditional logic"
+        pros: ["Simpler implementation", "Direct control flow"]
+        cons: ["Poor extensibility", "Complex fallback logic"]
+        
+    consequences:
+      positive: ["Clean architecture", "Easy testing", "Extensible design"]
+      negative: ["Additional abstraction complexity", "More classes to maintain"]
+      
+    implementation_notes: "Use dependency injection for strategy selection service"
+
+# Technology stack
+technology_stack:
+  languages:
+    primary: "Python 3.12"
+    secondary: ["Shell scripting", "YAML"]
+    
+  frameworks:
+    core: "Pydantic for configuration validation"
+    async: "AsyncIO for concurrent operations"
+    testing: "pytest with mock subprocess integration"
+    validation: "Pydantic with custom S3 validators"
+    
+  tools:
+    transfer: "s5cmd for high-performance S3 operations"
+    aws: "boto3 for AWS S3 integration and fallback"
+    monitoring: "OpenTelemetry for performance metrics"
+    
+  infrastructure:
+    containerization: "Docker with multi-stage builds"
+    orchestration: "Kubernetes with HPA for scaling"
+    cloud: "AWS with cross-region support"
+    monitoring: "OpenObserve + Prometheus + Grafana stack"
+
+# Performance architecture
+performance_architecture:
+  optimization_strategies:
+    - strategy: "Batch processing with configurable batch sizes"
+      impact: "Linear performance scaling with file count"
+      implementation: "Dynamic batch size optimization based on file sizes"
+      
+    - strategy: "Concurrent transfer operations"
+      impact: "Parallel processing of independent batches"
+      implementation: "AsyncIO-based concurrent execution with semaphore limits"
+      
+    - strategy: "Strategy caching and availability checking"
+      impact: "Reduced overhead for repeated operations"
+      implementation: "TTL-based caching of s5cmd availability and configuration"
+  
+  performance_targets:
+    - metric: "Transfer batch processing time"
+      target: "< 1.3 seconds (60% improvement over traditional)"
+      measurement: "End-to-end batch processing duration"
+      
+    - metric: "Operation count reduction"
+      target: "> 80% reduction (5 operations to 1 operation per file)"
+      measurement: "Network operations per file transferred"
+      
+    - metric: "Memory usage efficiency"
+      target: "< 100MB regardless of batch size"
+      measurement: "Peak memory usage during transfer operations"
+
+# Next phase preparation
+next_phase_inputs:
+  component_design_requirements:
+    - "Detailed S5cmdTransferAdapter interface with process management"
+    - "TransferOrchestrator implementation with performance metrics"
+    - "ModeSelectionService with intelligent fallback logic"
+    - "Configuration validation with AWS credential verification"
+    
+  integration_specifications:
+    - "s5cmd subprocess integration with error handling"
+    - "OpenTelemetry metrics integration for performance tracking"
+    - "Existing workflow orchestration integration points"
+    
+  performance_targets:
+    - "s5cmd process execution overhead < 50ms"
+    - "Strategy selection decision time < 10ms"
+    - "Fallback initiation time < 100ms"
+    - "Memory usage constant regardless of batch size"

@@ -1,0 +1,779 @@
+# S3 Direct Sync - API Specifications
+# Phase 2: Design | API Interface Design
+# ================================================================
+
+api_specifications:
+  # Feature identification
+  feature_id: "FEAT001"
+  feature_name: "S3 Direct Sync"
+  version: "2.1.0"
+  created_date: "2025-07-23"
+  created_by: "API Design Team"
+  
+  # API overview
+  api_style: "RESTful with domain-specific operations"
+  api_pattern: "Resource-oriented with action-based extensions"
+  authentication: "AWS IAM integration with role-based access"
+  documentation_format: "OpenAPI 3.0 with comprehensive examples"
+  
+  # Base configuration
+  base_configuration:
+    base_url: "/api/v2.1/s3-direct-sync"
+    content_type: "application/json"
+    response_format: "JSON with consistent error handling"
+    rate_limiting: "100 requests per minute per API key"
+    versioning_strategy: "URL path versioning"
+  
+  # Core API endpoints
+  endpoints:
+    - endpoint_id: "EP001"
+      path: "/transfer"
+      method: "POST"
+      summary: "Initiate S3 direct sync transfer operation"
+      description: "Creates and executes a new S3 to S3 direct transfer operation with intelligent mode selection"
+      
+      # Request specification
+      request:
+        content_type: "application/json"
+        schema:
+          type: "object"
+          required: ["source_url", "destination_url"]
+          properties:
+            source_url:
+              type: "string"
+              format: "s3-url"
+              description: "Source S3 URL (e.g., s3://source-bucket/path/)"
+              example: "s3://binance-archive/spot/daily/klines/"
+              
+            destination_url:
+              type: "string"
+              format: "s3-url"
+              description: "Destination S3 URL (e.g., s3://dest-bucket/path/)"
+              example: "s3://lakehouse-bronze/binance/spot/klines/"
+              
+            transfer_mode:
+              type: "string"
+              enum: ["direct_sync", "traditional", "auto"]
+              default: "auto"
+              description: "Transfer mode selection"
+              
+            batch_size:
+              type: "integer"
+              minimum: 1
+              maximum: 500
+              default: 100
+              description: "Maximum files per batch operation"
+              
+            performance_tracking:
+              type: "boolean"
+              default: true
+              description: "Enable detailed performance metrics collection"
+              
+            configuration:
+              type: "object"
+              description: "Additional transfer configuration options"
+              properties:
+                max_concurrent:
+                  type: "integer"
+                  minimum: 1
+                  maximum: 32
+                  default: 8
+                  description: "Maximum concurrent operations"
+                  
+                timeout_seconds:
+                  type: "integer"
+                  minimum: 30
+                  maximum: 3600
+                  default: 300
+                  description: "Operation timeout in seconds"
+                  
+                enable_fallback:
+                  type: "boolean"
+                  default: true
+                  description: "Enable automatic fallback to traditional mode"
+      
+      # Response specifications
+      responses:
+        "200":
+          description: "Transfer operation completed successfully"
+          schema:
+            type: "object"
+            required: ["operation_id", "status", "files_processed", "performance_metrics"]
+            properties:
+              operation_id:
+                type: "string"
+                format: "uuid"
+                description: "Unique identifier for the transfer operation"
+                example: "550e8400-e29b-41d4-a716-446655440000"
+                
+              status:
+                type: "string"
+                enum: ["completed"]
+                description: "Operation status"
+                
+              files_processed:
+                type: "integer"
+                minimum: 0
+                description: "Number of files successfully transferred"
+                example: 245
+                
+              bytes_transferred:
+                type: "integer"
+                minimum: 0
+                description: "Total bytes transferred"
+                example: 1073741824
+                
+              performance_metrics:
+                type: "object"
+                description: "Detailed performance metrics"
+                properties:
+                  total_duration_seconds:
+                    type: "number"
+                    format: "float"
+                    description: "Total operation duration"
+                    example: 1.3
+                    
+                  transfer_duration_seconds:
+                    type: "number"
+                    format: "float"
+                    description: "Actual transfer time"
+                    example: 1.1
+                    
+                  operation_count:
+                    type: "integer"
+                    description: "Number of network operations"
+                    example: 245
+                    
+                  average_throughput_mbps:
+                    type: "number"
+                    format: "float"
+                    description: "Average throughput in Mbps"
+                    example: 650.5
+                    
+                  efficiency_improvement:
+                    type: "number"
+                    format: "float"
+                    description: "Improvement over traditional mode (%)"
+                    example: 62.3
+                    
+                  mode_used:
+                    type: "string"
+                    enum: ["direct_sync", "traditional", "mixed"]
+                    description: "Actual transfer mode used"
+                    example: "direct_sync"
+        
+        "202":
+          description: "Transfer operation accepted and running asynchronously"
+          schema:
+            type: "object"
+            required: ["operation_id", "status"]
+            properties:
+              operation_id:
+                type: "string"
+                format: "uuid"
+                description: "Unique identifier for the transfer operation"
+                
+              status:
+                type: "string"
+                enum: ["pending", "running"]
+                description: "Current operation status"
+                
+              estimated_duration_seconds:
+                type: "number"
+                format: "float"
+                description: "Estimated completion time"
+                example: 2.5
+                
+              progress:
+                type: "object"
+                description: "Current progress information"
+                properties:
+                  files_queued:
+                    type: "integer"
+                    description: "Total files in queue"
+                  files_completed:
+                    type: "integer"
+                    description: "Files completed so far"
+                  current_batch:
+                    type: "integer"
+                    description: "Current batch being processed"
+        
+        "400":
+          description: "Bad request - invalid parameters"
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+        
+        "403":
+          description: "Forbidden - insufficient S3 permissions"
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+        
+        "500":
+          description: "Internal server error"
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+      
+      # Examples
+      examples:
+        basic_transfer:
+          summary: "Basic S3 direct sync transfer"
+          request:
+            source_url: "s3://binance-archive/spot/daily/klines/BTCUSDT/"
+            destination_url: "s3://lakehouse-bronze/binance/spot/klines/BTCUSDT/"
+          response:
+            operation_id: "550e8400-e29b-41d4-a716-446655440000"
+            status: "completed"
+            files_processed: 24
+            bytes_transferred: 52428800
+            performance_metrics:
+              total_duration_seconds: 1.2
+              operation_count: 24
+              efficiency_improvement: 65.8
+              mode_used: "direct_sync"
+        
+        batch_transfer:
+          summary: "Large batch transfer with custom configuration"
+          request:
+            source_url: "s3://binance-archive/spot/daily/"
+            destination_url: "s3://lakehouse-bronze/binance/spot/"
+            batch_size: 200
+            configuration:
+              max_concurrent: 16
+              timeout_seconds: 600
+          response:
+            operation_id: "550e8400-e29b-41d4-a716-446655440001"
+            status: "running"
+            estimated_duration_seconds: 15.5
+    
+    - endpoint_id: "EP002"
+      path: "/transfer/{operation_id}"
+      method: "GET"
+      summary: "Get transfer operation status and results"
+      description: "Retrieves current status and performance metrics for a specific transfer operation"
+      
+      # Path parameters
+      parameters:
+        - name: "operation_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+            format: "uuid"
+          description: "Unique identifier of the transfer operation"
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      
+      responses:
+        "200":
+          description: "Transfer operation details retrieved successfully"
+          schema:
+            type: "object"
+            required: ["operation_id", "status", "created_at"]
+            properties:
+              operation_id:
+                type: "string"
+                format: "uuid"
+                description: "Operation identifier"
+                
+              status:
+                type: "string"
+                enum: ["pending", "running", "completed", "failed", "cancelled"]
+                description: "Current operation status"
+                
+              created_at:
+                type: "string"
+                format: "datetime"
+                description: "Operation creation timestamp"
+                
+              started_at:
+                type: "string"
+                format: "datetime"
+                description: "Operation start timestamp"
+                
+              completed_at:
+                type: "string"
+                format: "datetime"
+                description: "Operation completion timestamp"
+                
+              source_url:
+                type: "string"
+                description: "Source S3 URL"
+                
+              destination_url:
+                type: "string"
+                description: "Destination S3 URL"
+                
+              files_processed:
+                type: "integer"
+                description: "Number of files processed"
+                
+              performance_metrics:
+                $ref: "#/components/schemas/PerformanceMetrics"
+                
+              error_details:
+                type: "object"
+                description: "Error information (when status is failed)"
+                properties:
+                  error_code:
+                    type: "string"
+                    description: "Error classification code"
+                  error_message:
+                    type: "string"
+                    description: "Human-readable error message"
+                  stack_trace:
+                    type: "string"
+                    description: "Technical stack trace (debug mode only)"
+        
+        "404":
+          description: "Transfer operation not found"
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    
+    - endpoint_id: "EP003"
+      path: "/transfer/batch"
+      method: "POST"
+      summary: "Execute multiple transfer operations in optimized batches"
+      description: "Processes multiple transfer requests with intelligent batching and optimization"
+      
+      request:
+        content_type: "application/json"
+        schema:
+          type: "object"
+          required: ["transfers"]
+          properties:
+            transfers:
+              type: "array"
+              minItems: 1
+              maxItems: 100
+              items:
+                type: "object"
+                required: ["source_url", "destination_url"]
+                properties:
+                  source_url:
+                    type: "string"
+                    format: "s3-url"
+                  destination_url:
+                    type: "string"
+                    format: "s3-url"
+                  transfer_mode:
+                    type: "string"
+                    enum: ["direct_sync", "traditional", "auto"]
+                    default: "auto"
+                    
+            batch_optimization:
+              type: "string"
+              enum: ["size_based", "count_based", "mixed"]
+              default: "mixed"
+              description: "Strategy for batch optimization"
+              
+            parallel_execution:
+              type: "boolean"
+              default: true
+              description: "Enable parallel batch execution"
+              
+            global_configuration:
+              type: "object"
+              description: "Configuration applied to all transfers"
+              properties:
+                max_concurrent_batches:
+                  type: "integer"
+                  minimum: 1
+                  maximum: 10
+                  default: 3
+                timeout_seconds:
+                  type: "integer"
+                  minimum: 60
+                  maximum: 7200
+                  default: 1800
+      
+      responses:
+        "200":
+          description: "Batch transfer operations completed"
+          schema:
+            type: "object"
+            required: ["batch_id", "status", "summary"]
+            properties:
+              batch_id:
+                type: "string"
+                format: "uuid"
+                description: "Unique identifier for the batch operation"
+                
+              status:
+                type: "string"
+                enum: ["completed", "partial_success", "failed"]
+                description: "Overall batch status"
+                
+              summary:
+                type: "object"
+                properties:
+                  total_transfers:
+                    type: "integer"
+                    description: "Total number of transfer requests"
+                  successful_transfers:
+                    type: "integer"
+                    description: "Number of successful transfers"
+                  failed_transfers:
+                    type: "integer"
+                    description: "Number of failed transfers"
+                  total_files_processed:
+                    type: "integer"
+                    description: "Total files transferred across all operations"
+                  total_bytes_transferred:
+                    type: "integer"
+                    description: "Total bytes transferred"
+                  total_duration_seconds:
+                    type: "number"
+                    format: "float"
+                    description: "Total batch processing time"
+                    
+              individual_results:
+                type: "array"
+                items:
+                  type: "object"
+                  properties:
+                    transfer_index:
+                      type: "integer"
+                      description: "Index of transfer in original request"
+                    operation_id:
+                      type: "string"
+                      format: "uuid"
+                      description: "Individual operation identifier"
+                    status:
+                      type: "string"
+                      enum: ["completed", "failed"]
+                    performance_metrics:
+                      $ref: "#/components/schemas/PerformanceMetrics"
+                    error_details:
+                      type: "object"
+                      description: "Error information for failed transfers"
+    
+    - endpoint_id: "EP004"
+      path: "/health"
+      method: "GET"
+      summary: "Health check and system status"
+      description: "Returns system health status and s5cmd availability"
+      
+      responses:
+        "200":
+          description: "System health status"
+          schema:
+            type: "object"
+            required: ["status", "timestamp", "capabilities"]
+            properties:
+              status:
+                type: "string"
+                enum: ["healthy", "degraded", "unhealthy"]
+                description: "Overall system health status"
+                
+              timestamp:
+                type: "string"
+                format: "datetime"
+                description: "Health check timestamp"
+                
+              capabilities:
+                type: "object"
+                description: "System capabilities status"
+                properties:
+                  s5cmd_available:
+                    type: "boolean"
+                    description: "s5cmd tool availability"
+                  direct_sync_enabled:
+                    type: "boolean"
+                    description: "Direct sync functionality status"
+                  fallback_available:
+                    type: "boolean"
+                    description: "Traditional mode fallback availability"
+                    
+              performance_status:
+                type: "object"
+                description: "Current performance indicators"
+                properties:
+                  active_transfers:
+                    type: "integer"
+                    description: "Number of currently active transfers"
+                  queue_depth:
+                    type: "integer"
+                    description: "Number of queued operations"
+                  average_response_time_ms:
+                    type: "number"
+                    format: "float"
+                    description: "Average response time over last hour"
+    
+    - endpoint_id: "EP005"
+      path: "/metrics"
+      method: "GET"
+      summary: "System performance metrics and statistics"
+      description: "Provides comprehensive performance metrics and usage statistics"
+      
+      parameters:
+        - name: "timeframe"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum: ["1h", "24h", "7d", "30d"]
+            default: "24h"
+          description: "Metrics collection timeframe"
+          
+        - name: "format"
+          in: "query"
+          required: false
+          schema:
+            type: "string"
+            enum: ["json", "prometheus"]
+            default: "json"
+          description: "Response format"
+      
+      responses:
+        "200":
+          description: "Performance metrics data"
+          schema:
+            type: "object"
+            required: ["timeframe", "collected_at", "metrics"]
+            properties:
+              timeframe:
+                type: "string"
+                description: "Metrics collection period"
+                
+              collected_at:
+                type: "string"
+                format: "datetime"
+                description: "Metrics collection timestamp"
+                
+              metrics:
+                type: "object"
+                properties:
+                  total_operations:
+                    type: "integer"
+                    description: "Total transfer operations in timeframe"
+                    
+                  successful_operations:
+                    type: "integer"
+                    description: "Successful operations count"
+                    
+                  failed_operations:
+                    type: "integer"
+                    description: "Failed operations count"
+                    
+                  average_duration_seconds:
+                    type: "number"
+                    format: "float"
+                    description: "Average operation duration"
+                    
+                  total_files_transferred:
+                    type: "integer"
+                    description: "Total files transferred"
+                    
+                  total_bytes_transferred:
+                    type: "integer"
+                    description: "Total bytes transferred"
+                    
+                  mode_distribution:
+                    type: "object"
+                    description: "Distribution of transfer modes used"
+                    properties:
+                      direct_sync_percentage:
+                        type: "number"
+                        format: "float"
+                      traditional_percentage:
+                        type: "number"
+                        format: "float"
+                      fallback_rate:
+                        type: "number"
+                        format: "float"
+                        
+                  performance_trends:
+                    type: "object"
+                    description: "Performance improvement trends"
+                    properties:
+                      efficiency_improvement:
+                        type: "number"
+                        format: "float"
+                        description: "Average efficiency improvement (%)"
+                      operation_reduction:
+                        type: "number"
+                        format: "float"
+                        description: "Average operation count reduction (%)"
+
+# Common schemas
+components:
+  schemas:
+    PerformanceMetrics:
+      type: "object"
+      required: ["total_duration_seconds", "transfer_duration_seconds", "files_transferred", "bytes_transferred", "operation_count"]
+      properties:
+        total_duration_seconds:
+          type: "number"
+          format: "float"
+          description: "Total operation duration including setup"
+          
+        transfer_duration_seconds:
+          type: "number"
+          format: "float"
+          description: "Actual transfer time excluding setup"
+          
+        files_transferred:
+          type: "integer"
+          minimum: 0
+          description: "Number of files successfully transferred"
+          
+        bytes_transferred:
+          type: "integer"
+          minimum: 0
+          description: "Total bytes transferred"
+          
+        operation_count:
+          type: "integer"
+          minimum: 1
+          description: "Number of network operations performed"
+          
+        average_throughput_mbps:
+          type: "number"
+          format: "float"
+          description: "Average throughput in megabits per second"
+          
+        efficiency_improvement:
+          type: "number"
+          format: "float"
+          description: "Efficiency improvement over traditional mode (%)"
+          
+        mode_used:
+          type: "string"
+          enum: ["direct_sync", "traditional", "mixed"]
+          description: "Actual transfer mode used"
+    
+    ErrorResponse:
+      type: "object"
+      required: ["error", "message", "timestamp"]
+      properties:
+        error:
+          type: "string"
+          description: "Error classification code"
+          example: "INVALID_S3_URL"
+          
+        message:
+          type: "string"
+          description: "Human-readable error message"
+          example: "The provided S3 URL is not valid or accessible"
+          
+        timestamp:
+          type: "string"
+          format: "datetime"
+          description: "Error occurrence timestamp"
+          
+        details:
+          type: "object"
+          description: "Additional error context"
+          properties:
+            field:
+              type: "string"
+              description: "Field that caused the error"
+            value:
+              type: "string"
+              description: "Invalid value provided"
+            suggestion:
+              type: "string"
+              description: "Suggested correction"
+        
+        request_id:
+          type: "string"
+          format: "uuid"
+          description: "Unique request identifier for troubleshooting"
+
+# API security
+security_specifications:
+  authentication:
+    method: "AWS IAM"
+    description: "AWS IAM roles and policies for S3 access control"
+    
+  authorization:
+    permissions_required:
+      - "s3:GetObject on source buckets"
+      - "s3:PutObject on destination buckets"
+      - "s3:ListBucket for both source and destination"
+    
+  data_protection:
+    in_transit: "HTTPS/TLS 1.2+ for all API communications"
+    at_rest: "S3 server-side encryption maintained during transfers"
+    
+  rate_limiting:
+    default_limits:
+      requests_per_minute: 100
+      concurrent_operations: 32
+      max_batch_size: 100
+    
+  audit_logging:
+    events_logged:
+      - "Transfer operation initiation"
+      - "Operation completion/failure"
+      - "Authentication/authorization events"
+      - "Performance threshold violations"
+
+# API versioning
+versioning:
+  strategy: "URL path versioning"
+  current_version: "v2.1"
+  supported_versions: ["v2.1"]
+  
+  deprecation_policy:
+    notice_period: "6 months minimum"
+    support_period: "12 months after deprecation notice"
+    migration_guidance: "Comprehensive migration documentation provided"
+
+# Error handling
+error_handling:
+  error_categories:
+    - category: "CLIENT_ERROR"
+      http_codes: [400, 401, 403, 404]
+      description: "Client-side request errors"
+      
+    - category: "SERVER_ERROR"
+      http_codes: [500, 502, 503, 504]
+      description: "Server-side processing errors"
+      
+    - category: "S3_ERROR"
+      http_codes: [403, 404, 500]
+      description: "S3 service-related errors"
+  
+  retry_guidance:
+    retryable_errors: ["500", "502", "503", "504"]
+    retry_strategy: "Exponential backoff with jitter"
+    max_retries: 3
+    base_delay: "1 second"
+
+# Performance specifications
+performance_specifications:
+  response_time_targets:
+    health_check: "< 50ms"
+    transfer_initiation: "< 200ms"
+    status_query: "< 100ms"
+    metrics_collection: "< 500ms"
+  
+  throughput_targets:
+    concurrent_operations: "Up to 32 simultaneous transfers"
+    batch_processing: "Up to 500 files per batch"
+    api_requests: "100 requests per minute per client"
+  
+  scalability:
+    horizontal_scaling: "Load balancer with multiple instances"
+    connection_pooling: "Optimized connection management"
+    caching: "Response caching for status and metrics endpoints"
+
+# Next phase preparation
+next_phase_inputs:
+  implementation_requirements:
+    - "FastAPI implementation with Pydantic models"
+    - "OpenAPI documentation generation"
+    - "Request/response validation middleware"
+    - "Error handling and logging framework"
+    
+  integration_specifications:
+    - "AWS IAM integration for authentication"
+    - "S3DirectSyncController implementation"
+    - "Performance metrics collection and export"
+    - "Health check and monitoring endpoints"
+    
+  testing_requirements:
+    - "API endpoint testing with various scenarios"
+    - "Performance testing under load"
+    - "Error handling and edge case validation"
+    - "Security testing for authentication and authorization"

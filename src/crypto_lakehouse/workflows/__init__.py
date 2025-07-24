@@ -46,6 +46,18 @@ def __getattr__(name: str):
         _deprecated_import_warning(name, "unified_archive_collection_flow")
         from .archive_collection_unified import unified_archive_collection_flow
         return unified_archive_collection_flow
+    elif name == "archive_collection_prefect":
+        _deprecated_import_warning("archive_collection_prefect", "archive_collection_unified")
+        from . import archive_collection_unified
+        return archive_collection_unified
+    elif name == "archive_collection":
+        _deprecated_import_warning("archive_collection", "archive_collection_unified")  
+        from . import archive_collection_unified
+        return archive_collection_unified
+    elif name == "archive_collection_updated":
+        _deprecated_import_warning("archive_collection_updated", "archive_collection_unified")
+        from . import archive_collection_unified
+        return archive_collection_unified
     
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 

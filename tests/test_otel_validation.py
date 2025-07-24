@@ -8,8 +8,8 @@ from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 
-from crypto_lakehouse.core.otel_config import OpenTelemetryConfig
-from crypto_lakehouse.core.otel_metrics import CryptoLakehouseMetrics
+from crypto_lakehouse.core.legacy.otel_config import OpenTelemetryConfig
+from crypto_lakehouse.core.legacy.otel_metrics import CryptoLakehouseMetrics
 
 
 class TestOpenTelemetrySpecCompliance:

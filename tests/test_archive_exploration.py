@@ -17,7 +17,7 @@ sys.path.append('.')
 
 from src.crypto_lakehouse.core.config import WorkflowConfig
 from src.crypto_lakehouse.core.metrics import MetricsCollector
-from src.crypto_lakehouse.workflows.archive_collection_updated import ArchiveCollectionWorkflow
+from crypto_lakehouse.workflows.archive_collection_updated import ArchiveCollectionWorkflow
 
 
 async def download_data_type_sample(market: str, data_type: str, symbols: list, date: str):
