@@ -1,0 +1,148 @@
+version: '3.8'
+
+# Crypto Lakehouse Platform - Essential Services Only
+# Minimal configuration for testing and development without optional dependencies
+# Services: MinIO, PostgreSQL, Prefect Server, Prefect Worker
+
+networks:
+  crypto-lakehouse:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+  minio_data:
+
+services:
+  # =====================================================================================
+  # ESSENTIAL STORAGE - MinIO S3-Compatible Object Storage
+  # =====================================================================================
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    container_name: crypto-lakehouse-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    volumes:
+      - minio_data:/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # =====================================================================================
+  # ESSENTIAL DATABASE - PostgreSQL
+  # =====================================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: crypto-lakehouse-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =====================================================================================
+  # ESSENTIAL WORKFLOW ORCHESTRATION - Prefect Server
+  # =====================================================================================
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: crypto-lakehouse-prefect-server
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_UI_URL: http://localhost:4200/api
+      PREFECT_API_URL: http://localhost:4200/api
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect123@postgres:5432/prefect
+      PREFECT_EXPERIMENTAL_ENABLE_ARTIFACTS: true
+      PREFECT_UI_SERVE_BASE: /
+      PREFECT_LOGGING_LEVEL: INFO
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: prefect server start --host 0.0.0.0 --port 4200
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =====================================================================================
+  # ESSENTIAL WORKFLOW EXECUTION - Prefect Worker
+  # =====================================================================================
+  prefect-worker:
+    image: prefecthq/prefect:3-latest
+    container_name: crypto-lakehouse-prefect-worker
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_LOGGING_LEVEL: INFO
+      # S3/MinIO Configuration
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password123
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - ./src:/opt/prefect/src
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: prefect worker start --pool default-pool --type process
+
+  # =====================================================================================
+  # HEALTH CHECK - Essential Services Monitor
+  # =====================================================================================
+  healthcheck:
+    image: busybox:latest
+    container_name: crypto-lakehouse-healthcheck-essential
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - minio
+      - postgres
+      - prefect-server
+      - prefect-worker
+    command: |
+      sh -c "
+        echo 'Crypto Lakehouse Platform - Essential Services Health Check'
+        echo '============================================================='
+        echo ''
+        echo 'Essential Services Status:'
+        echo '- MinIO Console: http://localhost:9001 (admin/password123)'
+        echo '- Prefect UI: http://localhost:4200'
+        echo '- PostgreSQL: localhost:5432 (prefect/prefect123/prefect)'
+        echo ''
+        echo 'S3 Configuration:'
+        echo '- Endpoint: http://localhost:9000'
+        echo '- Access Key: admin'
+        echo '- Secret Key: password123'
+        echo ''
+        echo 'Essential platform ready for testing!'
+        sleep 3600
+      "

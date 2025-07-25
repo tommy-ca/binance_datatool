@@ -1,0 +1,304 @@
+version: '3.8'
+
+# Crypto Lakehouse Platform - Full Stack
+# Complete infrastructure with all essential and optional services
+# Extends essential services with optional monitoring and development tools
+
+networks:
+  crypto-lakehouse:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+  jaeger_data:
+
+services:
+  # =====================================================================================
+  # ESSENTIAL SERVICES
+  # =====================================================================================
+  
+  # ESSENTIAL STORAGE - MinIO S3-Compatible Object Storage
+  minio:
+    image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+    container_name: crypto-lakehouse-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes:
+      - minio_data:/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ESSENTIAL DATABASE - PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: crypto-lakehouse-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ESSENTIAL WORKFLOW ORCHESTRATION - Prefect Server
+  prefect-server:
+    image: prefecthq/prefect:3-latest
+    container_name: crypto-lakehouse-prefect-server
+    ports:
+      - "4200:4200"
+    environment:
+      PREFECT_UI_URL: http://localhost:4200/api
+      PREFECT_API_URL: http://localhost:4200/api
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:prefect123@postgres:5432/prefect
+      PREFECT_EXPERIMENTAL_ENABLE_ARTIFACTS: true
+      PREFECT_UI_SERVE_BASE: /
+      PREFECT_LOGGING_LEVEL: INFO
+      # OpenTelemetry Integration (optional)
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: prefect-server
+      OTEL_RESOURCE_ATTRIBUTES: service.name=prefect-server,service.version=3.0.0
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: prefect server start --host 0.0.0.0 --port 4200
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ESSENTIAL WORKFLOW EXECUTION - Prefect Worker
+  prefect-worker:
+    image: prefecthq/prefect:3-latest
+    container_name: crypto-lakehouse-prefect-worker
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_LOGGING_LEVEL: INFO
+      # S3/MinIO Configuration
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password123
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_DEFAULT_REGION: us-east-1
+      # OpenTelemetry Integration (optional)
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: prefect-worker
+      OTEL_RESOURCE_ATTRIBUTES: service.name=prefect-worker,service.version=3.0.0
+    volumes:
+      - ./src:/opt/prefect/src
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: prefect worker start --pool default-pool --type process
+    deploy:
+      replicas: 2
+
+  # =====================================================================================
+  # OPTIONAL SERVICES
+  # =====================================================================================
+
+  # OPTIONAL CACHE - Redis
+  redis:
+    image: redis:7-alpine
+    container_name: crypto-lakehouse-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --replica-read-only no
+    volumes:
+      - redis_data:/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  # OPTIONAL HIGH-PERFORMANCE S3 OPERATIONS - s5cmd Service
+  s5cmd-service:
+    build:
+      context: ../config/s5cmd-service
+      dockerfile: Dockerfile
+    container_name: crypto-lakehouse-s5cmd
+    ports:
+      - "8080:8080"
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password123
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_DEFAULT_REGION: us-east-1
+      S5CMD_NUMWORKERS: 10
+      S5CMD_RETRY_COUNT: 3
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: s5cmd-service
+      OTEL_RESOURCE_ATTRIBUTES: service.name=s5cmd-service,service.version=2.2.2
+    volumes:
+      - ../config/s5cmd:/app/config
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  # OPTIONAL OBSERVABILITY STACK
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: crypto-lakehouse-otel-collector
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+      - "13133:13133" # Health check
+    volumes:
+      - ../config/otel/otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - jaeger
+      - prometheus
+    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: crypto-lakehouse-jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Jaeger HTTP
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+    volumes:
+      - jaeger_data:/tmp
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: crypto-lakehouse-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - crypto-lakehouse
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=168h'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: crypto-lakehouse-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin  
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../config/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - optional
+      - full
+
+  # OPTIONAL DEVELOPMENT UTILITIES
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: crypto-lakehouse-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@crypto-lakehouse.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    volumes:
+      - ../config/pgadmin/servers.json:/pgadmin4/servers.json
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - optional
+      - full

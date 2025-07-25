@@ -1,0 +1,434 @@
+# Crypto Lakehouse Platform - K3s Essential Services
+# Minimal Kubernetes deployment for testing and development
+# Services: Namespace, Storage, Secrets, MinIO, PostgreSQL, Prefect
+
+---
+# Namespace Configuration
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crypto-lakehouse
+  labels:
+    name: crypto-lakehouse
+    version: "3.2.0"
+    environment: local-development
+    infrastructure: k3s-essential
+---
+# Storage Class - Local Development
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+  namespace: crypto-lakehouse
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  path: /opt/local-path-provisioner/crypto-lakehouse
+---
+# Secrets - Essential Services Credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: crypto-lakehouse-essential-secrets
+  namespace: crypto-lakehouse
+type: Opaque
+data:
+  # Base64 encoded credentials for essential services
+  minio-root-user: YWRtaW4=           # admin
+  minio-root-password: cGFzc3dvcmQxMjM=  # password123
+  postgres-user: cHJlZmVjdA==           # prefect
+  postgres-password: cHJlZmVjdDEyMw==    # prefect123
+  postgres-db: cHJlZmVjdA==             # prefect
+  s3-access-key: YWRtaW4=               # admin
+  s3-secret-key: cGFzc3dvcmQxMjM=       # password123
+---
+# Resource Quota - Essential Services
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: crypto-lakehouse-essential-quota
+  namespace: crypto-lakehouse
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "5"
+    pods: "10"
+    services: "10"
+---
+# =====================================================================================
+# MINIO - Essential Object Storage
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: minio-essential
+spec:
+  ports:
+    - port: 9000
+      name: api
+      targetPort: 9000
+      nodePort: 30900
+    - port: 9001
+      name: console
+      targetPort: 9001
+      nodePort: 30901
+  selector:
+    app: minio-essential
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: minio-essential
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio-essential
+  template:
+    metadata:
+      labels:
+        app: minio-essential
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+        args:
+        - server
+        - /data
+        - --console-address
+        - ":9001"
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: minio-root-user
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: minio-root-password
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: minio-essential-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-essential-pvc
+  namespace: crypto-lakehouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 10Gi
+---
+# =====================================================================================
+# POSTGRESQL - Essential Database
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: postgres-essential
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-essential
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: postgres-essential
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-essential
+  template:
+    metadata:
+      labels:
+        app: postgres-essential
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: postgres-db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: postgres-password
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF-8"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - prefect
+            - -d
+            - prefect
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - prefect
+            - -d
+            - prefect
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-essential-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-essential-pvc
+  namespace: crypto-lakehouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 5Gi
+---
+# =====================================================================================
+# PREFECT - Essential Workflow Orchestration
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefect-server-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-server-essential
+spec:
+  ports:
+    - port: 4200
+      targetPort: 4200
+      nodePort: 30420
+      name: api
+  selector:
+    app: prefect-server-essential
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-server-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-server-essential
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-server-essential
+  template:
+    metadata:
+      labels:
+        app: prefect-server-essential
+    spec:
+      containers:
+      - name: prefect-server
+        image: prefecthq/prefect:3-latest
+        command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
+        env:
+        - name: PREFECT_API_URL
+          value: "http://prefect-server-essential.crypto-lakehouse:4200/api"
+        - name: PREFECT_SERVER_API_HOST
+          value: "0.0.0.0"
+        - name: PREFECT_API_DATABASE_CONNECTION_URL
+          value: "postgresql+asyncpg://prefect:prefect123@postgres-essential.crypto-lakehouse:5432/prefect"
+        - name: PREFECT_EXPERIMENTAL_ENABLE_ARTIFACTS
+          value: "true"
+        - name: PREFECT_UI_SERVE_BASE
+          value: "/"
+        - name: PREFECT_LOGGING_LEVEL
+          value: "INFO"
+        ports:
+        - containerPort: 4200
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+# =====================================================================================
+# PREFECT WORKER - Essential Processing
+# =====================================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-worker-essential
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-worker-essential
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-worker-essential
+  template:
+    metadata:
+      labels:
+        app: prefect-worker-essential
+    spec:
+      containers:
+      - name: prefect-worker
+        image: prefecthq/prefect:3-latest
+        command: ["prefect", "worker", "start", "--pool", "default-pool", "--type", "process"]
+        env:
+        - name: PREFECT_API_URL
+          value: "http://prefect-server-essential.crypto-lakehouse:4200/api"
+        - name: PREFECT_LOGGING_LEVEL
+          value: "INFO"
+        # S3/MinIO Configuration
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: s3-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-essential-secrets
+              key: s3-secret-key
+        - name: AWS_ENDPOINT_URL
+          value: "http://minio-essential.crypto-lakehouse:9000"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+---
+# =====================================================================================
+# NETWORK POLICY - Essential Services Security
+# =====================================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crypto-lakehouse-essential-netpol
+  namespace: crypto-lakehouse
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse
+  - to: []  # Allow external egress for package downloads
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: UDP
+      port: 53

@@ -1,0 +1,215 @@
+version: '3.8'
+
+# Crypto Lakehouse Platform - Optional Services
+# Additional services for enhanced development, monitoring, and debugging
+# Services: Redis, s5cmd, OpenTelemetry Stack, pgAdmin
+
+networks:
+  crypto-lakehouse:
+    external: true
+
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  jaeger_data:
+
+services:
+  # =====================================================================================
+  # OPTIONAL CACHE - Redis
+  # =====================================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: crypto-lakehouse-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --replica-read-only no
+    volumes:
+      - redis_data:/data
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =====================================================================================
+  # OPTIONAL HIGH-PERFORMANCE S3 OPERATIONS - s5cmd Service
+  # =====================================================================================
+  s5cmd-service:
+    build:
+      context: ../config/s5cmd-service
+      dockerfile: Dockerfile
+    container_name: crypto-lakehouse-s5cmd
+    ports:
+      - "8080:8080"
+    environment:
+      # S3/MinIO Configuration
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password123
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_DEFAULT_REGION: us-east-1
+      S5CMD_NUMWORKERS: 10
+      S5CMD_RETRY_COUNT: 3
+      # OpenTelemetry Integration
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: s5cmd-service
+      OTEL_RESOURCE_ATTRIBUTES: service.name=s5cmd-service,service.version=2.2.2
+    volumes:
+      - ../config/s5cmd:/app/config
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - otel-collector
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =====================================================================================
+  # OPTIONAL OBSERVABILITY STACK - OpenTelemetry + Jaeger + Prometheus + Grafana  
+  # =====================================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: crypto-lakehouse-otel-collector
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+      - "13133:13133" # Health check
+    volumes:
+      - ../config/otel/otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - jaeger
+      - prometheus
+    command: ["--config=/etc/otelcol-contrib/otel-collector.yaml"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: crypto-lakehouse-jaeger
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "14268:14268" # Jaeger HTTP
+      - "6831:6831/udp"   # Jaeger UDP
+      - "6832:6832/udp"   # Jaeger UDP
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+    volumes:
+      - jaeger_data:/tmp
+    networks:
+      - crypto-lakehouse
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: crypto-lakehouse-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - crypto-lakehouse
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=168h'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: crypto-lakehouse-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin  
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../config/grafana/provisioning:/etc/grafana/provisioning
+      - ../config/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # =====================================================================================
+  # OPTIONAL DEVELOPMENT UTILITIES
+  # =====================================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: crypto-lakehouse-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@crypto-lakehouse.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    volumes:
+      - ../config/pgadmin/servers.json:/pgadmin4/servers.json
+    networks:
+      - crypto-lakehouse
+
+  # =====================================================================================
+  # OPTIONAL SERVICES HEALTH CHECK
+  # =====================================================================================
+  optional-healthcheck:
+    image: busybox:latest
+    container_name: crypto-lakehouse-optional-healthcheck
+    networks:
+      - crypto-lakehouse
+    depends_on:
+      - redis
+      - s5cmd-service
+      - otel-collector
+      - jaeger  
+      - prometheus
+      - grafana
+      - pgadmin
+    command: |
+      sh -c "
+        echo 'Crypto Lakehouse Platform - Optional Services Health Check'
+        echo '==========================================================='
+        echo ''
+        echo 'Optional Services Status:'
+        echo '- Redis Cache: http://localhost:6379'
+        echo '- s5cmd Service: http://localhost:8080'
+        echo '- Jaeger UI: http://localhost:16686'
+        echo '- Prometheus: http://localhost:9090'
+        echo '- Grafana: http://localhost:3000 (admin/admin123)'
+        echo '- pgAdmin: http://localhost:5050 (admin@crypto-lakehouse.local/admin123)'
+        echo ''
+        echo 'OpenTelemetry Endpoints:'
+        echo '- OTLP gRPC: http://localhost:4317'
+        echo '- OTLP HTTP: http://localhost:4318'
+        echo '- Collector Health: http://localhost:13133'
+        echo ''
+        echo 'Optional services stack ready!'
+        sleep 3600
+      "
