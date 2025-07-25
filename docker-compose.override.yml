@@ -1,0 +1,109 @@
+version: '3.8'
+
+# Docker Compose Override - Development Specific Configurations
+# This file provides development-specific overrides and additional services
+
+services:
+  # Development-specific MinIO configuration
+  minio:
+    volumes:
+      - minio_data:/data
+      - ./scripts/minio-setup.sh:/docker-entrypoint-initdb.d/setup.sh:ro
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+      MINIO_PROMETHEUS_URL: http://prometheus:9090
+      MINIO_PROMETHEUS_JOB_ID: minio
+
+  # Development Prefect server with debugging
+  prefect-server:
+    environment:
+      PREFECT_LOGGING_LEVEL: DEBUG
+      PREFECT_API_ENABLE_HTTP2: false
+      PREFECT_EXPERIMENTAL_ENABLE_ARTIFACTS: true
+    volumes:
+      - ./flows:/opt/prefect/flows
+      - ./config/prefect:/root/.prefect
+      - ./logs/prefect:/var/log/prefect
+
+  # Enhanced Prefect worker for development
+  prefect-worker:
+    environment:
+      PREFECT_LOGGING_LEVEL: DEBUG
+    volumes:
+      - ./src:/opt/prefect/src
+      - ./flows:/opt/prefect/flows
+      - ./config/prefect:/root/.prefect
+      - ./logs/prefect:/var/log/prefect
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      replicas: 1  # Single worker for development
+
+  # Development-specific s5cmd service
+  s5cmd-service:
+    environment:
+      LOG_LEVEL: DEBUG
+      S5CMD_NUMWORKERS: 5  # Reduced for development
+    volumes:
+      - ./config/s5cmd:/app/config
+      - ./logs/s5cmd:/var/log/s5cmd
+
+  # Development Postgres with enhanced logging
+  postgres:
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: prefect123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    command: |
+      postgres
+        -c log_statement=all
+        -c log_destination=stderr
+        -c log_min_messages=info
+        -c log_min_error_statement=info
+        -c log_min_duration_statement=1000
+        -c shared_preload_libraries=pg_stat_statements
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./logs/postgres:/var/log/postgresql
+
+  # Enhanced Grafana for development
+  grafana:
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-worldmap-panel
+      GF_LOGGING_LEVEL: debug
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./logs/grafana:/var/log/grafana
+
+  # Development Jupyter notebook server
+  jupyter:
+    image: jupyter/datascience-notebook:latest
+    container_name: crypto-lakehouse-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: "crypto-lakehouse-token"
+    volumes:
+      - ./notebooks:/home/jovyan/notebooks
+      - ./src:/home/jovyan/src
+      - ./data:/home/jovyan/data
+    networks:
+      - crypto-lakehouse
+    user: root
+    command: |
+      bash -c "
+        pip install prefect boto3 s3fs pyarrow pandas numpy matplotlib seaborn &&
+        start-notebook.sh --NotebookApp.token='crypto-lakehouse-token' --NotebookApp.password='' --ip=0.0.0.0
+      "
+
+volumes:
+  # Additional development volumes
+  notebooks_data:
