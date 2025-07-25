@@ -1,0 +1,702 @@
+# Crypto Lakehouse Platform - K3s Local Infrastructure Deployment
+# Based on K3s Local Infrastructure Specifications v3.1.0
+# Lightweight Kubernetes for Local Development
+
+---
+# Namespace Configuration
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crypto-lakehouse
+  labels:
+    name: crypto-lakehouse
+    version: "3.1.0"
+    environment: local-development
+    infrastructure: k3s-local
+---
+# Storage Class - Local Development
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+  namespace: crypto-lakehouse
+provisioner: rancher.io/local-path
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+parameters:
+  path: /opt/local-path-provisioner/crypto-lakehouse
+---
+# Secrets - Local Development Credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: crypto-lakehouse-local-secrets
+  namespace: crypto-lakehouse
+type: Opaque
+data:
+  # Base64 encoded credentials for local development
+  minio-root-user: YWRtaW4=
+  minio-root-password: cGFzc3dvcmQxMjM=
+  postgres-user: cHJlZmVjdA==
+  postgres-password: cHJlZmVjdDEyMw==
+  postgres-db: cHJlZmVjdA==
+  s3-access-key: YWRtaW4=
+  s3-secret-key: cGFzc3dvcmQxMjM=
+  prefect-api-key: ZGV2ZWxvcG1lbnQtYXBpLWtleQ==
+---
+# Resource Quota - Development Limits
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: crypto-lakehouse-local-quota
+  namespace: crypto-lakehouse
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "10"
+    pods: "20"
+    services: "15"
+---
+# =====================================================================================
+# MINIO - Local Object Storage
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-local
+  namespace: crypto-lakehouse
+  labels:
+    app: minio-local
+spec:
+  ports:
+    - port: 9000
+      name: api
+      targetPort: 9000
+      nodePort: 30900
+    - port: 9001
+      name: console
+      targetPort: 9001
+      nodePort: 30901
+  selector:
+    app: minio-local
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-local
+  namespace: crypto-lakehouse
+  labels:
+    app: minio-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio-local
+  template:
+    metadata:
+      labels:
+        app: minio-local
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: "/minio/v2/metrics/cluster"
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:RELEASE.2024-07-16T23-46-41Z
+        args:
+        - server
+        - /data
+        - --console-address
+        - ":9001"
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: minio-root-user
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: minio-root-password
+        - name: MINIO_PROMETHEUS_AUTH_TYPE
+          value: "public"
+        - name: MINIO_PROMETHEUS_URL
+          value: "http://prometheus-local.crypto-lakehouse-monitoring:9090"
+        ports:
+        - containerPort: 9000
+          name: api
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: minio-local-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-local-pvc
+  namespace: crypto-lakehouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 20Gi
+---
+# =====================================================================================
+# POSTGRESQL - Local Database
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-local
+  namespace: crypto-lakehouse
+  labels:
+    app: postgres-local
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres-local
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-local
+  namespace: crypto-lakehouse
+  labels:
+    app: postgres-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-local
+  template:
+    metadata:
+      labels:
+        app: postgres-local
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: postgres-db
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: postgres-user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: postgres-password
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF-8"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - prefect
+            - -d
+            - prefect
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - prefect
+            - -d
+            - prefect
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-local-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-local-pvc
+  namespace: crypto-lakehouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 10Gi
+---
+# =====================================================================================
+# REDIS - Local Cache
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-local
+  namespace: crypto-lakehouse
+  labels:
+    app: redis-local
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+  selector:
+    app: redis-local
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-local
+  namespace: crypto-lakehouse
+  labels:
+    app: redis-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-local
+  template:
+    metadata:
+      labels:
+        app: redis-local
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command: ["redis-server", "--appendonly", "yes"]
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+---
+# =====================================================================================
+# PREFECT - Workflow Orchestration (Local)
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefect-server-local
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-server-local
+spec:
+  ports:
+    - port: 4200
+      targetPort: 4200
+      nodePort: 30420
+      name: api
+  selector:
+    app: prefect-server-local
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-server-local
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-server-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-server-local
+  template:
+    metadata:
+      labels:
+        app: prefect-server-local
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "4200"
+        prometheus.io/path: "/api/admin/metrics"
+    spec:
+      containers:
+      - name: prefect-server
+        image: prefecthq/prefect:3-latest
+        command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
+        env:
+        - name: PREFECT_API_URL
+          value: "http://prefect-server-local.crypto-lakehouse:4200/api"
+        - name: PREFECT_SERVER_API_HOST
+          value: "0.0.0.0"
+        - name: PREFECT_API_DATABASE_CONNECTION_URL
+          value: "postgresql+asyncpg://prefect:prefect123@postgres-local.crypto-lakehouse:5432/prefect"
+        - name: PREFECT_EXPERIMENTAL_ENABLE_ARTIFACTS
+          value: "true"
+        - name: PREFECT_UI_SERVE_BASE
+          value: "/"
+        - name: PREFECT_LOGGING_LEVEL
+          value: "INFO"
+        # OpenTelemetry Integration
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector-local.crypto-lakehouse-monitoring:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "prefect-server-local"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=prefect-server-local,service.version=3.0.0,environment=local-development"
+        ports:
+        - containerPort: 4200
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 4200
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+---
+# =====================================================================================
+# PREFECT WORKER - Local Processing
+# =====================================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-worker-local
+  namespace: crypto-lakehouse
+  labels:
+    app: prefect-worker-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-worker-local
+  template:
+    metadata:
+      labels:
+        app: prefect-worker-local
+    spec:
+      containers:
+      - name: prefect-worker
+        image: prefecthq/prefect:3-latest
+        command: ["prefect", "worker", "start", "--pool", "default-pool", "--type", "process"]
+        env:
+        - name: PREFECT_API_URL
+          value: "http://prefect-server-local.crypto-lakehouse:4200/api"
+        - name: PREFECT_LOGGING_LEVEL
+          value: "INFO"
+        # S3/MinIO Configuration
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: s3-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: s3-secret-key
+        - name: AWS_ENDPOINT_URL
+          value: "http://minio-local.crypto-lakehouse:9000"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        # OpenTelemetry Integration
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector-local.crypto-lakehouse-monitoring:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "prefect-worker-local"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=prefect-worker-local,service.version=3.0.0,environment=local-development"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+---
+# =====================================================================================
+# s5cmd SERVICE - High-Performance S3 Operations (Local)
+# =====================================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: s5cmd-service-local
+  namespace: crypto-lakehouse
+  labels:
+    app: s5cmd-service-local
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30808
+      name: api
+  selector:
+    app: s5cmd-service-local
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s5cmd-service-local
+  namespace: crypto-lakehouse
+  labels:
+    app: s5cmd-service-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s5cmd-service-local
+  template:
+    metadata:
+      labels:
+        app: s5cmd-service-local
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: s5cmd-service
+        image: crypto-lakehouse/s5cmd-service:latest
+        env:
+        # S3/MinIO Configuration
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: s3-access-key
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: crypto-lakehouse-local-secrets
+              key: s3-secret-key
+        - name: AWS_ENDPOINT_URL
+          value: "http://minio-local.crypto-lakehouse:9000"
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        - name: S5CMD_NUMWORKERS
+          value: "5"  # Reduced for local development
+        - name: S5CMD_RETRY_COUNT
+          value: "3"
+        - name: LOG_LEVEL
+          value: "INFO"
+        # OpenTelemetry Integration
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector-local.crypto-lakehouse-monitoring:4317"
+        - name: OTEL_SERVICE_NAME
+          value: "s5cmd-service-local"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=s5cmd-service-local,service.version=2.2.2,environment=local-development"
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+---
+# =====================================================================================
+# HORIZONTAL POD AUTOSCALER - Development Scaling
+# =====================================================================================
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: prefect-worker-local-hpa
+  namespace: crypto-lakehouse
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: prefect-worker-local
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+# =====================================================================================
+# NETWORK POLICY - Local Development Security
+# =====================================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crypto-lakehouse-local-netpol
+  namespace: crypto-lakehouse
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse-monitoring
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse
+    - namespaceSelector:
+        matchLabels:
+          name: crypto-lakehouse-monitoring
+  - to: []  # Allow external egress for package downloads and S3 access
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: UDP
+      port: 53
+---
+# =====================================================================================
+# INGRESS - Local Development Access
+# =====================================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crypto-lakehouse-local-ingress
+  namespace: crypto-lakehouse
+  annotations:
+    kubernetes.io/ingress.class: "traefik"
+    traefik.ingress.kubernetes.io/router.rule: "Host(`crypto-lakehouse.local`)"
+spec:
+  rules:
+  - host: crypto-lakehouse.local
+    http:
+      paths:
+      - path: /prefect
+        pathType: Prefix
+        backend:
+          service:
+            name: prefect-server-local
+            port:
+              number: 4200
+      - path: /minio
+        pathType: Prefix
+        backend:
+          service:
+            name: minio-local
+            port:
+              number: 9001
+      - path: /s5cmd
+        pathType: Prefix
+        backend:
+          service:
+            name: s5cmd-service-local
+            port:
+              number: 8080
