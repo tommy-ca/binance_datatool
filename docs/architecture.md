@@ -81,3 +81,49 @@ arguments, constructs a workflow, and presents the result. The workflow orchestr
 business logic and delegates S3 communication to the archive client. Per-command data
 flow diagrams are documented alongside each command in the
 [CLI reference](reference/cli/archive.md).
+
+## Extension: Multi-Source & DataOps (Overview)
+
+This project started as a focused toolkit for the Binance public archive. The
+design intentionally separates concerns across four layers (CLI, Workflow,
+Archive Client, Common). That separation makes it straightforward to generalize
+the project into a multi-source data pipeline with explicit DataOps and MLOps
+concerns while preserving the existing commands and workflows.
+
+The generalized architecture adds two explicit responsibilities:
+
+- A Source Adapter layer that encapsulates source-specific listing and
+  download behaviour (S3 XML listing, REST APIs, third-party SDKs).
+- A Storage / DataOps layer that unifies local archive storage and
+  downstream partitioning, contract validation, lineage, and metrics.
+
+High-level six-layer diagram (source → sink):
+
+```
+CLI / API Layer
+    ⇩
+Orchestration / Pipeline Layer (workflows / DAGs)
+    ⇩
+DataOps / Transform Layer (validation, transforms, contracts)
+    ⇩
+Source Adapter Layer (binance, coinbase, bybit, etc.)
+    ⇩
+Storage Connector Layer (S3 / local / delta / parquet)
+    ⇩
+Foundation Layer (shared enums, types, filters, progress)
+```
+
+This document and the companion specs describe how to evolve current
+workflows into the generalized pattern while keeping existing behaviour and the
+CLI interface stable for consumers.
+
+### Why this generalization
+
+- Preserve the current, well-tested behaviours (list-symbols, list-files,
+  download, verify) while enabling additional sources.
+- Enable contract-driven validation and lineage for DataOps and MLOps.
+- Allow the repository to expose small, testable adapters so agents and
+  subagents can be written and tested independently.
+
+See docs/specs-driven-development.md for the full requirements and
+spec-driven development flows.

@@ -37,6 +37,58 @@ tests/
 - **`--run-integration`** — a custom pytest option that unlocks the `integration`
   marker. The default run skips every integration test.
 
+## Test-Driven Development (TDD) & Specs-Driven Development Guidance
+
+This project follows a specs-driven development workflow. The goal is to keep
+features small, well-specified, and covered by tests before implementation.
+
+Workflows
+- Every new workflow, adapter, or public behaviour MUST have:
+  1. A short human-readable spec in `docs/specs-driven-development.md` describing
+     inputs, outputs, success criteria, error modes, and side-effects.
+  2. Unit tests that assert the behaviour at the workflow boundary using
+     injected fakes (e.g. `FakeArchiveClient`).
+  3. One or more integration tests (marked `@pytest.mark.integration`) that
+     exercise I/O against a real endpoint or a recorded fixture.
+
+Test templates
+- Use the shared `FakeArchiveClient` fixture in `tests/conftest.py` for all
+  adapter-driven workflow tests. If you need more control, extend the fake and
+  add a focused fixture.
+
+- Example unit test pattern for a new workflow:
+
+```py
+def test_my_workflow_happy_path(fake_archive_client, tmp_path):
+    # Arrange: configure fake responses and inject dependencies
+    fake_archive_client.configure(symbols=[...], files_by_symbol={...})
+    workflow = MyWorkflow(client=fake_archive_client, archive_home=tmp_path)
+
+    # Act
+    result = asyncio.run(workflow.run())
+
+    # Assert
+    assert result.<expected> == <value>
+```
+
+Specs-driven PRs
+- Every feature PR should include a one-paragraph spec summary and a link to
+  (or an excerpt from) `docs/specs-driven-development.md` describing the change.
+- Tests must be green locally before requesting review. Prefer small, focussed
+  PRs that add one behaviour at a time.
+
+Automation
+- The default CI runs unit tests and linting. Integration tests are gated
+  behind an environment variable or an explicit flag to avoid accidental
+  external requests.
+
+Subagents & Skills Guidance
+- For agent-style automation, create small skill modules under `skills/` that
+  call stable CLI commands or the public Python API. Each skill must have a
+  spec describing the expected I/O and an accompanying unit test that mocks
+  external side-effects.
+
+
 ---
 
 See also: [Extending the Project](../extending.md) | [Architecture](../architecture.md)
