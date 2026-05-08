@@ -129,17 +129,18 @@ This index provides a complete picture of the binance-datatool project after com
 | Component | Status | File | Tests | Notes |
 |-----------|--------|------|-------|-------|
 | **DataContract** | ✅ Complete | datacontract.py | 24 passing | Schema validation + validators |
-| **DataContractRegistry** | ✅ Complete | datacontract.py | 24 passing | Lookup by (source, market, type) |
 | **LineageTracker** | ✅ Complete | lineage.py | 24 passing | Data provenance tracking |
 | **BinanceAdapter** | ✅ Complete | adapter/binance.py | 35 passing | Wraps ArchiveClient |
-| **OKX/Bybit Adapter** | 🔄 Via CCXT | exchange/ccxt_rest.py | — | CCXTExchangeClient(trade_type="okx") |
 | **SourceRegistry** | ✅ Complete | source_registry.py | 2 passing | Adapter discovery/registration |
-| **Exchange Clients** | ✅ Complete | exchange/*.py | 18 passing | SDK-backed Spot/UM/CM REST + WebSocket |
-| **Silver Layer** | ✅ Complete | workflow/sink.py | — | Bronze→Silver transform + Parquet/DuckDB |
-| **Gap Fill + Health** | ✅ Complete | workflow/gap_fill.py, workflow/health_check.py | — | Auto-detect, lineage, health monitoring |
+| **Exchange Clients** | ✅ Complete | exchange/*.py | 18 passing | SDK-backed Spot/UM/CM REST + WS |
+| **Gap Fill + Health** | ✅ Complete | workflow/gap_fill.py, workflow/health_check.py | — | Auto-detect gaps, lineage, health monitor |
+| **Sink (Silver Layer)** | ✅ Complete | workflow/sink.py | — | Bronze→Silver transform to Parquet/DuckLake |
+| **DuckLake Catalog** | ✅ Complete | workflow/catalog.py | — | DuckLake v1.0 native tables + partitioning |
+| **Iceberg Catalog** | ✅ Complete | workflow/catalog.py | — | PyIceberg file-system catalog for multi-engine |
+| **Metadata Tables** | ✅ Complete | workflow/metadata.py | — | venues.parquet + symbols.parquet |
+| **OKX/Bybit** | 🔄 Via CCXT | exchange/ccxt_rest.py | — | CCXTExchangeClient(exchange_id) |
 | **Skills (5x)** | ⏳ Planned | — | — | See skills-subagents.md |
-| **MetricsCollector** | ❌ Not Started | — | — | Removed from scope |
-| **CLI --source flag** | ⏳ Planned | cli/archive.py | — | Phase 2 remaining work |
+| **MetricsCollector** | ❌ Removed | — | — | Scop cut; health check covers quality |
 
 ---
 
@@ -154,39 +155,28 @@ This index provides a complete picture of the binance-datatool project after com
 - [x] Specs-driven development guide (specs-driven-development.md)
 - [x] Implementation guide (implementation-guide.md)
 
-### Phase 2: Adapter Pattern & Multi-Source (🔄 IN PROGRESS)
-- [ ] LineageTracker class + tests
-- [ ] BinanceAdapter implementation + tests
-- [ ] OKX/Bybit via CCXT + tests
-- [ ] SourceRegistry CLI integration
-- [ ] Backward compatibility verification
+### Phase 6: Exchange SDK Migration (✅ COMPLETE)
+- [x] Migrated REST/WS clients to official Binance SDK
+- [x] Extended ExchangeClient protocol (aggTrades, fundingRate)
+- [x] Backward compatibility via BinanceRestClient/BinanceWsClient aliases
+- [x] Auto gap detection + health monitoring workflows
 
-**Estimated**: 1-2 weeks (depends on developer availability)
+### Phase 7: Silver Layer & DuckLake Catalog (✅ COMPLETE)
+- [x] Polars-based Bronze→Silver transform (kline, trades, fundingRate schemas)
+- [x] Silver schemas following Databento DBN (ts_event, ts_recv) + tardis.dev
+- [x] DuckLake v1.0 native tables with partitioning (symbol, interval, day)
+- [x] Iceberg catalog for multi-engine access (pyiceberg compatible)
+- [x] Venue/symbol metadata tables (venues.parquet, symbols.parquet)
+- [x] Self-describing catalog paths: exchange/binance-spot/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet
+- [x] Analytics views: daily_ohlcv, latest_klines, stale_symbols
+- [x] CLI: gap-fill, health, sink, refresh-metadata commands
 
-### Phase 3: Skills Implementation (⏳ NEXT)
-- [ ] discover-symbols skill + tests (unit + integration)
-- [ ] list-files skill + tests
-- [ ] download-partition skill + tests
-- [ ] verify-partition skill + tests
-- [ ] validate-contract skill + tests
-
-**Estimated**: 2-3 weeks
-
-### Phase 4: Observability & Metrics (⏳ FUTURE)
-- [ ] MetricsCollector class
-- [ ] Emit operation counts, durations, throughput
-- [ ] Optional: Prometheus endpoints
-
-**Estimated**: 1 week
-
-### Phase 5: Documentation & DevEx (⏳ FUTURE)
-- [ ] Add Mermaid diagrams to docs
-- [ ] Update AGENTS.md with development guidance
-- [ ] Create contributor onboarding guide
-
-**Estimated**: 1 week
-
----
+### Phase 8: Planned Future Work (⏳)
+- [ ] Skills/subagents implementation (5 core skills)
+- [ ] OKX/Bybit via CCXT full integration
+- [ ] CLI `--source` flag for SourceRegistry
+- [ ] Gap-fill → Silver auto-pipeline
+- [ ] Mermaid/add diagrams for documentation
 
 ## 🧪 Testing Strategy
 
@@ -400,57 +390,38 @@ If unclear on:
 
 ## 📌 Project TODO
 
-### Immediate (Next Sprint)
+### Complete (Phase 6-7)
 
-- [ ] **Phase 2, Step 1**: Implement LineageTracker (lineage.py + test_lineage.py)
-  - [ ] Record discovery, download, verification, validation
-  - [ ] Query and serialize
-  - [ ] 10+ unit tests
-  - Estimated: 3-4 hours
-
-- [ ] **Phase 2, Step 2**: Implement BinanceAdapter (adapter/binance.py + test_binance_adapter.py)
-  - [ ] Wrap ArchiveClient
-  - [ ] Implement protocol methods
-  - [ ] 10+ unit tests + 5+ integration tests
-  - Estimated: 4-5 hours
-
-### Short Term (Phase 6 SDK Migration Complete)
-
-- [x] Migrated exchange clients to official Binance SDK (`binance-sdk-spot`, `binance-sdk-derivatives-trading-usds-futures`, `binance-sdk-derivatives-trading-coin-futures`)
-- [x] Archive client (`archive/` module) kept intact (aiohttp-based S3 access)
+- [x] Exchange SDK migration (official binance-sdk-spot, binance-sdk-derivatives-*)
+- [x] Silver layer: Bronze→Silver transform + Parquet/DuckLake
+- [x] DuckLake v1.0: native tables with ACID, snapshots, partitioning
+- [x] Auto gap detection + health check + lineage tracking
+- [x] Venue/symbol metadata (venues.parquet, symbols.parquet)
+- [x] CLI: gap-fill, health, sink, refresh-metadata
 - [x] Tests: 249 passing, 9 skipped
 
 ### Next Steps
 
-- [ ] Phase 2, Step 3: OKX/Bybit via CCXT skeleton
-- [ ] Phase 2, Step 4: Adapter integration tests
-- [ ] Phase 2, Step 5: CLI integration with SourceRegistry
-
-### Medium Term (Phase 3)
-
-- [ ] Implement 5 core skills (discover-symbols, list-files, download-partition, verify-partition, validate-contract)
-- [ ] Write comprehensive skill tests (unit + integration)
-
-### Long Term (Phase 4+)
-
-- [ ] MetricsCollector for observability
-- [ ] Mermaid diagrams for documentation
-- [ ] Contributor onboarding guide
+- [ ] Skills/subagents implementation (5 core skills)
+- [ ] OKX/Bybit via CCXT full integration
+- [ ] CLI `--source` flag for SourceRegistry
+- [ ] Gap-fill → Silver auto-pipeline (detect → fetch → sink)
 
 ---
 
 ## ✨ Summary
 
-**Status**: Foundation and specifications complete. Ready to implement Phase 2 (Adapter Pattern & Multi-Source).
+**Status**: Bronze→Silver→DuckLake pipeline complete. Ready for skills/subagents and advanced DataOps workflows.
 
 **Impact**: This work enables:
-- Multi-source data pipeline (Binance S3 → OKX/Bybit via CCXT)
-- Contract-driven validation and lineage
-- Agent-driven workflows with formal skill APIs
-- Scalable, maintainable architecture
-- DataOps and MLOps readiness
+- End-to-end data pipeline: Archive → Bronze → Silver → DuckLake/Iceberg
+- Official Binance SDK integration for REST/WS market data
+- DuckLake v1.0 lakehouse with ACID transactions, snapshots, time-travel
+- DataOps: auto gap detection, health monitoring, lineage tracking
+- Multi-engine access: Polars, DuckDB, Iceberg-compatible readers
+- Agent-driven workflows with formal CLI commands
 
-**Next Step**: Start Phase 2, Step 1 (LineageTracker implementation).
+**Next Step**: Skills/subagents implementation (5 core skills).
 
 ---
 
