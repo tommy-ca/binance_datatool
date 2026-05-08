@@ -799,7 +799,10 @@ DuckDB (local analytics) ─ OR ─ Iceberg (catalog-driven lakehouse)
 5. ⏳ Iceberg catalog integration (pyiceberg, planned)
 
 **Done**: `SinkWorkflow` in `workflow/sink.py`, `binance-datatool sink` CLI command.
-**Next**: Iceberg catalog for multi-engine access.
+**Silver schema design**: Follows Databento DBN (`ts_event`, `price`, `size`), tardis.dev
+  conventions, and Binance archive naming. See `docs/silver-layer-spec.md`.
+**Iceberg-style partitioning**: `{catalog}/{trade_type}/{data_type}/silver_{data_type}/date={YYYY-MM-DD}/{file}.parquet`.
+**Next**: Iceberg catalog (pyiceberg) for multi-engine access.
 
 ---
 

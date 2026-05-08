@@ -135,6 +135,8 @@ This index provides a complete picture of the binance-datatool project after com
 | **OKX/Bybit Adapter** | 🔄 Via CCXT | exchange/ccxt_rest.py | — | CCXTExchangeClient(trade_type="okx") |
 | **SourceRegistry** | ✅ Complete | source_registry.py | 2 passing | Adapter discovery/registration |
 | **Exchange Clients** | ✅ Complete | exchange/*.py | 18 passing | SDK-backed Spot/UM/CM REST + WebSocket |
+| **Silver Layer** | ✅ Complete | workflow/sink.py | — | Bronze→Silver transform + Parquet/DuckDB |
+| **Gap Fill + Health** | ✅ Complete | workflow/gap_fill.py, workflow/health_check.py | — | Auto-detect, lineage, health monitoring |
 | **Skills (5x)** | ⏳ Planned | — | — | See skills-subagents.md |
 | **MetricsCollector** | ❌ Not Started | — | — | Removed from scope |
 | **CLI --source flag** | ⏳ Planned | cli/archive.py | — | Phase 2 remaining work |

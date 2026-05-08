@@ -1,12 +1,14 @@
-"""Transform and load archive data to Parquet/DuckDB/Iceberg.
+"""Transform archive data to Silver layer (Parquet/DuckDB/Iceberg).
 
-Reads raw archive data (ZIP CSVs and filled CSVs), normalizes schemas,
-writes partitioned Parquet files, and loads into DuckDB for analytics.
+Reads Bronze data (archive ZIP CSVs, filled CSVs), normalizes to Silver
+schemas following Databento DBN and tardis.dev conventions, writes
+partitioned Parquet, and loads into DuckDB/Iceberg.
 """
 
 from __future__ import annotations
 
 import csv
+import time
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +24,53 @@ if TYPE_CHECKING:
 
 _DEFAULT_CATALOG_PATH = "data/lake"
 
+# Silver klines columns (normalized, Databento DBN + tardis.dev naming)
+_SILVER_KLINE_COLS = [
+    "ts_event",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "quote_volume",
+    "trade_count",
+    "taker_buy_volume",
+    "taker_buy_quote_volume",
+]
+
+_BRONZE_TO_SILVER_KLINE = {
+    "open_time": "ts_event",
+    "count": "trade_count",
+}
+
+_SILVER_META_COLS = [
+    "source",
+    "trade_type",
+    "symbol",
+    "interval",
+    "data_type",
+    "ingested_at",
+]
+
+_FULL_SILVER_KLINE_SCHEMA = {
+    "ts_event": pl.Int64,
+    "open": pl.Float64,
+    "high": pl.Float64,
+    "low": pl.Float64,
+    "close": pl.Float64,
+    "volume": pl.Float64,
+    "quote_volume": pl.Float64,
+    "trade_count": pl.Int64,
+    "taker_buy_volume": pl.Float64,
+    "taker_buy_quote_volume": pl.Float64,
+    "source": pl.Utf8,
+    "trade_type": pl.Utf8,
+    "symbol": pl.Utf8,
+    "interval": pl.Utf8,
+    "data_type": pl.Utf8,
+    "ingested_at": pl.Int64,
+}
+
 
 @dataclass
 class SinkStats:
@@ -33,58 +82,14 @@ class SinkStats:
     errors: list[str] = field(default_factory=list)
 
 
-_SCHEMA_KLINE = {
-    "open_time": pl.Int64,
-    "open": pl.Float64,
-    "high": pl.Float64,
-    "low": pl.Float64,
-    "close": pl.Float64,
-    "volume": pl.Float64,
-    "close_time": pl.Int64,
-    "quote_volume": pl.Float64,
-    "count": pl.Int64,
-    "taker_buy_volume": pl.Float64,
-    "taker_buy_quote_volume": pl.Float64,
-    "ignore": pl.Utf8,
-}
-
-_SCHEMA_AGGR_TRADES = {
-    "agg_trade_id": pl.Int64,
-    "price": pl.Float64,
-    "quantity": pl.Float64,
-    "first_trade_id": pl.Int64,
-    "last_trade_id": pl.Int64,
-    "transact_time": pl.Int64,
-    "is_buyer_maker": pl.Int8,
-}
-
-_SCHEMA_FUNDING_RATE = {
-    "symbol": pl.Utf8,
-    "funding_time": pl.Int64,
-    "funding_rate": pl.Float64,
-    "mark_price": pl.Float64,
-}
-
-
-def _schema_for(data_type: str) -> dict[str, pl.DataType]:
-    if data_type == "klines":
-        return dict(_SCHEMA_KLINE)
-    if data_type == "aggTrades":
-        return dict(_SCHEMA_AGGR_TRADES)
-    if data_type == "fundingRate":
-        return dict(_SCHEMA_FUNDING_RATE)
-    msg = f"Unknown data type: {data_type}"
-    raise ValueError(msg)
-
-
-def _scan_files(
+def _scan_bronze_files(
     archive_home: Path,
     trade_type: TradeType,
     data_type: str,
     symbols: Sequence[str],
     interval: str | None = None,
 ) -> list[Path]:
-    """Scan archive for all CSV files (both ZIP entries and filled CSVs)."""
+    """Scan Bronze archive for CSV/ZIP files."""
     files: list[Path] = []
     for symbol in symbols:
         base = archive_home / "data" / trade_type.s3_path / "daily" / data_type / symbol
@@ -103,12 +108,11 @@ def _scan_files(
 
 
 def _parse_csv_line(line: str) -> list[str]:
-    """Parse a single CSV line, handling quoted fields."""
     return next(csv.reader([line]))
 
 
 def _read_zip_csv(path: Path) -> pl.DataFrame:
-    """Read CSV content from a Binance archive ZIP file."""
+    """Read CSV from a Binance archive ZIP file."""
     with zipfile.ZipFile(path) as z:
         csv_files = [n for n in z.namelist() if n.endswith(".csv")]
         if not csv_files:
@@ -134,34 +138,116 @@ def _read_filled_csv(path: Path) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=header, orient="row")
 
 
-def _cast_schema(df: pl.DataFrame, schema: dict[str, pl.DataType]) -> pl.DataFrame:
-    """Cast DataFrame columns to the target schema types."""
+def _cast_columns(df: pl.DataFrame, schema: dict[str, pl.DataType]) -> pl.DataFrame:
+    """Cast DataFrame columns to match target schema types."""
     casts = {}
     for col, dtype in schema.items():
         if col in df.columns:
-            try:
-                casts[col] = pl.col(col).cast(dtype)
-            except Exception:
-                casts[col] = pl.col(col).cast(pl.Utf8).cast(dtype)
-    return df.with_columns(**casts)
+            casts[col] = pl.col(col).cast(dtype, strict=False)
+    if casts:
+        df = df.with_columns(**casts)
+    return df
 
 
-def _add_metadata(
+def _rename_to_silver(df: pl.DataFrame, mapping: dict[str, str]) -> pl.DataFrame:
+    """Rename Bronze columns to Silver naming."""
+    for old, new in mapping.items():
+        if old in df.columns:
+            df = df.rename({old: new})
+    return df
+
+
+def _add_silver_metadata(
     df: pl.DataFrame,
     trade_type: str,
     data_type: str,
     symbol: str,
+    interval: str | None,
+    source: str,
 ) -> pl.DataFrame:
-    """Add source metadata columns."""
+    """Add Silver metadata columns."""
+    now_ms = int(time.time() * 1000)
     return df.with_columns(
+        pl.lit(source).alias("source"),
         pl.lit(trade_type).alias("trade_type"),
-        pl.lit(data_type).alias("data_type"),
         pl.lit(symbol).alias("symbol"),
+        pl.lit(interval or "").alias("interval"),
+        pl.lit(data_type).alias("data_type"),
+        pl.lit(now_ms).alias("ingested_at"),
     )
 
 
+def _bronze_kline_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
+    """Transform Bronze klines CSV to Silver schema."""
+    df = _rename_to_silver(df, _BRONZE_TO_SILVER_KLINE)
+    # Keep only Silver columns that exist in data
+    keep = [c for c in _SILVER_KLINE_COLS if c in df.columns]
+    df = df.select(keep)
+    df = _cast_columns(df, _FULL_SILVER_KLINE_SCHEMA)
+    return df
+
+
+def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
+    """Transform Bronze aggTrades CSV to Silver trades schema."""
+    rename_map = {
+        "agg_trade_id": "trade_id",
+        "price": "price",
+        "quantity": "size",
+        "transact_time": "ts_event",
+    }
+    df = _rename_to_silver(df, rename_map)
+    keep = [
+        c for c in ["ts_event", "price", "size", "trade_id", "is_buyer_maker"] if c in df.columns
+    ]
+    df = df.select(keep)
+    return df.with_columns(
+        pl.lit(None, pl.Utf8).alias("side"),
+        pl.lit(None, pl.Int64).alias("agg_trade_id"),
+    )
+
+
+def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
+    """Transform Bronze fundingRate CSV to Silver schema."""
+    rename_map = {"funding_time": "ts_event"}
+    df = _rename_to_silver(df, rename_map)
+    keep = [c for c in ["ts_event", "funding_rate", "mark_price"] if c in df.columns]
+    df = df.select(keep)
+    df = _cast_columns(
+        df,
+        {
+            "ts_event": pl.Int64,
+            "funding_rate": pl.Float64,
+            "mark_price": pl.Float64,
+        },
+    )
+    return df
+
+
+def _bronze_to_silver(
+    df: pl.DataFrame,
+    data_type: str,
+    source: str,
+) -> pl.DataFrame:
+    """Dispatch Bronze→Silver transform by data type."""
+    if data_type == "klines":
+        return _bronze_kline_to_silver(df, source)
+    if data_type in ("aggTrades", "trades"):
+        return _bronze_agg_trades_to_silver(df, source)
+    if data_type == "fundingRate":
+        return _bronze_funding_rate_to_silver(df, source)
+    msg = f"Unknown data type: {data_type}"
+    raise ValueError(msg)
+
+
+def _parse_symbol_from_path(path: Path, known_symbols: Sequence[str]) -> str | None:
+    for sym in known_symbols:
+        if sym in path.name or sym in str(path):
+            return sym
+    return None
+
+
 class SinkWorkflow:
-    """Transform archive data to Parquet and load into DuckDB/Iceberg."""
+    """Transform Bronze archive data to Silver layer (Parquet/DuckDB)."""
 
     def __init__(
         self,
@@ -181,15 +267,14 @@ class SinkWorkflow:
         interval: str | None = None,
         target: Literal["parquet", "duckdb", "all"] = "all",
     ) -> SinkStats:
-        """Transform archive data for given symbols and load to target."""
+        """Transform Bronze archive data to Silver layer."""
         stats = SinkStats()
-        schema = _schema_for(data_type.value)
         data_type_str = data_type.value
         trade_type_str = trade_type.value
 
-        files = _scan_files(self._archive_home, trade_type, data_type_str, symbols, interval)
+        files = _scan_bronze_files(self._archive_home, trade_type, data_type_str, symbols, interval)
         if not files:
-            logger.warning("No data files found for {}/{}", trade_type_str, data_type_str)
+            logger.warning("No Bronze files found for {}/{}", trade_type_str, data_type_str)
             return stats
 
         seen_symbols: set[str] = set()
@@ -197,8 +282,8 @@ class SinkWorkflow:
 
         for path in files:
             try:
+                source = "api_filled" if "_filled" in str(path.parent) else "archive"
                 df = _read_zip_csv(path) if path.suffix == ".zip" else _read_filled_csv(path)
-
                 if df.is_empty():
                     continue
 
@@ -207,19 +292,21 @@ class SinkWorkflow:
                     continue
 
                 seen_symbols.add(symbol)
-                df = _cast_schema(df, schema)
-                df = _add_metadata(df, trade_type_str, data_type_str, symbol)
-                all_dfs.append(df)
-                stats.row_count += len(df)
+                silver_df = _bronze_to_silver(df, data_type_str, source)
+                silver_df = _add_silver_metadata(
+                    silver_df, trade_type_str, data_type_str, symbol, interval, source
+                )
+                all_dfs.append(silver_df)
+                stats.row_count += len(silver_df)
 
             except Exception as e:
-                logger.error("Failed to read {}: {}", path, e)
+                logger.error("Failed to transform {}: {}", path, e)
                 stats.errors.append(f"{path.name}: {e}")
 
         if not all_dfs:
             return stats
 
-        combined = pl.concat(all_dfs)
+        combined = pl.concat(all_dfs, how="diagonal")
 
         if target in ("parquet", "all"):
             stats.parquet_files = self._write_parquet(combined, trade_type_str, data_type_str)
@@ -236,51 +323,48 @@ class SinkWorkflow:
         trade_type: str,
         data_type: str,
     ) -> int:
-        """Write DataFrame to partitioned Parquet files."""
+        """Write Silver DataFrame to partitioned Parquet."""
+        # Iceberg-style path: {catalog}/{namespace}/{table}/date=N/{file}.parquet
         base = self._catalog_path / trade_type / data_type
         base.mkdir(parents=True, exist_ok=True)
 
-        # Determine partition column
-        if "open_time" in df.columns:
-            df = df.with_columns(pl.from_epoch(pl.col("open_time") // 1000).alias("_date"))
-            partition_col = pl.col("_date").dt.strftime("%Y-%m-%d").alias("date")
-            df = df.with_columns(partition_col)
-        elif "transact_time" in df.columns:
-            df = df.with_columns(pl.from_epoch(pl.col("transact_time") // 1000).alias("_date"))
-            partition_col = pl.col("_date").dt.strftime("%Y-%m-%d").alias("date")
-            df = df.with_columns(partition_col)
+        # Extract date from ts_event for partitioning
+        ts_col = "ts_event" if "ts_event" in df.columns else None
+        if ts_col:
+            df = df.with_columns(
+                pl.from_epoch(pl.col(ts_col) // 1000).dt.strftime("%Y-%m-%d").alias("date")
+            )
         else:
             df = df.with_columns(pl.lit("unknown").alias("date"))
 
         file_count = 0
         for date_val, group in df.group_by("date", maintain_order=True):
-            out_path = base / date_val[0] / f"{trade_type}_{data_type}.parquet"
+            table_name = f"silver_{data_type}"
+            out_path = (
+                base / table_name / f"date={date_val[0]}" / f"{trade_type}_{data_type}.parquet"
+            )
             out_path.parent.mkdir(parents=True, exist_ok=True)
-            group.drop("_date").write_parquet(out_path)
+            group.drop(["date"]).write_parquet(out_path)
             file_count += 1
 
-        logger.info("Wrote {} parquet files to {}", file_count, base)
+        logger.info("Silver: wrote {} parquet files to {}", file_count, base)
         return file_count
 
     def _load_duckdb(self, df: pl.DataFrame, trade_type: str, data_type: str) -> None:
-        """Load DataFrame into DuckDB."""
-        import duckdb
+        """Load Silver DataFrame into DuckDB."""
+        try:
+            import duckdb
+        except ImportError:
+            logger.warning("DuckDB not available; skipping load")
+            return
 
-        table_name = f"{trade_type}_{data_type}".replace("-", "_")
+        table_name = f"silver_{trade_type}_{data_type}".replace("-", "_")
         db_path = str(self._duckdb_path) if self._duckdb_path else ":memory:"
 
         con = duckdb.connect(db_path)
         try:
             con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
             row_count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-            logger.info("Loaded {} rows into DuckDB table {}", row_count, table_name)
+            logger.info("Silver: loaded {} rows into DuckDB table {}", row_count, table_name)
         finally:
             con.close()
-
-
-def _parse_symbol_from_path(path: Path, known_symbols: Sequence[str]) -> str | None:
-    """Extract symbol from a path like .../BTCUSDT/1h/BTCUSDT-1h-2026-01-01.zip."""
-    for sym in known_symbols:
-        if sym in path.name or sym in str(path):
-            return sym
-    return None

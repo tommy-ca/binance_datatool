@@ -83,6 +83,66 @@ class KlineData:
         )
 
 
+@dataclass(slots=True)
+class SilverKline:
+    """Normalized silver-layer kline record.
+
+    Unifies spot/um/cm klines from all sources (archive, API, WS).
+    """
+
+    ts_event: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    quote_volume: float
+    trade_count: int
+    taker_buy_volume: float
+    taker_buy_quote_volume: float
+    source: str
+    trade_type: str
+    symbol: str
+    interval: str
+    data_type: str
+    ingested_at: int
+
+
+@dataclass(slots=True)
+class SilverTrade:
+    """Normalized silver-layer trade record.
+
+    Unifies trades/aggTrades from all trade types.
+    """
+
+    ts_event: int
+    price: float
+    size: float
+    side: str | None
+    trade_id: int
+    agg_trade_id: int | None = None
+    is_buyer_maker: int | None = None
+    source: str = ""
+    trade_type: str = ""
+    symbol: str = ""
+    data_type: str = ""
+    ingested_at: int = 0
+
+
+@dataclass(slots=True)
+class SilverFundingRate:
+    """Normalized silver-layer funding rate record."""
+
+    ts_event: int
+    funding_rate: float
+    mark_price: float
+    source: str = ""
+    trade_type: str = ""
+    symbol: str = ""
+    data_type: str = ""
+    ingested_at: int = 0
+
+
 __all__ = [
     "SymbolInfoBase",
     "SpotSymbolInfo",
@@ -90,4 +150,7 @@ __all__ = [
     "CmSymbolInfo",
     "SymbolInfo",
     "KlineData",
+    "SilverKline",
+    "SilverTrade",
+    "SilverFundingRate",
 ]

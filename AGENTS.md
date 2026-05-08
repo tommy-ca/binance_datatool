@@ -157,6 +157,40 @@ Iceberg (multi-engine lakehouse)
 - **HealthCheckWorkflow**: Scans local archive for completeness (missing dates), freshness (staleness), integrity (checksums)
 - **Lineage**: Every data operation records `LineageEvent` via `LineageTracker` (exportable to JSON)
 
+## Silver Layer (Transform/Normalize)
+
+The Silver layer normalizes Bronze archive data into unified schemas following
+Databento DBN and tardis.dev conventions.
+
+### Silver Schema (klines)
+| Silver Column | Bronze Source | Type | Description |
+|--------------|---------------|------|-------------|
+| `ts_event` | `open_time` | INT64 ms | Event timestamp (DBN convention) |
+| `open` | CSV column | FLOAT64 | Open price |
+| `high` | CSV column | FLOAT64 | High price |
+| `low` | CSV column | FLOAT64 | Low price |
+| `close` | CSV column | FLOAT64 | Close price |
+| `volume` | CSV column | FLOAT64 | Base volume |
+| `quote_volume` | CSV column | FLOAT64 | Quote volume |
+| `trade_count` | `count` | INT64 | Number of trades |
+| `taker_buy_volume` | CSV column | FLOAT64 | Maker buy volume |
+| `taker_buy_quote_volume` | CSV column | FLOAT64 | Maker buy quote volume |
+| `source` | Auto | UTF8 | `"archive"`, `"api_filled"`, `"ws_stream"` |
+| `trade_type` | Auto | UTF8 | `"spot"`, `"um"`, `"cm"` |
+| `symbol` | Auto | UTF8 | e.g. `"BTCUSDT"` |
+| `interval` | Auto | UTF8 | e.g. `"1h"` |
+| `data_type` | Auto | UTF8 | `"klines"` |
+| `ingested_at` | Auto | INT64 ms | Ingestion timestamp |
+
+### Iceberg Catalog Path
+```
+{catalog}/{trade_type}/{data_type}/silver_{data_type}/date={YYYY-MM-DD}/{file}.parquet
+```
+
+### Silver Spec
+See `docs/silver-layer-spec.md` for full schema definitions for klines, trades,
+aggTrades, and funding rate across all trade types.
+
 ## Repository Boundaries
 - `temp/` is git-ignored and may contain temporary or non-public materials.
 - Do not treat `temp/` as part of the public package surface or public project documentation.
