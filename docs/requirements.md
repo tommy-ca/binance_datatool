@@ -19,9 +19,9 @@
 | **FR-2: List Files** | Query a data source for available data files for one or more symbols, respecting partition and data type | HIGH | ✅ Implemented |
 | **FR-3: Download Files** | Fetch data files from source using diff-based sync (only new/updated files), with resumable downloads and retry logic | HIGH | ✅ Implemented |
 | **FR-4: Verify Integrity** | Validate downloaded files against SHA256 checksums, with marker caching to avoid re-verification | HIGH | ✅ Implemented |
-| **FR-5: Multi-Source Support** | Enable data ingestion from multiple exchanges behind a common adapter interface | HIGH | 🔄 In Progress |
-| **FR-6: Data Contracts** | Define and validate schema/structure constraints on ingested data | MEDIUM | 🚧 Planned |
-| **FR-7: Lineage Tracking** | Record data provenance: source, partition, transformation steps, validation status | MEDIUM | 🚧 Planned |
+| **FR-5: Multi-Source Support** | Enable data ingestion from multiple exchanges behind a common adapter interface | HIGH | ✅ Implemented |
+| **FR-6: Data Contracts** | Define and validate schema/structure constraints on ingested data | MEDIUM | ✅ Implemented |
+| **FR-7: Lineage Tracking** | Record data provenance: source, partition, transformation steps, validation status | MEDIUM | ✅ Implemented |
 | **FR-8: CLI Composition** | Support stdin/stdout piping to compose commands into multi-step workflows | HIGH | ✅ Implemented |
 
 ### 2.2 Non-Functional Requirements
