@@ -7,37 +7,21 @@ contributors, maintainers, and AI agents working on the codebase.
 
 ```
 src/binance_datatool/
-├── __init__.py              # Package root — exports __version__
-├── py.typed                 # PEP 561 type stub marker
-│
-├── common/                  # Shared types, filters, and constants
-│   ├── __init__.py          # Re-exports public symbols
-│   ├── constants.py         # S3 settings, quote assets, stablecoins, leverage rules
-│   ├── enums.py             # TradeType, DataFrequency, DataType, ContractType
-│   ├── filter.py            # Spot/Um/Cm symbol filters and build_symbol_filter()
-│   ├── logging.py           # configure_cli_logging for CLI entry points
-│   ├── path.py              # Archive-home resolution and ArchiveHomeNotConfiguredError
-│   ├── progress.py          # ProgressEvent, ProgressReporter protocol, make_reporter()
-│   ├── types.py             # SymbolInfoBase, SpotSymbolInfo, UmSymbolInfo, CmSymbolInfo
-│   └── symbols.py           # infer_spot_info, infer_um_info, infer_cm_info
-│
-├── archive/                 # S3 data access, checksum, and download helpers
-│   ├── __init__.py          # Re-exports client, checksum, downloader, and symbol_dir symbols
-│   ├── checksum.py          # SHA256 verification helpers (calc, read, verify_single_file)
-│   ├── client.py            # HTTP client, XML parsing, ArchiveFile metadata
-│   ├── downloader.py        # aria2c batch downloader with per-file retry and proxy control
-│   └── symbol_dir.py        # SymbolArchiveDir, local marker management, directory scanning
-│
-├── exchange/                # Live exchange API clients (Phase 6a/6b ✅)
-│   ├── __init__.py          # Re-exports ExchangeClient protocol + implementations
-│   ├── client.py            # ExchangeClient Protocol (fetch_ohlcv, stream_ohlcv)
-│   ├── binance_rest.py      # BinanceSpotRestClient, BinanceUmRestClient, BinanceCmRestClient
-│   ├── binance_ws.py        # BinanceSpotWsClient, BinanceUmWsClient, BinanceCmWsClient
-│   ├── ccxt_rest.py         # CCXTExchangeClient(trade_type) — REST via ccxt
-│   ├── ccxt_pro.py         # CCXTProExchangeClient(trade_type) — WebSocket via ccxt.pro
-│   ├── registry.py          # ExchangeRegistry — register/list exchange clients (Planned)
-│   └── factory.py           # create_client(exchange_id) → ExchangeClient instance (Planned)
-│
+├── __init__.py              # Version metadata only
+├── common/                  # Shared utilities (enums, constants, types, filters, symbols, progress, intervals)
+├── archive/                 # Archive access (S3 HTTP client, checksum, downloader, symbol directory)
+├── adapter/                 # Multi-source adapter pattern (DataSourceAdapter protocol, Binance/Coinbase adapters)
+│   ├── __init__.py          # DataSourceAdapter protocol, FileMetadata
+│   ├── binance.py           # BinanceAdapter (wraps ArchiveClient)
+│   ├── coinbase.py          # CoinbaseAdapter (skeleton)
+│   ├── registry.py          # Adapter registration
+│   └── bridge.py           # Backward compatibility bridges
+├── exchange/                # Live exchange API clients (REST/WebSocket, CCXT integration)
+│   ├── client.py            # ExchangeClient protocol (@runtime_checkable)
+│   ├── binance_rest.py      # BinanceSpot/Um/CmRestClient
+│   ├── binance_ws.py       # BinanceSpot/Um/CmWsClient
+│   ├── ccxt_rest.py        # CCXTExchangeClient (optional dependency)
+│   └── ccxt_pro.py         # CCXTProExchangeClient (optional dependency)
 ├── workflow/                # Business logic orchestration
 │   ├── __init__.py          # Re-exports all workflow classes and result types
 │   ├── _shared.py           # Shared helpers (infer_symbol_info, validate_interval)
@@ -46,10 +30,12 @@ src/binance_datatool/
 │   ├── list_symbols.py      # ArchiveListSymbolsWorkflow
 │   ├── results.py           # Result dataclasses (ListSymbolsResult, DiffResult, VerifyResult, etc.)
 │   └── verify.py            # ArchiveVerifyWorkflow
-│
-└── cli/                     # Typer CLI layer
-    ├── __init__.py          # Root callback with -v/-vv verbosity and --archive-home
-    └── archive.py           # Root list-symbols, list-files, download, and verify commands
+├── cli/                     # Typer CLI layer
+│   ├── __init__.py          # Root callback with -v/-vv verbosity and --archive-home
+│   └── archive.py           # Root list-symbols, list-files, download, and verify commands
+├── datacontract.py          # DataContract and ContractRegistry (schema validation)
+├── lineage.py               # LineageTracker (data provenance tracking)
+└── source_registry.py       # SourceRegistry (source selection by name)
 ```
 
 ## Layered Design

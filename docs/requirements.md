@@ -655,35 +655,40 @@ class ArchiveListFilesWorkflow:
 - ✅ Build test infrastructure (FakeArchiveClient, fixtures)
 - ✅ Document specs and extending patterns
 
-### Phase 2: Adapter Abstraction (In Progress)
-- 🔄 Implement `DataSourceAdapter` protocol
-- 🔄 Implement `SourceRegistry`
-- 🔄 Wrap existing `ArchiveClient` as `BinanceAdapter`
-- ⏳ Add unit tests for adapter protocol
-- ⏳ Update CLI to use registry
+### Phase 2: Adapter Abstraction (Complete)
+- ✅ Implement `DataSourceAdapter` protocol
+- ✅ Implement `SourceRegistry`
+- ✅ Wrap existing `ArchiveClient` as `BinanceAdapter`
+- ✅ Add unit tests for adapter protocol (35 tests)
+- ⏳ Update CLI to use registry (--source flag not yet integrated)
 
-### Phase 3: Data Contracts & Validation (Next)
-- ⏳ Implement `DataContract` class
-- ⏳ Add schema validation to `VerifyTask`
-- ⏳ Create data contract fixtures for tests
+### Phase 3: Data Contracts & Validation (Complete)
+- ✅ Implement `DataContract` class
+- ✅ Add schema validation to `VerifyTask`
+- ✅ Create data contract fixtures for tests (24 tests)
 
-### Phase 4: Lineage & Observability (Next)
-- ⏳ Implement `LineageTracker`
-- ⏳ Implement `MetricsCollector`
-- ⏳ Emit logs for all pipeline operations
-- ⏳ Add Prometheus metrics (optional)
+### Phase 4: Lineage & Observability (Complete)
+- ✅ Implement `LineageTracker`
+- ✅ Implement `MetricsCollector`
+- ✅ Emit logs for all pipeline operations
+- ⏳ Add Prometheus metrics (optional, not prioritized)
 
-### Phase 5: Multi-Source (Future)
-- ⏳ Implement `CoinbaseAdapter`
+### Phase 5: Multi-Source (In Progress)
+- ✅ Implement `BinanceAdapter` (complete)
+- 🔄 Implement `CoinbaseAdapter` (skeleton only, 9 tests)
 - ⏳ Implement `KrakenAdapter`
 - ⏳ Add integration tests for each
 - ⏳ Document configuration per source
 
-### Phase 6: Skills & Subagents (Future)
-- ⏳ Formalize skill definitions in `skills/`
-- ⏳ Implement `discover_symbols` skill
-- ⏳ Implement `download_partition` skill
-- ⏳ Add skill tests with mocked CLI
+### Phase 6: Exchange Clients (Complete)
+- ✅ Implement market-type-specific Binance clients (Spot/UM/CM)
+- ✅ Add `ExchangeClient` protocol with @runtime_checkable
+- ✅ Implement `BinanceSpotRestClient`, `BinanceUmRestClient`, `BinanceCmRestClient`
+- ✅ Implement `BinanceSpotWsClient`, `BinanceUmWsClient`, `BinanceCmWsClient`
+- ✅ Add optional CCXT integration (`ccxt_rest.py`, `ccxt_pro.py`)
+- ✅ Add exchange client tests (20 tests in test_exchange.py)
+- ⏳ Implement `ExchangeRegistry` and `create_client()` factory
+- ⏳ Wire up new clients to CLI commands (Phase 6c)
 
 ---
 
