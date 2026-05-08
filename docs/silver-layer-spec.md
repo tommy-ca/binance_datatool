@@ -221,9 +221,9 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 | `aggTrades` | `symbol` | `symbol, ts_event` | zstd |
 | `fundingRate` | `symbol` | `symbol, ts_event` | zstd |
 
-Note: `ts_event` is BIGINT epoch ms, not a TIMESTAMP. DuckLake partition
-transforms (`day()`, `month()`) require TIMESTAMP/DATE types. Date-range
-pruning uses Parquet file-level column statistics (min/max) instead.
+The `ts_event` column is BIGINT epoch ms (not TIMESTAMP). A `ts_date DATE`
+column is populated at DuckLake ingest time via `CAST(epoch_ms(ts_event) AS DATE)`,
+enabling DuckLake's native DATE partition transforms for efficient date pruning.
 | `venues` | Unpartitioned | — | zstd |
 | `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
 

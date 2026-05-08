@@ -209,27 +209,27 @@ class DuckLakeCatalog:
     # Column order must match the Silver Parquet output from sink.py
     # for INSERT INTO ... SELECT * FROM read_parquet() to work correctly.
     TABLE_DEFS: dict[str, str] = {
-        "spot_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "um_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "cm_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "um_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "cm_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "spot_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "um_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
-        "cm_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "spot_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "um_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "cm_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "um_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "cm_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "spot_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "um_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "cm_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
         "venues": "venue VARCHAR, trade_type VARCHAR, exchange VARCHAR, source VARCHAR, symbol_count BIGINT, data_types VARCHAR, fetched_at BIGINT",
         "symbols": "symbol VARCHAR, trade_type VARCHAR, exchange VARCHAR, base_asset VARCHAR, quote_asset VARCHAR, contract_type VARCHAR, is_leverage BOOLEAN, is_stable_pair BOOLEAN, source VARCHAR, status VARCHAR, fetched_at BIGINT",
     }
 
     TABLE_PARTITIONS: dict[str, str] = {
-        "spot_klines": "symbol, interval",
-        "um_klines": "symbol, interval",
-        "cm_klines": "symbol, interval",
-        "spot_aggTrades": "symbol",
-        "um_aggTrades": "symbol",
-        "cm_aggTrades": "symbol",
-        "um_fundingRate": "symbol",
-        "cm_fundingRate": "symbol",
+        "spot_klines": "symbol, interval, ts_date",
+        "um_klines": "symbol, interval, ts_date",
+        "cm_klines": "symbol, interval, ts_date",
+        "spot_aggTrades": "symbol, ts_date",
+        "um_aggTrades": "symbol, ts_date",
+        "cm_aggTrades": "symbol, ts_date",
+        "um_fundingRate": "symbol, ts_date",
+        "cm_fundingRate": "symbol, ts_date",
     }
 
     def __init__(
@@ -300,11 +300,27 @@ class DuckLakeCatalog:
         """
         self.ensure_table(con, table_name)
         ingested = 0
+        has_ts = "ts_event" in self.TABLE_DEFS.get(table_name, "")
+        has_date = "ts_date" in self.TABLE_DEFS.get(table_name, "")
+
+        # Build explicit column list matching Silver Parquet output order
+        col_list = self.TABLE_DEFS.get(table_name, "")
+        data_cols = [c.split()[0] for c in col_list.split(",") if c.split()[0] != "ts_date"]
+        data_cols_str = ", ".join(data_cols)
+
         for path in parquet_files:
             try:
-                con.execute(
-                    f"INSERT INTO {table_name} SELECT * FROM read_parquet('{path}', hive_partitioning=false)"
-                )
+                if has_date and has_ts:
+                    cols_with_date = ", ".join(data_cols + ["ts_date"])
+                    con.execute(
+                        f"INSERT INTO {table_name} ({cols_with_date}) "
+                        f"SELECT {data_cols_str}, CAST(epoch_ms(ts_event) AS DATE) AS ts_date "
+                        f"FROM read_parquet('{path}', hive_partitioning=false)"
+                    )
+                else:
+                    con.execute(
+                        f"INSERT INTO {table_name} SELECT * FROM read_parquet('{path}', hive_partitioning=false)"
+                    )
                 ingested += 1
             except Exception as e:
                 logger.warning("DuckLake: failed to ingest {}: {}", path, e)
