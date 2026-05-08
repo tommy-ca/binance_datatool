@@ -66,7 +66,7 @@ This index provides a complete picture of the binance-datatool project after com
      - ✅ Phase 4: Lineage Tracking (lineage.py, LineageTracker)
      - ✅ Phase 6: Exchange Clients (exchange/ module)
    - **Next Steps**:
-     - 🔄 CoinbaseAdapter (skeleton done, implement methods)
+     - 🔄 OKX/Bybit via CCXT (CCXTExchangeClient)
      - ⏳ CLI integration with SourceRegistry (--source flag)
      - ⏳ Skills/subagents implementation
 
@@ -76,7 +76,7 @@ This index provides a complete picture of the binance-datatool project after com
    - **Priorities**:
      1. Data contracts + validation (✅ DONE: datacontract.py)
      2. Lineage tracking (✅ DONE: lineage.py)
-     3. Multi-source adapter (✅ DONE: adapter/binance.py, 🔄 CoinbaseAdapter skeleton)
+     3. Multi-source adapter (✅ DONE: adapter/binance.py, 🔄 OKX/Bybit via CCXT)
      4. Exchange clients (✅ DONE: exchange/ module)
      5. Skills/subagents (⏳ TODO: implement from skills-subagents.md)
 
@@ -108,8 +108,8 @@ This index provides a complete picture of the binance-datatool project after com
 - **Protocol**: `DataSourceAdapter` (5 methods: list_symbols, list_files, fetch_file, parse_symbol, get_metadata)
 - **Implementations Needed**:
   - BinanceAdapter (wrap ArchiveClient)
-  - CoinbaseAdapter (REST API)
-  - KrakenAdapter (REST API)
+  - CCXT unified API (okx, bybit, binance)
+  - DataSourceAdapter protocol
 
 ### Skills (⏳ PLANNED)
 - **Directory**: `src/binance_datatool/skills/`
@@ -132,7 +132,7 @@ This index provides a complete picture of the binance-datatool project after com
 | **DataContractRegistry** | ✅ Complete | datacontract.py | 24 passing | Lookup by (source, market, type) |
 | **LineageTracker** | ✅ Complete | lineage.py | 24 passing | Data provenance tracking |
 | **BinanceAdapter** | ✅ Complete | adapter/binance.py | 35 passing | Wraps ArchiveClient |
-| **CoinbaseAdapter** | 🔄 Skeleton | adapter/coinbase.py | 9 passing | Methods raise NotImplementedError |
+| **OKX/Bybit Adapter** | 🔄 Via CCXT | exchange/ccxt_rest.py | — | CCXTExchangeClient(trade_type="okx") |
 | **SourceRegistry** | ✅ Complete | source_registry.py | 2 passing | Adapter discovery/registration |
 | **Exchange Clients** | ✅ Complete | exchange/*.py | 20 passing | Spot/UM/CM REST + WebSocket |
 | **Skills (5x)** | ⏳ Planned | — | — | See skills-subagents.md |
@@ -155,7 +155,7 @@ This index provides a complete picture of the binance-datatool project after com
 ### Phase 2: Adapter Pattern & Multi-Source (🔄 IN PROGRESS)
 - [ ] LineageTracker class + tests
 - [ ] BinanceAdapter implementation + tests
-- [ ] CoinbaseAdapter skeleton + tests
+- [ ] OKX/Bybit via CCXT + tests
 - [ ] SourceRegistry CLI integration
 - [ ] Backward compatibility verification
 
@@ -287,7 +287,7 @@ Orchestration / Pipeline Layer
   ↓
 DataOps / Transform Layer (validation, contracts)
   ↓
-Source Adapter Layer (binance, coinbase, kraken, etc.)
+Source Adapter Layer (binance via S3, OKX/Bybit via CCXT)
   ↓
 Storage Connector Layer (S3, local, delta, parquet)
   ↓
@@ -414,7 +414,7 @@ If unclear on:
 
 ### Short Term (Phase 2 Completion)
 
-- [ ] Phase 2, Step 3: CoinbaseAdapter skeleton
+- [ ] Phase 2, Step 3: OKX/Bybit via CCXT skeleton
 - [ ] Phase 2, Step 4: Adapter integration tests
 - [ ] Phase 2, Step 5: CLI integration with SourceRegistry
 
@@ -436,7 +436,7 @@ If unclear on:
 **Status**: Foundation and specifications complete. Ready to implement Phase 2 (Adapter Pattern & Multi-Source).
 
 **Impact**: This work enables:
-- Multi-source data pipeline (Binance → Coinbase → Kraken, etc.)
+- Multi-source data pipeline (Binance S3 → OKX/Bybit via CCXT)
 - Contract-driven validation and lineage
 - Agent-driven workflows with formal skill APIs
 - Scalable, maintainable architecture

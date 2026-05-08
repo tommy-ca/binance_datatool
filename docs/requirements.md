@@ -667,9 +667,9 @@ class ArchiveListFilesWorkflow:
 - ✅ Add schema validation to `VerifyTask`
 - ✅ Create data contract fixtures for tests (24 tests)
 
-### Phase 4: Lineage & Observability (Complete)
+### Phase 4: Lineage & Observability (Partial)
 - ✅ Implement `LineageTracker`
-- ✅ Implement `MetricsCollector`
+- ❌ Implement `MetricsCollector` (removed from scope)
 - ✅ Emit logs for all pipeline operations
 - ⏳ Add Prometheus metrics (optional, not prioritized)
 
