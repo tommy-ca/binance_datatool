@@ -189,30 +189,24 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ## Catalog Directory Structure
 
 ```
-{archive_home}/../lake/
-├── venues.parquet           # Venue metadata (3 rows)
-├── symbols.parquet          # Symbol metadata (all trade types)
-├── spot/
-│   └── klines/
-│       └── symbol=BTCUSDT/
-│           ├── interval=1h/
-│           │   └── date=2026-05-08/
-│           │       └── spot_klines.parquet
-│           └── interval=1m/
-│               └── date=2026-05-08/
-│                   └── spot_klines.parquet
-├── um/
-│   └── klines/
-│       └── symbol=BTCUSDT/
-│           └── interval=1h/
-│               └── date=2026-05-08/
-│                   └── um_klines.parquet
-└── cm/
-    └── klines/
-        └── symbol=BTCUSDT/
-            └── interval=1h/
-                └── date=2026-05-08/
-                    └── cm_klines.parquet
+{lake_path}/
+├── metadata.ducklake         # DuckLake v1.0 catalog (SQLite)
+├── metadata.ducklake.wal     # Write-ahead log
+├── metadata/
+│   ├── venues.parquet        # Venue metadata (3 rows)
+│   └── symbols.parquet       # Symbol metadata (all trade types)
+└── data/
+    ├── exchange=binance-spot/
+    │   └── data-type=klines/
+    │       └── symbol=BTCUSDT/
+    │           └── interval=1h/
+    │               └── date=2026-05-08/
+    │                   └── data.parquet        # Written by Polars
+    └── main/                                    # DuckLake managed path
+        └── spot_klines/
+            └── symbol=BTCUSDT/
+                └── interval=1h/
+                    └── ducklake-*.parquet       # Managed by DuckDB
 ```
 
 ## Iceberg Catalog Design
@@ -223,12 +217,16 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ### Tables
 | Table | Partition By | Sort Order | Compress |
 |-------|-------------|------------|----------|
-| `klines` | `symbol, interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `klines_1h` | `symbol, interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `klines_1d` | `symbol, interval, months(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `trades` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
-| `aggTrades` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
-| `fundingRate` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
+| `klines` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
+| `klines_1h` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
+| `klines_1d` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
+| `trades` | `symbol` | `symbol, ts_event` | zstd |
+| `aggTrades` | `symbol` | `symbol, ts_event` | zstd |
+| `fundingRate` | `symbol` | `symbol, ts_event` | zstd |
+
+Note: `ts_event` is BIGINT epoch ms, not a TIMESTAMP. DuckLake partition
+transforms (`day()`, `month()`) require TIMESTAMP/DATE types. Date-range
+pruning uses Parquet file-level column statistics (min/max) instead.
 | `venues` | Unpartitioned | — | zstd |
 | `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
 
@@ -248,16 +246,20 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 from pathlib import Path
 from binance_datatool.workflow.catalog import DuckLakeCatalog
 
-# Create DuckLake catalog
+# Create DuckLake catalog with native table management
 catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
 
-# Register lake views — scans self-describing path structure:
-#   data/exchange=binance-spot/data-type=klines/symbol=*/...
-catalog.register_lake_views(con, interval="1h")  # filter by interval partition
-catalog.register_lake_views(con)                  # all intervals
+# Create DuckLake native table with partitioning
+#  ALTER TABLE spot_klines SET PARTITIONED BY (symbol, interval)
+catalog.ensure_table(con, "spot_klines")
 
-# Create analytics views
+# Ingest externally-written Parquet into managed DuckLake table
+#  INSERT INTO spot_klines SELECT * FROM read_parquet('path/to/data.parquet')
+parquet_files = catalog.find_parquet_files("spot", "klines", interval="1h")
+catalog.ingest_parquet(con, "spot_klines", parquet_files)
+
+# Create analytics views (daily_ohlcv, stale_symbols)
 catalog.create_analytics_views(con)
 ```
 
