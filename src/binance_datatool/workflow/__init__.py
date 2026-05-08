@@ -16,6 +16,7 @@ from .results import (
     VerifyDiffResult,
     VerifyResult,
 )
+from .sink import SinkStats, SinkWorkflow
 from .verify import ArchiveVerifyWorkflow
 
 __all__ = [
@@ -32,6 +33,8 @@ __all__ = [
     "HealthReport",
     "ListFilesResult",
     "ListSymbolsResult",
+    "SinkStats",
+    "SinkWorkflow",
     "SymbolHealth",
     "SymbolListFilesResult",
     "SymbolListingError",

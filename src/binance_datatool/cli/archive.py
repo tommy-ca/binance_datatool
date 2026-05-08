@@ -29,6 +29,7 @@ from binance_datatool.workflow import (
     DownloadResult,
     GapFillWorkflow,
     HealthCheckWorkflow,
+    SinkWorkflow,
     SymbolListingError,
     VerifyDiffResult,
     VerifyResult,
@@ -36,9 +37,11 @@ from binance_datatool.workflow import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from binance_datatool.exchange.client import ExchangeClient
+
+
+from pathlib import Path
 
 
 def _exchange_client_for_trade_type(trade_type: TradeType) -> ExchangeClient:
@@ -657,4 +660,71 @@ def health_command(
         for err in report.errors:
             typer.echo(f"Error: {err}", err=True)
     if report.total_symbols > 0 and report.healthy_symbols < report.total_symbols:
+        raise typer.Exit(code=2)
+
+
+@app.command("sink")
+def sink_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    symbols: Annotated[list[str] | None, typer.Argument(help="Symbols to transform.")] = None,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type."),
+    ] = DataType.klines,
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Kline interval."),
+    ] = None,
+    target: Annotated[
+        str,
+        typer.Option("--target", help="Sink target: parquet, duckdb, or all."),
+    ] = "parquet",
+    duckdb_path: Annotated[
+        str | None,
+        typer.Option("--duckdb", help="DuckDB file path (default: :memory:)."),
+    ] = None,
+    catalog_path: Annotated[
+        str | None,
+        typer.Option("--catalog", help="Parquet catalog directory."),
+    ] = None,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Transform archive data to Parquet and load into DuckDB.
+
+    Reads raw archive data (ZIP CSVs and filled CSVs), normalizes schemas,
+    writes partitioned Parquet files, and optionally loads into DuckDB.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+
+    resolved_symbols = symbols or []
+    if not resolved_symbols:
+        typer.echo("Error: At least one SYMBOL argument required.", err=True)
+        raise typer.Exit(code=2)
+
+    workflow = SinkWorkflow(
+        archive_home=archive_home,
+        catalog_path=Path(catalog_path) if catalog_path else None,
+        duckdb_path=Path(duckdb_path) if duckdb_path else None,
+    )
+
+    stats = workflow.transform(
+        trade_type=trade_type,
+        data_type=data_type,
+        symbols=resolved_symbols,
+        interval=interval,
+        target=target,  # type: ignore
+    )
+
+    typer.echo(
+        f"Transformed {stats.symbols} symbols, "
+        f"{stats.row_count} rows into "
+        f"{stats.parquet_files} parquet files",
+        err=True,
+    )
+    if stats.errors:
+        for err in stats.errors:
+            typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(code=2)

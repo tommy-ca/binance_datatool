@@ -747,7 +747,7 @@ class ArchiveListFilesWorkflow:
 - ⏳ Wire up new clients to CLI commands (Phase 6c)
 - ⏳ Transform/normalize/sink pipeline to DuckDB/Iceberg (Phase 7)
 
-### Phase 7: Transform, Normalize, and Sink (Planned)
+### Phase 7: Transform, Normalize, and Sink (Complete)
 
 Goal: Transform raw archive data into queryable columnar format (Parquet), normalize schemas
 across data types and trade types, and sink to DuckDB (local) and/or Apache Iceberg (catalog).
@@ -792,13 +792,14 @@ DuckDB (local analytics) ─ OR ─ Iceberg (catalog-driven lakehouse)
 ```
 
 **Implementation order**:
-1. Polars-based archive reader (read ZIP CSVs + filled CSVs)
-2. Schema normalization per data type
-3. Parquet writer (partitioned by trade_type/data_type/date)
-4. DuckDB sink (CREATE TABLE AS, incremental INSERT)
-5. Iceberg catalog integration (pyiceberg)
+1. ✅ Polars-based archive reader (read ZIP CSVs + filled CSVs)
+2. ✅ Schema normalization per data type
+3. ✅ Parquet writer (partitioned by trade_type/data_type/date)
+4. ✅ DuckDB sink (CREATE OR REPLACE TABLE)
+5. ⏳ Iceberg catalog integration (pyiceberg, planned)
 
-**Estimated effort**: 2-3 sprints (4-6 weeks)
+**Done**: `SinkWorkflow` in `workflow/sink.py`, `binance-datatool sink` CLI command.
+**Next**: Iceberg catalog for multi-engine access.
 
 ---
 

@@ -104,6 +104,59 @@ The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `
   `[open_time, open, high, low, close, volume, close_time, quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]`
 - WS kline stream returns dict with structure `{"k": {"t": ..., "o": ..., ...}}`
 
+## CLI Commands Reference
+
+### archive commands
+```bash
+binance-datatool list-symbols spot --freq daily --type klines --quote USDT
+binance-datatool list-files --symbols BTCUSDT --trade-type spot --type klines --interval 1d
+binance-datatool download --symbols BTCUSDT --trade-type spot --type klines --interval 1d --dry-run
+binance-datatool verify --symbols BTCUSDT --trade-type spot --type klines --interval 1d
+```
+
+### gap-fill command (REST API backfill)
+```bash
+# Auto-detect gaps and fill (uses REST API via SDK)
+binance-datatool gap-fill spot --auto-detect --symbol BTCUSDT --type klines --interval 1h --lookback 30
+# Manual time range
+binance-datatool gap-fill spot --symbol BTCUSDT --type klines --interval 1h --start-time 1700000000000 --end-time 1700088000000
+```
+
+### health command (data quality monitoring)
+```bash
+# Check completeness, freshness, integrity
+binance-datatool health spot --type klines --interval 1h BTCUSDT --max-stale 3
+```
+
+### sink command (transform to Parquet/DuckDB)
+```bash
+# Transform archive data to partitioned Parquet
+binance-datatool sink spot --type klines --interval 1h --target parquet --catalog /path/to/lake BTCUSDT
+# Load into DuckDB as well
+binance-datatool sink spot --type klines --interval 1h --target all --duckdb /path/to/db.duckdb BTCUSDT
+```
+
+## Data Pipeline Architecture
+
+```
+Archive (local ZIPs + filled CSVs)
+  ↓ Polars read + normalize
+Normalized DataFrames (standardized schema per data type)
+  ↓ write_parquet (partitioned by trade_type/data_type/date)
+Parquet files (columnar, queryable)
+  ↓ DuckDB sink (CREATE OR REPLACE TABLE)
+DuckDB (local SQL analytics)
+  ↓ Future: pyiceberg catalog
+Iceberg (multi-engine lakehouse)
+```
+
+## Key Design Patterns
+
+- **SinkWorkflow**: Polars-based transform + Parquet write + DuckDB load
+- **GapFillWorkflow**: Auto-detect gaps via `_scan_existing_dates()` → `_fetch_data()` → `_save_filled()`
+- **HealthCheckWorkflow**: Scans local archive for completeness (missing dates), freshness (staleness), integrity (checksums)
+- **Lineage**: Every data operation records `LineageEvent` via `LineageTracker` (exportable to JSON)
+
 ## Repository Boundaries
 - `temp/` is git-ignored and may contain temporary or non-public materials.
 - Do not treat `temp/` as part of the public package surface or public project documentation.
