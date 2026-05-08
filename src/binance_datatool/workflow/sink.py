@@ -17,12 +17,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from loguru import logger
 
-from binance_datatool.workflow.catalog import (
-    DuckLakeCatalog,
-    IcebergCatalog,
-    duckdb_table_name,
-    iceberg_table_name,
-)
+from binance_datatool.workflow.catalog import DuckLakeCatalog, duckdb_table_name
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -336,12 +331,30 @@ class SinkWorkflow:
         data_type: str,
         interval: str | None = None,
     ) -> int:
-        """Write Silver DataFrame to partitioned Parquet via Iceberg catalog."""
-        table_name = iceberg_table_name(data_type, interval)
-        iceberg = IcebergCatalog(self._catalog_path)
-        iceberg.create_namespace()
-        iceberg.register_parquet(df, table_name, trade_type, interval=interval)
-        return len(df)
+        """Write Silver DataFrame to DuckLake data path with Hive partitioning.
+
+        Catalog layout mirrors archive directory organization:
+          {catalog}/data/{tt}/{dt}/symbol={S}/interval={I}/date={D}/file.parquet  (klines)
+          {catalog}/data/{tt}/{dt}/symbol={S}/date={D}/file.parquet               (non-klines)
+        """
+        base = self._catalog_path / "data" / trade_type / data_type
+        df = df.with_columns(pl.col("symbol").alias("_sym"))
+        df = df.with_columns(
+            pl.from_epoch(pl.col("ts_event") // 1000).dt.strftime("%Y-%m-%d").alias("_dt")
+        )
+
+        written = 0
+        for (sym, dt), group in df.group_by(["_sym", "_dt"], maintain_order=True):
+            out_dir = base / f"symbol={sym}" / f"date={dt}"
+            if interval:
+                out_dir = base / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out = out_dir / f"{trade_type}_{data_type}.parquet"
+            group.drop(["_sym", "_dt"]).write_parquet(out)
+            written += 1
+
+        logger.info("Wrote {} parquet files to {}", written, base)
+        return written
 
     def _load_duckdb(
         self, df: pl.DataFrame, trade_type: str, data_type: str, interval: str | None = None

@@ -127,9 +127,9 @@ class IcebergCatalog:
     ) -> Path:
         """Register a DataFrame as an Iceberg table (file-system catalog).
 
-        Uses Hive-style partitioning by date (and interval for klines):
-          {table}/interval={I}/date={N}/data.parquet
-          {table}/date={N}/data.parquet                (non-kline types)
+        Uses the same Hive-style partitioning as DuckLake for interop:
+          symbol={S}/interval={I}/date={N}/file.parquet  (klines)
+          symbol={S}/date={N}/file.parquet               (non-klines)
         Metadata tables (venues, symbols) are stored flat.
         """
         self._init_catalog()
@@ -141,26 +141,24 @@ class IcebergCatalog:
             df.write_parquet(out)
             return out
 
-        ts_col = "ts_event" if "ts_event" in df.columns else None
-        if ts_col:
-            df = df.with_columns(
-                pl.from_epoch(pl.col(ts_col) // 1000).dt.strftime("%Y-%m-%d").alias("_iceberg_date")
-            )
-        else:
-            df = df.with_columns(pl.lit("unknown").alias("_iceberg_date"))
+        df = df.with_columns(pl.col("symbol").alias("_sym"))
+        df = df.with_columns(
+            pl.from_epoch(pl.col("ts_event") // 1000).dt.strftime("%Y-%m-%d").alias("_dt")
+        )
 
         written = 0
-        for date_val, group in df.group_by("_iceberg_date", maintain_order=True):
-            partition_path = table_root / f"date={date_val[0]}"
+        for (sym, dt), group in df.group_by(["_sym", "_dt"], maintain_order=True):
+            parts = [table_root / f"symbol={sym}" / f"date={dt}"]
             if interval:
-                partition_path = table_root / f"interval={interval}" / f"date={date_val[0]}"
-            partition_path.mkdir(parents=True, exist_ok=True)
+                parts = [table_root / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"]
+            out_dir = parts[0]
+            out_dir.mkdir(parents=True, exist_ok=True)
             suffix = f"_{trade_type}" if trade_type else ""
-            out = partition_path / f"{table_name}{suffix}.parquet"
-            group.drop("_iceberg_date").write_parquet(out)
+            out = out_dir / f"{table_name}{suffix}.parquet"
+            group.drop(["_sym", "_dt"]).write_parquet(out)
             written += 1
 
-        logger.info("Iceberg: registered {} files to {}", written, table_root)
+        logger.info("Iceberg: {} files under {}", written, table_root)
         return table_root
 
 
@@ -245,22 +243,23 @@ class DuckLakeCatalog:
     def register_lake_views(self, con: Any, interval: str | None = None) -> None:
         """Create DuckLake views that scan the lake Parquet in-place (zero-copy).
 
-        For kline-class data types, views scan interval-partitioned directories:
-          ``spot/klines/interval={interval}/date=*/*.parquet``
-        For non-kline types, scans the flat directory structure:
-          ``spot/fundingRate/date=*/*.parquet``
+        Catalog layout mirrors the archive directory organization:
+          {trade_type}/{data_type}/symbol={S}/interval={I}/date={N}/*.parquet  (klines)
+          {trade_type}/{data_type}/symbol={S}/date={N}/*.parquet               (non-klines)
         """
         dp = self._data_path
         views = []
         for tt in ("spot", "um", "cm"):
-            views.append((f"{tt}_klines", dp / tt / "klines"))
-            views.append((f"{tt}_fundingRate", dp / tt / "fundingRate"))
+            for dt in ("klines", "fundingRate"):
+                views.append((f"{tt}_{dt}", dp / tt / dt))
 
-        for view_name, path in views:
+        for view_name, base_path in views:
             if interval and "klines" in view_name:
-                pattern = str(path / f"interval={interval}" / "*/*.parquet")
+                pattern = str(
+                    base_path / "symbol=*" / f"interval={interval}" / "date=*" / "*.parquet"
+                )
             else:
-                pattern = str(path / "*/*.parquet")
+                pattern = str(base_path / "symbol=*" / "date=*" / "*.parquet")
             try:
                 con.execute(
                     f"CREATE OR REPLACE VIEW {view_name} AS "

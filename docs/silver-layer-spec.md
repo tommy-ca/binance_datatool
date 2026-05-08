@@ -24,12 +24,12 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 | Catalog Path | Description | Partitioning |
 |---|---|---|
-| `{catalog}/spot/klines/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `interval, date` |
-| `{catalog}/spot/klines/interval=1m/date=N/spot_klines.parquet` | Spot klines (1m) | `interval, date` |
-| `{catalog}/um/klines/interval=1h/date=N/um_klines.parquet` | UM klines (1h) | `interval, date` |
-| `{catalog}/cm/klines/interval=1h/date=N/cm_klines.parquet` | CM klines (1h) | `interval, date` |
-| `{catalog}/spot/aggTrades/date=N/spot_aggTrades.parquet` | Spot aggregated trades | `date` |
-| `{catalog}/um/fundingRate/date=N/um_fundingRate.parquet` | UM funding rate | `date` |
+| `{catalog}/spot/klines/symbol=BTCUSDT/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `symbol, interval, date` |
+| `{catalog}/spot/klines/symbol=ETHUSDT/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `symbol, interval, date` |
+| `{catalog}/um/klines/symbol=BTCUSDT/interval=1h/date=N/um_klines.parquet` | UM klines (1h) | `symbol, interval, date` |
+| `{catalog}/cm/klines/symbol=BTCUSDT/interval=1h/date=N/cm_klines.parquet` | CM klines (1h) | `symbol, interval, date` |
+| `{catalog}/spot/aggTrades/symbol=BTCUSDT/date=N/spot_aggTrades.parquet` | Spot aggTrades | `symbol, date` |
+| `{catalog}/um/fundingRate/symbol=BTCUSDT/date=N/um_fundingRate.parquet` | UM funding rate | `symbol, date` |
 | `{catalog}/venues.parquet` | Venue metadata | None |
 | `{catalog}/symbols.parquet` | Symbol metadata | None |
 
@@ -195,22 +195,25 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ├── symbols.parquet          # Symbol metadata (all trade types)
 ├── spot/
 │   └── klines/
-│       ├── interval=1h/
-│       │   └── date=2026-05-08/
-│       │       └── spot_klines.parquet
-│       └── interval=1m/
-│           └── date=2026-05-08/
-│               └── spot_klines.parquet
+│       └── symbol=BTCUSDT/
+│           ├── interval=1h/
+│           │   └── date=2026-05-08/
+│           │       └── spot_klines.parquet
+│           └── interval=1m/
+│               └── date=2026-05-08/
+│                   └── spot_klines.parquet
 ├── um/
 │   └── klines/
-│       └── interval=1h/
-│           └── date=2026-05-08/
-│               └── um_klines.parquet
+│       └── symbol=BTCUSDT/
+│           └── interval=1h/
+│               └── date=2026-05-08/
+│                   └── um_klines.parquet
 └── cm/
     └── klines/
-        └── interval=1h/
-            └── date=2026-05-08/
-                └── cm_klines.parquet
+        └── symbol=BTCUSDT/
+            └── interval=1h/
+                └── date=2026-05-08/
+                    └── cm_klines.parquet
 ```
 
 ## Iceberg Catalog Design
@@ -221,12 +224,12 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ### Tables
 | Table | Partition By | Sort Order | Compress |
 |-------|-------------|------------|----------|
-| `klines` | `interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `klines_1h` | `interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `klines_1d` | `interval, months(ts_event)` | `symbol, interval, ts_event` | zstd |
-| `trades` | `days(ts_event)` | `symbol, ts_event` | zstd |
-| `aggTrades` | `days(ts_event)` | `symbol, ts_event` | zstd |
-| `fundingRate` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `klines` | `symbol, interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
+| `klines_1h` | `symbol, interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
+| `klines_1d` | `symbol, interval, months(ts_event)` | `symbol, interval, ts_event` | zstd |
+| `trades` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
+| `aggTrades` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
+| `fundingRate` | `symbol, days(ts_event)` | `symbol, ts_event` | zstd |
 | `venues` | Unpartitioned | — | zstd |
 | `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
 
@@ -360,15 +363,26 @@ SELECT symbol, COUNT(*) FROM spot_klines GROUP BY symbol;
 
 ```
 {lake_path}/
-├── metadata.ducklake     # DuckLake v1.0 catalog (ACID metadata)
-├── metadata.ducklake.wal # Write-ahead log
+├── metadata.ducklake      # DuckLake v1.0 catalog (ACID metadata)
+├── metadata.ducklake.wal  # Write-ahead log
 └── data/
     ├── spot/
     │   └── klines/
-    │       └── date=2026-05-08/
-    │           └── spot_klines.parquet
-    ├── um/klines/...
-    └── cm/klines/...
+    │       └── symbol=BTCUSDT/
+    │           ├── interval=1h/
+    │           │   └── date=2026-05-08/
+    │           │       └── spot_klines.parquet
+    │           └── interval=1m/
+    │               └── date=2026-05-08/
+    │                   └── spot_klines.parquet
+    ├── um/
+    │   └── klines/
+    │       └── symbol=BTCUSDT/
+    │           └── interval=1h/date=2026-05-08/um_klines.parquet
+    └── cm/
+        └── klines/
+            └── symbol=BTCUSDT/
+                └── interval=1h/date=2026-05-08/cm_klines.parquet
 ```
 
 ## Gap-Fill and Health Check on Silver
