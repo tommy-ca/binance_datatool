@@ -14,26 +14,46 @@ This document guides developers through implementing the specifications and buil
 - [x] DataContract unit tests (24 tests, all passing)
 - [x] Skills & subagents specification (skills-subagents.md)
 
-### 🔄 Phase 2: Adapter Pattern & Multi-Source (IN PROGRESS)
-- [ ] Implement LineageTracker for data provenance
-- [ ] Implement BinanceAdapter wrapping ArchiveClient
-- [ ] Implement example CoinbaseAdapter (skeleton)
-- [ ] Write adapter integration tests
-- [ ] Integrate SourceRegistry with CLI
+### ✅ Phase 2: Adapter Pattern & Multi-Source (COMPLETE)
+- [x] Implement LineageTracker for data provenance
+- [x] Implement BinanceAdapter wrapping ArchiveClient
+- [x] Implement example CoinbaseAdapter (skeleton, 9 tests)
+- [x] Write adapter integration tests (35 tests in test_adapter_binance.py)
+- [ ] integrate SourceRegistry with CLI (--source flag not yet wired)
 
-### ⏳ Phase 3: Skills Implementation (NEXT)
+### ✅ Phase 3: Data Contracts & Validation (COMPLETE)
+- [x] Implement DataContract class
+- [x] Add schema validation to VerifyTask
+- [x] Create data contract fixtures for tests
+- [x] DataContract unit tests (24 tests in test_datacontract.py)
+
+### ✅ Phase 4: Lineage & Observability (COMPLETE)
+- [x] Implement LineageTracker
+- [x] Implement MetricsCollector
+- [x] Emit operation logs and metrics
+- [ ] Add Prometheus endpoints (optional, not prioritized)
+
+### ✅ Phase 5: Exchange Clients (COMPLETE)
+- [x] Implement market-type-specific Binance clients (Spot/UM/CM)
+- [x] Add ExchangeClient protocol with @runtime_checkable
+- [x] Implement REST and WebSocket clients for each market type
+- [x] Add optional CCXT integration (ccxt_rest.py, ccxt_pro.py)
+- [x] Add exchange client tests (20 tests in test_exchange.py)
+
+### ⏳ Phase 6: Skills Implementation (NEXT)
 - [ ] Implement discover-symbols skill
 - [ ] Implement list-files skill
 - [ ] Implement download-partition skill
 - [ ] Implement verify-partition skill
 - [ ] Implement validate-contract skill
 
-### ⏳ Phase 4: Observability & Metrics (FUTURE)
-- [ ] Implement MetricsCollector
-- [ ] Emit operation logs and metrics
-- [ ] Add Prometheus endpoints (optional)
+### ⏳ Phase 7: Multi-Source Expansion (FUTURE)
+- [ ] Complete CoinbaseAdapter implementation
+- [ ] Implement KrakenAdapter
+- [ ] Add integration tests for each source
+- [ ] Document configuration per source
 
-### ⏳ Phase 5: Documentation & DevEx (FUTURE)
+### ⏳ Phase 8: Documentation & DevEx (FUTURE)
 - [ ] Add Mermaid diagrams to docs
 - [ ] Update AGENTS.md with development guidance
 - [ ] Create contributor onboarding guide
