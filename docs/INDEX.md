@@ -130,13 +130,14 @@ This index provides a complete picture of the binance-datatool project after com
 |-----------|--------|------|-------|-------|
 | **DataContract** | ✅ Complete | datacontract.py | 24 passing | Schema validation + validators |
 | **DataContractRegistry** | ✅ Complete | datacontract.py | 24 passing | Lookup by (source, market, type) |
-| **LineageTracker** | ⏳ Planned | lineage.py | — | Phase 2, Step 1 |
-| **BinanceAdapter** | ⏳ Planned | adapter/binance.py | — | Phase 2, Step 2 |
-| **CoinbaseAdapter** | ⏳ Skeleton | adapter/coinbase.py | — | Phase 2, Step 3 |
-| **SourceRegistry** | ✅ Complete | source_registry.py | 10 passing | Adapter discovery/registration |
-| **Skills (5x)** | ⏳ Planned | skills/*.py | — | Phase 3 |
-| **MetricsCollector** | ⏳ Planned | metrics.py | — | Phase 4 |
-| **CLI --source flag** | ⏳ Planned | cli/archive.py | — | Phase 2, Step 5 |
+| **LineageTracker** | ✅ Complete | lineage.py | 24 passing | Data provenance tracking |
+| **BinanceAdapter** | ✅ Complete | adapter/binance.py | 35 passing | Wraps ArchiveClient |
+| **CoinbaseAdapter** | 🔄 Skeleton | adapter/coinbase.py | 9 passing | Methods raise NotImplementedError |
+| **SourceRegistry** | ✅ Complete | source_registry.py | 2 passing | Adapter discovery/registration |
+| **Exchange Clients** | ✅ Complete | exchange/*.py | 20 passing | Spot/UM/CM REST + WebSocket |
+| **Skills (5x)** | ⏳ Planned | — | — | See skills-subagents.md |
+| **MetricsCollector** | ❌ Not Started | — | — | Removed from scope |
+| **CLI --source flag** | ⏳ Planned | cli/archive.py | — | Phase 2 remaining work |
 
 ---
 
