@@ -29,6 +29,7 @@ from binance_datatool.workflow import (
     DownloadResult,
     GapFillWorkflow,
     HealthCheckWorkflow,
+    MetadataWorkflow,
     SinkWorkflow,
     SymbolListingError,
     VerifyDiffResult,
@@ -728,3 +729,64 @@ def sink_command(
         for err in stats.errors:
             typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(code=2)
+
+
+@app.command("refresh-metadata")
+def refresh_metadata_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    data_freq: Annotated[
+        DataFrequency,
+        typer.Option("--freq", help="Partition frequency."),
+    ] = DataFrequency.daily,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type."),
+    ] = DataType.klines,
+    from_api: Annotated[
+        bool,
+        typer.Option("--from-api", help="Fetch symbols from REST API instead of archive."),
+    ] = False,
+    catalog_path: Annotated[
+        str | None,
+        typer.Option("--catalog", help="Output catalog directory."),
+    ] = None,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Refresh venue and symbol metadata tables.
+
+    Lists symbols from the Binance archive (or REST API) and saves as
+    Parquet for the Iceberg catalog.
+    """
+    import asyncio
+
+    from binance_datatool.archive.client import ArchiveClient
+
+    archive_home = resolve_archive_home(archive_home_path)
+    catalog = Path(catalog_path) if catalog_path else archive_home.parent / "lake"
+    source_label = "api" if from_api else "archive"
+
+    client = ArchiveClient()
+    workflow = MetadataWorkflow(
+        archive_client=client,
+        catalog_path=catalog,
+        source_label=source_label,
+    )
+
+    # Save venues
+    venues = workflow.refresh_venues()
+    venue_path = workflow.save_venues(venues)
+    typer.echo(f"Venues -> {venue_path}", err=True)
+
+    # Save symbols
+    if from_api:
+        symbols = asyncio.run(workflow.refresh_symbols_from_api(trade_type))
+    else:
+        symbols = asyncio.run(
+            workflow.refresh_symbols(trade_type, data_freq, data_type)
+        )
+    sym_path = workflow.save_symbols(symbols)
+    typer.echo(f"Symbols -> {sym_path}", err=True)
+    typer.echo(f"Saved {len(symbols)} symbols for {trade_type.value}", err=True)

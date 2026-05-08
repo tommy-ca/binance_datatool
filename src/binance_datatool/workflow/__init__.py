@@ -5,6 +5,7 @@ from .gap_fill import GapFillResult, GapFillWorkflow
 from .health_check import HealthCheckWorkflow, HealthReport, SymbolHealth
 from .list_files import ArchiveListFilesWorkflow
 from .list_symbols import ArchiveListSymbolsWorkflow
+from .metadata import MetadataWorkflow
 from .results import (
     DiffEntry,
     DiffResult,
@@ -33,6 +34,7 @@ __all__ = [
     "HealthReport",
     "ListFilesResult",
     "ListSymbolsResult",
+    "MetadataWorkflow",
     "SinkStats",
     "SinkWorkflow",
     "SymbolHealth",

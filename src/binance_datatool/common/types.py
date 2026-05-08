@@ -143,6 +143,36 @@ class SilverFundingRate:
     ingested_at: int = 0
 
 
+@dataclass(slots=True)
+class VenueMetadata:
+    """Trading venue metadata fetched from archive or API."""
+
+    venue: str
+    trade_type: str
+    exchange: str
+    source: str
+    symbol_count: int
+    data_types: list[str]
+    fetched_at: int
+
+
+@dataclass(slots=True)
+class SymbolMetadata:
+    """Trading symbol metadata fetched from archive or API."""
+
+    symbol: str
+    trade_type: str
+    exchange: str
+    base_asset: str
+    quote_asset: str
+    contract_type: str | None = None
+    is_leverage: bool = False
+    is_stable_pair: bool = False
+    source: str = ""
+    status: str = "trading"
+    fetched_at: int = 0
+
+
 __all__ = [
     "SymbolInfoBase",
     "SpotSymbolInfo",
@@ -153,4 +183,6 @@ __all__ = [
     "SilverKline",
     "SilverTrade",
     "SilverFundingRate",
+    "VenueMetadata",
+    "SymbolMetadata",
 ]

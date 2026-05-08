@@ -19,18 +19,48 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 ## Iceberg Catalog Table Naming
 
 ```
-binance.{layer}_{data_type}_{interval_suffix}
+{catalog}/{trade_type}/{data_type}/date={YYYY-MM-DD}/{file}.parquet
 ```
 
 | Catalog Path | Description | Partitioning |
 |---|---|---|
-| `binance.silver_klines_1m` | 1-minute klines | `(trade_type, date)` |
-| `binance.silver_klines_1h` | 1-hour klines | `(trade_type, date)` |
-| `binance.silver_klines_1d` | 1-day klines | `(trade_type, date)` |
-| `binance.silver_trades` | Raw trades + aggTrades | `(trade_type, date)` |
-| `binance.silver_funding_rate` | Perpetual funding rates | `(trade_type, date)` |
-| `binance.gold_daily_ohlcv` | Daily aggregated OHLCV | `(trade_type)` |
-| `binance.gold_funding_summary` | Funding rate summaries | `(trade_type)` |
+| `{catalog}/spot/klines/date=N/spot_klines.parquet` | Spot klines | `date` |
+| `{catalog}/um/klines/date=N/um_klines.parquet` | UM klines | `date` |
+| `{catalog}/cm/klines/date=N/cm_klines.parquet` | CM klines | `date` |
+| `{catalog}/spot/aggTrades/date=N/spot_aggTrades.parquet` | Spot aggregated trades | `date` |
+| `{catalog}/um/fundingRate/date=N/um_fundingRate.parquet` | UM funding rate | `date` |
+| `{catalog}/venues.parquet` | Venue metadata | None |
+| `{catalog}/symbols.parquet` | Symbol metadata | None |
+
+## Metadata Tables
+
+### venues (catalog-level)
+
+| Column | Type | Source | Description |
+|--------|------|--------|-------------|
+| `venue` | UTF8 | Auto | `"binance_spot"`, `"binance_um"`, `"binance_cm"` |
+| `trade_type` | UTF8 | Auto | `"spot"`, `"um"`, `"cm"` |
+| `exchange` | UTF8 | Auto | `"binance"` |
+| `source` | UTF8 | Auto | `"archive"` or `"api"` |
+| `symbol_count` | INT64 | Derived | Number of symbols (populated after refresh) |
+| `data_types` | UTF8 | Auto | Comma-separated available data types |
+| `fetched_at` | INT64 (ms) | Auto | When metadata was fetched |
+
+### symbols (catalog-level)
+
+| Column | Type | Source | Description |
+|--------|------|--------|-------------|
+| `symbol` | UTF8 | Archive/API | Trading pair (e.g. `"BTCUSDT"`) |
+| `trade_type` | UTF8 | Auto | `"spot"`, `"um"`, `"cm"` |
+| `exchange` | UTF8 | Auto | `"binance"` |
+| `base_asset` | UTF8 | Archive/API | Base asset (e.g. `"BTC"`) |
+| `quote_asset` | UTF8 | Archive/API | Quote asset (e.g. `"USDT"`) |
+| `contract_type` | UTF8 | API | `"perpetual"`, `"delivery"`, or empty |
+| `is_leverage` | BOOL | Archive | Leveraged token flag |
+| `is_stable_pair` | BOOL | Archive | Stablecoin pair flag |
+| `source` | UTF8 | Auto | `"archive"` or `"api"` |
+| `status` | UTF8 | API | `"trading"`, `"break"`, etc. |
+| `fetched_at` | INT64 (ms) | Auto | When metadata was fetched |
 
 ## Silver Layer Schemas
 
@@ -115,11 +145,67 @@ taker_buy_quote_volume   → taker_buy_quote_volume
 -                        → ingested_at = now()
 ```
 
+## Data Flow: Archive → Silver Pipeline
+
+```
+Archive (local ZIPs + filled CSVs)
+  │
+  ├── ArchiveListSymbolsWorkflow (list-symbols)
+  │     → symbols metadata (symbols.parquet)
+  │
+  ├── SinkWorkflow (sink)
+  │     → read ZIP CSVs + filled CSVs
+  │     → Bronze → Silver transform (normalize, cast, add metadata)
+  │     → write partitioned Parquet: {catalog}/{type}/{data_type}/date=N/*.parquet
+  │     → DuckDB: CREATE OR REPLACE TABLE {type}_{data_type}
+  │
+  └── MetadataWorkflow (refresh-metadata)
+        → venues.parquet (3 venues: spot, um, cm)
+        → symbols.parquet (all symbols per trade type)
+        → Optionally from REST API: richer metadata (status, contract type)
+```
+
+## Commands
+
+```bash
+# Transform Bronz to Silver Parquet
+binance-datatool sink spot --type klines --interval 1h --target parquet --catalog /path/to/lake BTCUSDT
+
+# Load into DuckDB as well
+binance-datatool sink spot --type klines --interval 1h --target all --duckdb /path/to/db.duckdb BTCUSDT
+
+# Refresh metadata from archive
+binance-datatool refresh-metadata spot --catalog /path/to/lake
+
+# Refresh metadata from REST API (richer data)
+binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
+```
+
+## Catalog Directory Structure
+
+```
+{archive_home}/../lake/
+├── venues.parquet           # Venue metadata (3 rows)
+├── symbols.parquet          # Symbol metadata (all trade types)
+├── spot/
+│   └── klines/
+│       └── date=2026-05-08/
+│           └── spot_klines.parquet
+├── um/
+│   └── klines/
+│       └── date=2026-05-08/
+│           └── um_klines.parquet
+└── cm/
+    └── klines/
+        └── date=2026-05-08/
+            └── cm_klines.parquet
+```
+
 ## Gap-Fill and Health Check on Silver
 
 ### Gap Detection (Silver-aware)
 - Scan Silver layer for missing dates per `(trade_type, data_type, symbol, interval)`
-- Query Parquet/Iceberg for date range coverage
+- Query Parquet for date range coverage
 - Fetch missing data from REST API → normalize → append to Silver
 
 ### Health Check (Silver-aware)

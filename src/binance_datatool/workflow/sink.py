@@ -339,10 +339,7 @@ class SinkWorkflow:
 
         file_count = 0
         for date_val, group in df.group_by("date", maintain_order=True):
-            table_name = f"silver_{data_type}"
-            out_path = (
-                base / table_name / f"date={date_val[0]}" / f"{trade_type}_{data_type}.parquet"
-            )
+            out_path = base / f"date={date_val[0]}" / f"{trade_type}_{data_type}.parquet"
             out_path.parent.mkdir(parents=True, exist_ok=True)
             group.drop(["date"]).write_parquet(out_path)
             file_count += 1
@@ -358,7 +355,7 @@ class SinkWorkflow:
             logger.warning("DuckDB not available; skipping load")
             return
 
-        table_name = f"silver_{trade_type}_{data_type}".replace("-", "_")
+        table_name = f"{trade_type}_{data_type}".replace("-", "_")
         db_path = str(self._duckdb_path) if self._duckdb_path else ":memory:"
 
         con = duckdb.connect(db_path)

@@ -184,12 +184,27 @@ Databento DBN and tardis.dev conventions.
 
 ### Iceberg Catalog Path
 ```
-{catalog}/{trade_type}/{data_type}/silver_{data_type}/date={YYYY-MM-DD}/{file}.parquet
+{catalog}/{trade_type}/{data_type}/date={YYYY-MM-DD}/{file}.parquet
+```
+
+### Metadata Tables
+```
+{catalog}/venues.parquet     — Venue metadata (spot, um, cm)
+{catalog}/symbols.parquet    — Symbol metadata (all symbols per trade type)
 ```
 
 ### Silver Spec
 See `docs/silver-layer-spec.md` for full schema definitions for klines, trades,
 aggTrades, and funding rate across all trade types.
+
+### Populate Metadata from Archive/API
+```bash
+# From archive (symbols discovered via S3 listing)
+binance-datatool refresh-metadata spot --catalog /path/to/lake
+
+# From REST API (richer metadata: status, contract type)
+binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
+```
 
 ## Repository Boundaries
 - `temp/` is git-ignored and may contain temporary or non-public materials.
