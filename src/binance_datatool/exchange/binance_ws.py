@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 
-from binance_datatool.models.adapter import KlineData
+from binance_datatool.common.types import KlineData
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

@@ -1,4 +1,4 @@
-"""Shared typed models for parsed Binance symbols."""
+"""Shared typed models for parsed Binance symbols and OHLCV data."""
 
 from __future__ import annotations
 
@@ -42,3 +42,30 @@ class CmSymbolInfo(SymbolInfoBase):
 
 
 SymbolInfo = SpotSymbolInfo | UmSymbolInfo | CmSymbolInfo
+
+
+@dataclass(slots=True)
+class KlineData:
+    """OHLCV kline/candlestick data from an exchange."""
+
+    open_time: int
+    open: str
+    high: str
+    low: str
+    close: str
+    volume: str
+    close_time: int
+    quote_volume: str
+    num_trades: int
+    taker_buy_volume: str
+    taker_buy_quote_volume: str
+
+
+__all__ = [
+    "SymbolInfoBase",
+    "SpotSymbolInfo",
+    "UmSymbolInfo",
+    "CmSymbolInfo",
+    "SymbolInfo",
+    "KlineData",
+]

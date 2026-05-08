@@ -7,7 +7,7 @@ import importlib
 
 from binance_datatool.common.enums import TradeType
 from binance_datatool.common.intervals import VALID_INTERVALS
-from binance_datatool.models.adapter import KlineData
+from binance_datatool.common.types import KlineData
 
 __all__ = ["CCXTProExchangeClient"]
 
