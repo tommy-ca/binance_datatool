@@ -167,6 +167,23 @@ class BinanceUmRestClient(_BinanceRestClientBase):
     delivery futures.
     """
 
+    def __init__(
+        self,
+        timeout_seconds: int | float = 30,
+        trust_env: bool = True,
+    ) -> None:
+        """Initialize UM futures REST client.
+
+        Args:
+            timeout_seconds: HTTP request timeout.
+            trust_env: Honour HTTP_PROXY environment variables.
+        """
+        super().__init__(
+            trade_type=TradeType.um,
+            timeout_seconds=timeout_seconds,
+            trust_env=trust_env,
+        )
+
     async def fetch_ohlcv(
         self,
         symbol: str,
@@ -220,6 +237,23 @@ class BinanceCmRestClient(_BinanceRestClientBase):
     Implements the ExchangeClient protocol for COIN-M perpetual and
     delivery futures.
     """
+
+    def __init__(
+        self,
+        timeout_seconds: int | float = 30,
+        trust_env: bool = True,
+    ) -> None:
+        """Initialize CM futures REST client.
+
+        Args:
+            timeout_seconds: HTTP request timeout.
+            trust_env: Honour HTTP_PROXY environment variables.
+        """
+        super().__init__(
+            trade_type=TradeType.cm,
+            timeout_seconds=timeout_seconds,
+            trust_env=trust_env,
+        )
 
     async def fetch_ohlcv(
         self,
