@@ -127,9 +127,7 @@ class IcebergCatalog:
     ) -> Path:
         """Register a DataFrame as an Iceberg table (file-system catalog).
 
-        Uses the same Hive-style partitioning as DuckLake for interop:
-          symbol={S}/interval={I}/date={N}/file.parquet  (klines)
-          symbol={S}/date={N}/file.parquet               (non-klines)
+        Path convention matches DuckLake for interop.
         Metadata tables (venues, symbols) are stored flat.
         """
         self._init_catalog()
@@ -148,13 +146,11 @@ class IcebergCatalog:
 
         written = 0
         for (sym, dt), group in df.group_by(["_sym", "_dt"], maintain_order=True):
-            parts = [table_root / f"symbol={sym}" / f"date={dt}"]
+            out_dir = table_root / f"symbol={sym}" / f"date={dt}"
             if interval:
-                parts = [table_root / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"]
-            out_dir = parts[0]
+                out_dir = table_root / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"
             out_dir.mkdir(parents=True, exist_ok=True)
-            suffix = f"_{trade_type}" if trade_type else ""
-            out = out_dir / f"{table_name}{suffix}.parquet"
+            out = out_dir / "data.parquet"
             group.drop(["_sym", "_dt"]).write_parquet(out)
             written += 1
 
@@ -243,23 +239,39 @@ class DuckLakeCatalog:
     def register_lake_views(self, con: Any, interval: str | None = None) -> None:
         """Create DuckLake views that scan the lake Parquet in-place (zero-copy).
 
-        Catalog layout mirrors the archive directory organization:
-          {trade_type}/{data_type}/symbol={S}/interval={I}/date={N}/*.parquet  (klines)
-          {trade_type}/{data_type}/symbol={S}/date={N}/*.parquet               (non-klines)
+        Matches the self-describing catalog layout:
+          data/exchange={E}/data-type={DT}/symbol={S}/[interval={I}/]date={D}/data.parquet
         """
         dp = self._data_path
-        views = []
-        for tt in ("spot", "um", "cm"):
-            for dt in ("klines", "fundingRate"):
-                views.append((f"{tt}_{dt}", dp / tt / dt))
+        exchanges = {
+            "spot": ("binance-spot", "klines", "spot_klines"),
+            "spot_fr": ("binance-spot", "fundingRate", "spot_fundingRate"),
+            "um": ("binance-perps-um", "klines", "um_klines"),
+            "um_fr": ("binance-perps-um", "fundingRate", "um_fundingRate"),
+            "cm": ("binance-perps-cm", "klines", "cm_klines"),
+            "cm_fr": ("binance-perps-cm", "fundingRate", "cm_fundingRate"),
+        }
 
-        for view_name, base_path in views:
-            if interval and "klines" in view_name:
-                pattern = str(
-                    base_path / "symbol=*" / f"interval={interval}" / "date=*" / "*.parquet"
+        for _key, (exchange, dtype, view_name) in exchanges.items():
+            base_pattern = (
+                dp
+                / f"exchange={exchange}"
+                / f"data-type={dtype}"
+                / "symbol=*"
+                / "date=*"
+                / "data.parquet"
+            )
+            if interval and dtype == "klines":
+                base_pattern = (
+                    dp
+                    / f"exchange={exchange}"
+                    / f"data-type={dtype}"
+                    / "symbol=*"
+                    / f"interval={interval}"
+                    / "date=*"
+                    / "data.parquet"
                 )
-            else:
-                pattern = str(base_path / "symbol=*" / "date=*" / "*.parquet")
+            pattern = str(base_pattern)
             try:
                 con.execute(
                     f"CREATE OR REPLACE VIEW {view_name} AS "
@@ -269,7 +281,7 @@ class DuckLakeCatalog:
                 con.execute(
                     f"CREATE OR REPLACE VIEW {view_name} AS SELECT * FROM (SELECT 1::BIGINT AS ts_event) WHERE 1=0"
                 )
-        logger.info("DuckLake: lake views registered at {}", dp)
+        logger.info("DuckLake: views registered at {}", dp)
 
     def create_analytics_views(self, con: Any) -> None:
         """Create analytics views on top of lake tables (in DuckLake catalog)."""

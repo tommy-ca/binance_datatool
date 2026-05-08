@@ -24,14 +24,13 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 | Catalog Path | Description | Partitioning |
 |---|---|---|
-| `{catalog}/spot/klines/symbol=BTCUSDT/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `symbol, interval, date` |
-| `{catalog}/spot/klines/symbol=ETHUSDT/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `symbol, interval, date` |
-| `{catalog}/um/klines/symbol=BTCUSDT/interval=1h/date=N/um_klines.parquet` | UM klines (1h) | `symbol, interval, date` |
-| `{catalog}/cm/klines/symbol=BTCUSDT/interval=1h/date=N/cm_klines.parquet` | CM klines (1h) | `symbol, interval, date` |
-| `{catalog}/spot/aggTrades/symbol=BTCUSDT/date=N/spot_aggTrades.parquet` | Spot aggTrades | `symbol, date` |
-| `{catalog}/um/fundingRate/symbol=BTCUSDT/date=N/um_fundingRate.parquet` | UM funding rate | `symbol, date` |
-| `{catalog}/venues.parquet` | Venue metadata | None |
-| `{catalog}/symbols.parquet` | Symbol metadata | None |
+| `data/exchange=binance-spot/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet` | Spot klines (1h) | `exchange, data-type, symbol, interval, date` |
+| `data/exchange=binance-perps-um/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet` | UM klines (1h) | `exchange, data-type, symbol, interval, date` |
+| `data/exchange=binance-perps-cm/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet` | CM klines (1h) | `exchange, data-type, symbol, interval, date` |
+| `data/exchange=binance-spot/data-type=aggTrades/symbol=BTCUSDT/date=N/data.parquet` | Spot aggTrades | `exchange, data-type, symbol, date` |
+| `data/exchange=binance-perps-um/data-type=fundingRate/symbol=BTCUSDT/date=N/data.parquet` | UM funding rate | `exchange, data-type, symbol, date` |
+| `metadata/venues.parquet` | Venue metadata | None |
+| `metadata/symbols.parquet` | Symbol metadata | None |
 
 ## Metadata Tables
 
@@ -253,10 +252,10 @@ from binance_datatool.workflow.catalog import DuckLakeCatalog
 catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
 
-# Register interval-aware lake views
-# For klines: scans interval-partitioned directories
-catalog.register_lake_views(con, interval="1h")  # only scans interval=1h/
-catalog.register_lake_views(con)                  # scans all intervals
+# Register lake views — scans self-describing path structure:
+#   data/exchange=binance-spot/data-type=klines/symbol=*/...
+catalog.register_lake_views(con, interval="1h")  # filter by interval partition
+catalog.register_lake_views(con)                  # all intervals
 
 # Create analytics views
 catalog.create_analytics_views(con)
@@ -363,26 +362,21 @@ SELECT symbol, COUNT(*) FROM spot_klines GROUP BY symbol;
 
 ```
 {lake_path}/
-├── metadata.ducklake      # DuckLake v1.0 catalog (ACID metadata)
-├── metadata.ducklake.wal  # Write-ahead log
+├── metadata.ducklake       # DuckLake v1.0 catalog (ACID metadata)
+├── metadata.ducklake.wal   # Write-ahead log
+├── metadata/
+│   ├── venues.parquet      # Venue metadata (3 rows)
+│   └── symbols.parquet     # Symbol metadata (all symbols)
 └── data/
-    ├── spot/
-    │   └── klines/
-    │       └── symbol=BTCUSDT/
-    │           ├── interval=1h/
-    │           │   └── date=2026-05-08/
-    │           │       └── spot_klines.parquet
-    │           └── interval=1m/
-    │               └── date=2026-05-08/
-    │                   └── spot_klines.parquet
-    ├── um/
-    │   └── klines/
-    │       └── symbol=BTCUSDT/
-    │           └── interval=1h/date=2026-05-08/um_klines.parquet
-    └── cm/
-        └── klines/
+    └── exchange=binance-spot/
+        └── data-type=klines/
             └── symbol=BTCUSDT/
-                └── interval=1h/date=2026-05-08/cm_klines.parquet
+                ├── interval=1h/
+                │   └── date=2026-05-08/
+                │       └── data.parquet       # <-- same file name everywhere
+                └── interval=1m/
+                    └── date=2026-05-08/
+                        └── data.parquet
 ```
 
 ## Gap-Fill and Health Check on Silver

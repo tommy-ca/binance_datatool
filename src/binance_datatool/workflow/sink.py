@@ -333,11 +333,16 @@ class SinkWorkflow:
     ) -> int:
         """Write Silver DataFrame to DuckLake data path with Hive partitioning.
 
-        Catalog layout mirrors archive directory organization:
-          {catalog}/data/{tt}/{dt}/symbol={S}/interval={I}/date={D}/file.parquet  (klines)
-          {catalog}/data/{tt}/{dt}/symbol={S}/date={D}/file.parquet               (non-klines)
+        Catalog layout (self-describing, no redundancy):
+          data/exchange={E}/data-type={DT}/symbol={S}/interval={I}/date={D}/data.parquet  (klines)
+          data/exchange={E}/data-type={DT}/symbol={S}/date={D}/data.parquet               (non-klines)
+
+        Exchange naming: binance-spot, binance-perps-um, binance-perps-cm
         """
-        base = self._catalog_path / "data" / trade_type / data_type
+        exchange = {"spot": "binance-spot", "um": "binance-perps-um", "cm": "binance-perps-cm"}.get(
+            trade_type, trade_type
+        )
+        base = self._catalog_path / "data" / f"exchange={exchange}" / f"data-type={data_type}"
         df = df.with_columns(pl.col("symbol").alias("_sym"))
         df = df.with_columns(
             pl.from_epoch(pl.col("ts_event") // 1000).dt.strftime("%Y-%m-%d").alias("_dt")
@@ -345,15 +350,16 @@ class SinkWorkflow:
 
         written = 0
         for (sym, dt), group in df.group_by(["_sym", "_dt"], maintain_order=True):
-            out_dir = base / f"symbol={sym}" / f"date={dt}"
+            parts = [base / f"symbol={sym}" / f"date={dt}"]
             if interval:
-                out_dir = base / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"
+                parts = [base / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"]
+            out_dir = parts[0]
             out_dir.mkdir(parents=True, exist_ok=True)
-            out = out_dir / f"{trade_type}_{data_type}.parquet"
+            out = out_dir / "data.parquet"
             group.drop(["_sym", "_dt"]).write_parquet(out)
             written += 1
 
-        logger.info("Wrote {} parquet files to {}", written, base)
+        logger.info("Wrote {} parquet files", written)
         return written
 
     def _load_duckdb(
