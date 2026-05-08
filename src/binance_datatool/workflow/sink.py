@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from loguru import logger
 
-from binance_datatool.workflow.catalog import DuckLakeCatalog, duckdb_table_name
+from binance_datatool.workflow.catalog import DuckLakeCatalog
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -365,24 +365,33 @@ class SinkWorkflow:
     def _load_duckdb(
         self, df: pl.DataFrame, trade_type: str, data_type: str, interval: str | None = None
     ) -> None:
-        """Connect DuckLake v1.0 to the lake and register views.
+        """Register Parquet files in native DuckLake v1.0 tables.
 
-        Uses the official DuckLake format (ATTACH 'ducklake:metadata.ducklake')
-        for ACID-compliant lakehouse queries. Data stays in Parquet — views
-        scan the lake in-place (zero copy).
+        Uses the official DuckLake format with:
+        1. Native DuckLake table creation (CREATE TABLE + SET PARTITIONED BY)
+        2. ducklake_add_data_files() for registering externally-written Parquet
+        3. DuckLake catalog provides ACID, snapshots, time-travel
         """
         catalog = DuckLakeCatalog(
             lake_path=self._catalog_path,
             db_path=self._duckdb_path,
         )
+        parquet_files = catalog.find_parquet_files(trade_type, data_type, interval)
+        if not parquet_files:
+            logger.info("No parquet files found for {}/{}", trade_type, data_type)
+            return
+
+        table_name = f"{trade_type}_{data_type}".replace("-", "_")
+
         con = catalog.connect()
         try:
-            catalog.register_lake_views(con, interval)
+            catalog.ensure_table(con, table_name)
+            ingested = catalog.ingest_parquet(con, table_name, parquet_files)
             catalog.create_analytics_views(con)
-            table_name = duckdb_table_name(trade_type, data_type)
             count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
             logger.info(
-                "DuckLake v1.0: {} rows via {} (scanned from lake)",
+                "DuckLake v1.0: ingested {} files, {} rows in native table {}",
+                ingested,
                 count,
                 table_name,
             )

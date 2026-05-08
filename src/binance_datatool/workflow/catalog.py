@@ -191,20 +191,36 @@ HAVING days_stale > 3;
 
 
 class DuckLakeCatalog:
-    """DuckLake v1.0 catalog — DuckDB queries the lake via the DuckLake format.
+    """DuckLake v1.0 catalog — native DuckDB lakehouse tables + ACID.
 
     Uses the official DuckLake format (ATTACH 'ducklake:metadata.ducklake') from
-    the DuckDB team. The DuckLake catalog provides:
+    the DuckDB team. Provides:
     - ACID transactions over multi-table operations
-    - Lightweight snapshots and time-travel queries
-    - Schema evolution and partition pruning
-    - Concurrent read/write from multiple DuckDB instances
+    - Native table management with partitioning
+    - Snapshots, time-travel, schema evolution
+    - ducklake_add_data_files for registering externally-written Parquet
 
     Data is written as Parquet via Polars (efficient batch transform),
-    then registered as DuckLake views for ACID-compliant querying.
+    then registered as native DuckLake tables for ACID-compliant querying.
 
     Docs: https://ducklake.select/docs/stable
     """
+
+    TABLE_DEFS: dict[str, str] = {
+        "spot_klines": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "um_klines": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "cm_klines": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "um_fundingRate": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "cm_fundingRate": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+    }
+
+    TABLE_PARTITIONS: dict[str, str] = {
+        "spot_klines": "symbol, interval, day(ts_event)",
+        "um_klines": "symbol, interval, day(ts_event)",
+        "cm_klines": "symbol, interval, day(ts_event)",
+        "um_fundingRate": "symbol, day(ts_event)",
+        "cm_fundingRate": "symbol, day(ts_event)",
+    }
 
     def __init__(
         self,
@@ -227,64 +243,81 @@ class DuckLakeCatalog:
         con.execute("LOAD parquet")
         con.execute("LOAD iceberg")
 
-        # Attach DuckLake format (ACID catalog + Parquet storage)
         metadata_path = self._lake_path / "metadata.ducklake"
-        data_path = self._data_path
-        con.execute(
-            f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{data_path}')"
-        )
-        con.execute(f"USE {self._catalog_name}")
+        try:
+            con.execute(
+                f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} "
+                f"(DATA_PATH '{self._data_path}', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute(f"USE {self._catalog_name}")
+        except Exception:
+            con.execute(f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{self._data_path}')")
+            con.execute(f"USE {self._catalog_name}")
         return con
 
-    def register_lake_views(self, con: Any, interval: str | None = None) -> None:
-        """Create DuckLake views that scan the lake Parquet in-place (zero-copy).
+    def ensure_table(self, con: Any, table_name: str) -> None:
+        """Create a DuckLake native table with partitioning if not exists."""
+        if table_name not in self.TABLE_DEFS:
+            logger.warning("Unknown table: {}", table_name)
+            return
+        exists = con.execute(
+            f"SELECT count(*) FROM information_schema.tables WHERE table_name = '{table_name}'"
+        ).fetchone()[0]
+        if exists:
+            return
+        cols = self.TABLE_DEFS[table_name]
+        con.execute(f"CREATE TABLE {table_name} ({cols})")
+        parts = self.TABLE_PARTITIONS.get(table_name)
+        if parts:
+            con.execute(f"ALTER TABLE {table_name} SET PARTITIONED BY ({parts})")
+        logger.info("DuckLake: created native table {} with partitions ({})", table_name, parts)
 
-        Matches the self-describing catalog layout:
-          data/exchange={E}/data-type={DT}/symbol={S}/[interval={I}/]date={D}/data.parquet
+    def ingest_parquet(
+        self,
+        con: Any,
+        table_name: str,
+        parquet_files: list[Path],
+    ) -> int:
+        """Ingest externally-written Parquet into a native DuckLake table.
+
+        Uses INSERT INTO + read_parquet to load data into DuckLake's managed
+        storage. DuckDB handles the file placement and partition tracking.
+
+        This is the official DuckLake pattern for registering data written by
+        external tools like Polars.
         """
-        dp = self._data_path
-        exchanges = {
-            "spot": ("binance-spot", "klines", "spot_klines"),
-            "spot_fr": ("binance-spot", "fundingRate", "spot_fundingRate"),
-            "um": ("binance-perps-um", "klines", "um_klines"),
-            "um_fr": ("binance-perps-um", "fundingRate", "um_fundingRate"),
-            "cm": ("binance-perps-cm", "klines", "cm_klines"),
-            "cm_fr": ("binance-perps-cm", "fundingRate", "cm_fundingRate"),
-        }
-
-        for _key, (exchange, dtype, view_name) in exchanges.items():
-            base_pattern = (
-                dp
-                / f"exchange={exchange}"
-                / f"data-type={dtype}"
-                / "symbol=*"
-                / "date=*"
-                / "data.parquet"
-            )
-            if interval and dtype == "klines":
-                base_pattern = (
-                    dp
-                    / f"exchange={exchange}"
-                    / f"data-type={dtype}"
-                    / "symbol=*"
-                    / f"interval={interval}"
-                    / "date=*"
-                    / "data.parquet"
-                )
-            pattern = str(base_pattern)
+        self.ensure_table(con, table_name)
+        ingested = 0
+        for path in parquet_files:
             try:
                 con.execute(
-                    f"CREATE OR REPLACE VIEW {view_name} AS "
-                    f"SELECT * FROM read_parquet('{pattern}', union_by_name=true)"
+                    f"INSERT INTO {table_name} SELECT * FROM read_parquet('{path}', hive_partitioning=false)"
                 )
-            except Exception:
-                con.execute(
-                    f"CREATE OR REPLACE VIEW {view_name} AS SELECT * FROM (SELECT 1::BIGINT AS ts_event) WHERE 1=0"
-                )
-        logger.info("DuckLake: views registered at {}", dp)
+                ingested += 1
+            except Exception as e:
+                logger.warning("DuckLake: failed to ingest {}: {}", path, e)
+        logger.info("DuckLake: ingested {} files into table {}", ingested, table_name)
+        return ingested
+
+    def find_parquet_files(
+        self,
+        trade_type: str,
+        data_type: str,
+        interval: str | None = None,
+    ) -> list[Path]:
+        """Find all data.parquet files matching a trade/data type pattern."""
+        exchange_map = {"spot": "binance-spot", "um": "binance-perps-um", "cm": "binance-perps-cm"}
+        exchange = exchange_map.get(trade_type, trade_type)
+        base = self._data_path / f"exchange={exchange}" / f"data-type={data_type}"
+        if not base.exists():
+            return []
+        pattern = "**/data.parquet"
+        if interval:
+            pattern = f"**/interval={interval}/**/data.parquet"
+        return sorted(base.glob(pattern))
 
     def create_analytics_views(self, con: Any) -> None:
-        """Create analytics views on top of lake tables (in DuckLake catalog)."""
+        """Create analytics views on top of native DuckLake tables."""
         for stmt in _DUCKLAKE_ANALYTICS_VIEWS.split(";"):
             stmt = stmt.strip()
             if stmt:
@@ -298,7 +331,6 @@ class DuckLakeCatalog:
         """Run a SQL query against the DuckLake catalog."""
         con = self.connect()
         try:
-            self.register_lake_views(con)
             return pl.from_arrow(con.execute(query).fetch_arrow_table())
         finally:
             con.close()
