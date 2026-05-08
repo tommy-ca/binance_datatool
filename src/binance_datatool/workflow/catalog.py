@@ -10,13 +10,10 @@ Catalog follows Databento DBN and tardis.dev schema conventions.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import polars as pl
 from loguru import logger
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 def duckdb_table_name(trade_type: str, data_type: str) -> str:
@@ -146,9 +143,7 @@ class IcebergCatalog:
         ts_col = "ts_event" if "ts_event" in df.columns else None
         if ts_col:
             df = df.with_columns(
-                pl.from_epoch(pl.col(ts_col) // 1000)
-                .dt.strftime("%Y-%m-%d")
-                .alias("_iceberg_date")
+                pl.from_epoch(pl.col(ts_col) // 1000).dt.strftime("%Y-%m-%d").alias("_iceberg_date")
             )
         else:
             df = df.with_columns(pl.lit("unknown").alias("_iceberg_date"))
@@ -169,112 +164,117 @@ class IcebergCatalog:
 # ── DuckDB Catalog ──────────────────────────────────────────────────────
 
 
-_DUCKDB_VIEWS_SQL = """
--- Analytics views for the binance data lake.
+_DUCKLAKE_LAKE_VIEWS = """
+-- DuckLake views: scan the lake Parquet files directly.
+-- No data copy — queries run against the lake in-place.
 
--- Daily aggregate: OHLCV by symbol
+CREATE OR REPLACE VIEW spot_klines AS
+    SELECT * FROM read_parquet('{lake_prefix}/spot/klines/*/*.parquet', union_by_name=true);
+
+CREATE OR REPLACE VIEW um_klines AS
+    SELECT * FROM read_parquet('{lake_prefix}/um/klines/*/*.parquet', union_by_name=true);
+
+CREATE OR REPLACE VIEW cm_klines AS
+    SELECT * FROM read_parquet('{lake_prefix}/cm/klines/*/*.parquet', union_by_name=true);
+
+CREATE OR REPLACE VIEW um_fundingRate AS
+    SELECT * FROM read_parquet('{lake_prefix}/um/fundingRate/*/*.parquet', union_by_name=true);
+
+CREATE OR REPLACE VIEW cm_fundingRate AS
+    SELECT * FROM read_parquet('{lake_prefix}/cm/fundingRate/*/*.parquet', union_by_name=true);
+"""
+
+_DUCKLAKE_ANALYTICS_VIEWS = """
+-- Analytics views on top of lake-scanned tables.
+
 CREATE OR REPLACE VIEW daily_ohlcv AS
-SELECT
-    CAST(ts_event / 86400000 AS DATE) AS trade_date,
-    symbol,
-    trade_type,
-    FIRST(open) AS open,
-    MAX(high) AS high,
-    MIN(low) AS low,
-    LAST(close) AS close,
-    SUM(volume) AS volume,
-    SUM(quote_volume) AS quote_volume,
-    COUNT(*) AS bar_count
-FROM spot_klines
-WHERE interval = '1h'
+SELECT CAST(ts_event / 86400000 AS DATE) AS trade_date,
+       symbol, trade_type,
+       FIRST(open) AS open, MAX(high) AS high,
+       MIN(low) AS low, LAST(close) AS close,
+       SUM(volume) AS volume, SUM(quote_volume) AS quote_volume,
+       COUNT(*) AS bar_count
+FROM spot_klines WHERE interval = '1h'
 GROUP BY trade_date, symbol, trade_type;
 
--- Latest data per symbol
 CREATE OR REPLACE VIEW latest_klines AS
 SELECT DISTINCT ON (symbol, trade_type, interval)
-    symbol,
-    trade_type,
-    interval,
-    ts_event,
-    close,
-    volume,
-    ingested_at
+       symbol, trade_type, interval, ts_event, close, volume, ingested_at
 FROM spot_klines
 ORDER BY symbol, trade_type, interval, ts_event DESC;
 
--- Funding rate summary (UM)
-CREATE OR REPLACE VIEW funding_summary AS
-SELECT
-    symbol,
-    trade_type,
-    COUNT(*) AS records,
-    AVG(funding_rate) AS avg_rate,
-    MAX(ts_event) AS latest_ts
-FROM um_fundingRate
-GROUP BY symbol, trade_type;
-
--- Health check: symbols with stale data
 CREATE OR REPLACE VIEW stale_symbols AS
-SELECT
-    symbol,
-    trade_type,
-    MAX(ts_event) AS latest_ts,
-    CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
-    DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
-FROM spot_klines
-GROUP BY symbol, trade_type
+SELECT symbol, trade_type,
+       MAX(ts_event) AS latest_ts,
+       CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
+       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
+FROM spot_klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 """
 
 
-class DuckDBCatalog:
-    """DuckDB catalog manager for local analytics.
+class DuckLakeCatalog:
+    """DuckLake catalog — DuckDB queries the lake directly.
 
-    Creates tables, views, and materialized views on top of the
-    partitioned Parquet catalog for DuckDB-based querying.
+    Instead of loading data into DuckDB tables, this registers views
+    that scan the lake Parquet files in-place using DuckDB's lake
+    extensions (ducklake, iceberg, parquet).
+
+    Benefits:
+    - No data duplication (views scan lake Parquet directly)
+    - Always up-to-date (reads latest lake files at query time)
+    - DuckDB optimizer push-down: filter/projection to Parquet
+    - Zero-copy: data lives in the lake, queries read in-place
     """
 
-    def __init__(self, db_path: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        lake_path: Path | str,
+        db_path: Path | str | None = None,
+    ) -> None:
+        self._lake_path = Path(lake_path).resolve()
         self._db_path = str(db_path) if db_path else ":memory:"
 
     def connect(self):
-        """Create a DuckDB connection."""
+        """Create a DuckDB connection with lake extensions loaded."""
         import duckdb
 
         con = duckdb.connect(self._db_path)
         con.execute("SET enable_progress_bar=false")
+        con.execute("LOAD ducklake")
+        con.execute("LOAD parquet")
+        con.execute("LOAD iceberg")
         return con
 
-    def register_table(
-        self,
-        con: Any,
-        parquet_paths: Sequence[Path],
-        trade_type: str,
-        data_type: str,
-    ) -> str:
-        """Register a set of Parquet files as a DuckDB table."""
-        table = duckdb_table_name(trade_type, data_type)
-        files_str = ", ".join(f"'{p}'" for p in parquet_paths)
-        con.execute(f"CREATE OR REPLACE TABLE {table} AS SELECT * FROM read_parquet([{files_str}])")
-        row_count = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        logger.info("DuckDB: loaded {} rows into table {}", row_count, table)
-        return table
-
-    def create_views(self, con: Any) -> None:
-        """Create analytics views on the DuckDB session."""
-        for stmt in _DUCKDB_VIEWS_SQL.split(";"):
+    def register_lake_views(self, con: Any) -> None:
+        """Create views that scan the lake Parquet directory in-place."""
+        lake_prefix = str(self._lake_path)
+        sql = _DUCKLAKE_LAKE_VIEWS.format(lake_prefix=lake_prefix)
+        for stmt in sql.split(";"):
             stmt = stmt.strip()
             if stmt:
                 try:
                     con.execute(stmt)
                 except Exception as e:
-                    logger.warning("DuckDB view error: {}", e)
-        logger.info("DuckDB: analytics views created")
+                    logger.warning("DuckLake view error: {}", e)
+        logger.info("DuckLake: lake views registered at {}", lake_prefix)
+
+    def create_analytics_views(self, con: Any) -> None:
+        """Create analytics views on top of lake tables."""
+        for stmt in _DUCKLAKE_ANALYTICS_VIEWS.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                try:
+                    con.execute(stmt)
+                except Exception as e:
+                    logger.warning("DuckLake analytics error: {}", e)
+        logger.info("DuckLake: analytics views created")
 
     def run_query(self, query: str) -> pl.DataFrame:
-        """Run a SQL query and return results as Polars DataFrame."""
+        """Run a SQL query against the lake and return results."""
         con = self.connect()
         try:
+            self.register_lake_views(con)
             return pl.from_arrow(con.execute(query).fetch_arrow_table())
         finally:
             con.close()

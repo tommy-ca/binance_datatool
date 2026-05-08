@@ -144,7 +144,7 @@ Archive (local ZIPs + filled CSVs)
 Normalized DataFrames (standardized schema per data type)
   ↓ write_parquet (partitioned by trade_type/data_type/date)
 Parquet files (columnar, queryable)
-  ↓ DuckDB sink (CREATE OR REPLACE TABLE)
+  ↓ DuckLake catalog (read_parquet view — zero copy)
 DuckDB (local SQL analytics)
   ↓ Future: pyiceberg catalog
 Iceberg (multi-engine lakehouse)

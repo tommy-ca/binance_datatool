@@ -244,20 +244,27 @@ catalog.register_parquet(df, "klines", trade_type="spot")
 # → iceberg/binance/klines/date=2026-05-08/klines_spot.parquet
 ```
 
-## DuckDB Catalog Design
+## DuckLake Catalog Design
 
-### Tables
-| Table | Source | Description |
-|-------|--------|-------------|
-| `spot_klines` | `lake/spot/klines/*.parquet` | Spot klines |
-| `um_klines` | `lake/um/klines/*.parquet` | UM klines |
-| `cm_klines` | `lake/cm/klines/*.parquet` | CM klines |
-| `um_fundingRate` | `lake/um/fundingRate/*.parquet` | UM funding rate |
-| `cm_fundingRate` | `lake/cm/fundingRate/*.parquet` | CM funding rate |
+DuckLake uses DuckDB's lake extensions to query Parquet files in-place.
+No data is copied into DuckDB — views scan the lake directly.
+
+### Lake Views (zero-copy)
+| View | Lake Source | Description |
+|------|-------------|-------------|
+| `spot_klines` | `lake/spot/klines/*/*.parquet` | Spot klines |
+| `um_klines` | `lake/um/klines/*/*.parquet` | UM klines |
+| `cm_klines` | `lake/cm/klines/*/*.parquet` | CM klines |
+| `um_fundingRate` | `lake/um/fundingRate/*/*.parquet` | UM funding rate |
+| `cm_fundingRate` | `lake/cm/fundingRate/*/*.parquet` | CM funding rate |
+
+Views use `read_parquet('.../*/*.parquet', union_by_name=true)` to scan
+the entire lake directory. DuckDB's Parquet reader handles partition
+pruning and projection pushdown automatically.
 
 ### Analytics Views
 ```sql
--- Daily OHLCV aggregation
+-- Daily OHLCV aggregation (queries lake in-place)
 CREATE OR REPLACE VIEW daily_ohlcv AS
 SELECT CAST(ts_event / 86400000 AS DATE) AS trade_date,
        symbol, trade_type,
@@ -286,12 +293,12 @@ HAVING days_stale > 3;
 
 ### Implementation
 ```python
-from binance_datatool.workflow.catalog import DuckDBCatalog
+from binance_datatool.workflow.catalog import DuckLakeCatalog
 
-catalog = DuckDBCatalog("/path/to/db.duckdb")
+catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
-catalog.register_table(con, parquet_paths, "spot", "klines")
-catalog.create_views(con)
+catalog.register_lake_views(con)       # spot_klines = read_parquet('lake/spot/klines/...')
+catalog.create_analytics_views(con)    # daily_ohlcv, latest_klines, stale_symbols
 ```
 
 ## Gap-Fill and Health Check on Silver

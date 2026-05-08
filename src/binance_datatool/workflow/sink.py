@@ -18,7 +18,7 @@ import polars as pl
 from loguru import logger
 
 from binance_datatool.workflow.catalog import (
-    DuckDBCatalog,
+    DuckLakeCatalog,
     IcebergCatalog,
     duckdb_table_name,
     iceberg_table_name,
@@ -341,13 +341,24 @@ class SinkWorkflow:
         return len(df)
 
     def _load_duckdb(self, df: pl.DataFrame, trade_type: str, data_type: str) -> None:
-        """Load Silver DataFrame into DuckDB via catalog."""
-        catalog = DuckDBCatalog(self._duckdb_path)
+        """Connect DuckLake to the lake and register lake-scanning views.
+
+        DuckLake scans the lake Parquet files in-place — no data copy.
+        """
+        catalog = DuckLakeCatalog(
+            lake_path=self._catalog_path,
+            db_path=self._duckdb_path,
+        )
         con = catalog.connect()
         try:
+            catalog.register_lake_views(con)
+            catalog.create_analytics_views(con)
             table_name = duckdb_table_name(trade_type, data_type)
-            con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
             row_count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-            logger.info("DuckDB: loaded {} rows into table {}", row_count, table_name)
+            logger.info(
+                "DuckLake: {} rows available via view {} (scanned from lake)",
+                row_count,
+                table_name,
+            )
         finally:
             con.close()

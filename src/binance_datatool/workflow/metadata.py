@@ -24,18 +24,30 @@ class MetadataWorkflow:
     EXCHANGE = "binance"
     VENUES = [
         VenueMetadata(
-            venue="binance_spot", trade_type="spot", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "trades"],
+            venue="binance_spot",
+            trade_type="spot",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "trades"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_um", trade_type="um", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_um",
+            trade_type="um",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_cm", trade_type="cm", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_cm",
+            trade_type="cm",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
     ]
@@ -135,17 +147,19 @@ class MetadataWorkflow:
             sym_name = s.get("symbol", "") if isinstance(s, dict) else str(s)
             if symbols and sym_name not in symbols:
                 continue
-            result.append(SymbolMetadata(
-                symbol=sym_name,
-                trade_type=trade_type.value,
-                exchange=self.EXCHANGE,
-                base_asset=(s.get("baseAsset", "") if isinstance(s, dict) else ""),
-                quote_asset=(s.get("quoteAsset", "") if isinstance(s, dict) else ""),
-                contract_type=(s.get("contractType", "") if isinstance(s, dict) else None),
-                status=(s.get("status", "trading") if isinstance(s, dict) else "trading"),
-                source="api",
-                fetched_at=now,
-            ))
+            result.append(
+                SymbolMetadata(
+                    symbol=sym_name,
+                    trade_type=trade_type.value,
+                    exchange=self.EXCHANGE,
+                    base_asset=(s.get("baseAsset", "") if isinstance(s, dict) else ""),
+                    quote_asset=(s.get("quoteAsset", "") if isinstance(s, dict) else ""),
+                    contract_type=(s.get("contractType", "") if isinstance(s, dict) else None),
+                    status=(s.get("status", "trading") if isinstance(s, dict) else "trading"),
+                    source="api",
+                    fetched_at=now,
+                )
+            )
         return result
 
     def save_venues(self, venues: list[VenueMetadata]) -> Path:

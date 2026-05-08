@@ -784,9 +784,7 @@ def refresh_metadata_command(
     if from_api:
         symbols = asyncio.run(workflow.refresh_symbols_from_api(trade_type))
     else:
-        symbols = asyncio.run(
-            workflow.refresh_symbols(trade_type, data_freq, data_type)
-        )
+        symbols = asyncio.run(workflow.refresh_symbols(trade_type, data_freq, data_type))
     sym_path = workflow.save_symbols(symbols)
     typer.echo(f"Symbols -> {sym_path}", err=True)
     typer.echo(f"Saved {len(symbols)} symbols for {trade_type.value}", err=True)
