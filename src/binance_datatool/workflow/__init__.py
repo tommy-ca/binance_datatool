@@ -2,6 +2,7 @@
 
 from .download import ArchiveDownloadWorkflow
 from .gap_fill import GapFillResult, GapFillWorkflow
+from .health_check import HealthCheckWorkflow, HealthReport, SymbolHealth
 from .list_files import ArchiveListFilesWorkflow
 from .list_symbols import ArchiveListSymbolsWorkflow
 from .results import (
@@ -27,8 +28,11 @@ __all__ = [
     "DownloadResult",
     "GapFillResult",
     "GapFillWorkflow",
+    "HealthCheckWorkflow",
+    "HealthReport",
     "ListFilesResult",
     "ListSymbolsResult",
+    "SymbolHealth",
     "SymbolListFilesResult",
     "SymbolListingError",
     "VerifyDiffResult",

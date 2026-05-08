@@ -49,6 +49,8 @@ class LineageEventType(str, Enum):
     TRANSFORMED = "transformed"  # Data transformed
     LOADED = "loaded"  # Data loaded to storage
     REJECTED = "rejected"  # Data rejected
+    FILLED = "filled"  # Gap filled via REST API
+    HEALTH_CHECKED = "health_checked"  # Health check ran
 
 
 @dataclass(frozen=True)

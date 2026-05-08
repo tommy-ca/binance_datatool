@@ -28,6 +28,7 @@ from binance_datatool.workflow import (
     DiffResult,
     DownloadResult,
     GapFillWorkflow,
+    HealthCheckWorkflow,
     SymbolListingError,
     VerifyDiffResult,
     VerifyResult,
@@ -526,6 +527,14 @@ def gap_fill_command(
         int | None,
         typer.Option("--end-time", help="End time in ms."),
     ] = None,
+    auto_detect: Annotated[
+        bool,
+        typer.Option("--auto-detect", help="Auto-detect gaps from local archive."),
+    ] = False,
+    lookback: Annotated[
+        int,
+        typer.Option("--lookback", help="Days to look back for gap detection."),
+    ] = 30,
     archive_home_path: Annotated[
         str | None,
         typer.Option("--archive-home", help="Override archive home."),
@@ -546,20 +555,106 @@ def gap_fill_command(
         raise typer.Exit(code=2)
 
     client = _exchange_client_for_trade_type(trade_type)
+    from binance_datatool.lineage import LineageTracker
+
+    tracker = LineageTracker()
     workflow = GapFillWorkflow(
         exchange_client=client,
         archive_home=archive_home,
         symbols=[symbol],
         data_type=data_type.value,
         interval=interval,
+        tracker=tracker,
+        lookback_days=lookback,
     )
 
-    result = asyncio.run(workflow.run(start_time=start_time, end_time=end_time))
+    detect = auto_detect or (start_time is None and end_time is None)
+    result = asyncio.run(
+        workflow.run(
+            start_time=start_time,
+            end_time=end_time,
+            detect_gaps=detect,
+        )
+    )
 
+    if auto_detect or detect:
+        typer.echo(f"Gaps detected: {len(result.gaps_detected)}", err=True)
     typer.echo(f"Filled: {result.files_filled} files, Failed: {result.files_failed}", err=True)
     for p in result.filled:
         typer.echo(str(p.relative_to(archive_home)))
     if result.failed:
         for sym, err in result.failed:
             typer.echo(f"Failed {sym}: {err}", err=True)
+        raise typer.Exit(code=2)
+
+
+@app.command("health")
+def health_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    symbols: Annotated[list[str] | None, typer.Argument(help="Symbols to check.")] = None,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type to check."),
+    ] = DataType.klines,
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Interval for kline-class data types."),
+    ] = None,
+    max_stale: Annotated[
+        int,
+        typer.Option("--max-stale", help="Max days since latest data before warning."),
+    ] = 3,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Check health of local archive data.
+
+    Reports completeness, freshness, and integrity for each symbol.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+    from binance_datatool.common import DataFrequency
+
+    resolved_symbols = symbols or []
+    if not resolved_symbols:
+        typer.echo("Error: At least one SYMBOL argument required.", err=True)
+        raise typer.Exit(code=2)
+
+    workflow = HealthCheckWorkflow(
+        trade_type=trade_type,
+        data_freq=DataFrequency.daily,
+        data_type=data_type,
+        symbols=resolved_symbols,
+        archive_home=archive_home,
+        interval=interval,
+        max_stale_days=max_stale,
+    )
+
+    report = workflow.run()
+
+    for health in report.per_symbol:
+        status = "HEALTHY" if health.is_healthy else "ISSUES"
+        typer.echo(
+            f"{health.symbol}: {status} "
+            f"(dates: {health.date_count}, "
+            f"missing: {len(health.missing_dates)}, "
+            f"corrupted: {len(health.corrupted_files)}, "
+            f"latest: {health.latest_date or 'N/A'})"
+        )
+        if health.missing_dates:
+            typer.echo(f"  Missing: {health.missing_dates[:10]}", err=True)
+        if health.corrupted_files:
+            typer.echo(f"  Corrupted: {health.corrupted_files[:5]}", err=True)
+
+    typer.echo(
+        f"Summary: {report.healthy_symbols}/{report.total_symbols} healthy, "
+        f"{report.total_missing_dates} missing dates, "
+        f"{report.total_corrupted} corrupted files",
+        err=True,
+    )
+    if report.errors:
+        for err in report.errors:
+            typer.echo(f"Error: {err}", err=True)
+    if report.total_symbols > 0 and report.healthy_symbols < report.total_symbols:
         raise typer.Exit(code=2)

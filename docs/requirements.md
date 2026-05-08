@@ -734,15 +734,73 @@ class ArchiveListFilesWorkflow:
   - UM: `rest_api.compressed_aggregate_trades_list()` + `get_funding_rate_history()`
   - CM: same as UM + `get_funding_rate_history_of_perpetual_futures()`
 - ✅ **Gap-fill workflow** (`workflow/gap_fill.py`) detects and fills missing archive data via REST API
-  - CLI: `binance-datatool gap-fill` command
-  - Supports klines, aggTrades, fundingRate
+  - CLI: `binance-datatool gap-fill` command with `--auto-detect` flag
+  - Supports klines, aggTrades, fundingRate with auto gap detection
   - Saves filled data as CSV with SHA256 checksum in `_filled/` subdirectory
+  - Records lineage events (LineageEventType.FILLED) for each operation
+- ✅ **Health check workflow** (`workflow/health_check.py`) monitors data health
+  - CLI: `binance-datatool health` command
+  - Checks completeness (missing dates), freshness (staleness), and integrity (checksums)
+  - Per-symbol health report with summary
+- ✅ **Enhanced LineageEventType**: Added `FILLED` (gap fill) and `HEALTH_CHECKED` events
 - ⏳ Implement `ExchangeRegistry` and `create_client()` factory
 - ⏳ Wire up new clients to CLI commands (Phase 6c)
+- ⏳ Transform/normalize/sink pipeline to DuckDB/Iceberg (Phase 7)
+
+### Phase 7: Transform, Normalize, and Sink (Planned)
+
+Goal: Transform raw archive data into queryable columnar format (Parquet), normalize schemas
+across data types and trade types, and sink to DuckDB (local) and/or Apache Iceberg (catalog).
+
+**Rationale**: Raw archive ZIPs are opaque. For analytics, ML feature engineering, and
+DataOps pipelines, we need columnar data with consistent schemas.
+
+**Proposed architecture**:
+```
+Archive (local ZIPs + filled CSVs)
+  ↓ Polars (read + transform)
+Normalized DataFrames (standardized schema)
+  ↓ Partition by (trade_type, data_type, date)
+Parquet files (columnar)
+  ↓ Load
+DuckDB (local analytics) ─ OR ─ Iceberg (catalog-driven lakehouse)
+```
+
+**Key design decisions**:
+- **Polars**: Already in dependencies. LazyFrame for efficient streaming transforms.
+- **Parquet as interchange format**: Universal columnar format, works with DuckDB, Iceberg,
+  Polars, Pandas, Spark.
+- **DuckDB first**: Local SQL analytics without external infrastructure.
+- **Iceberg later**: When catalog-driven schema evolution and multi-engine access are needed.
+- **Incremental loads**: Process only new/changed files since last run (track via lineage).
+
+**Normalized schema** (all trade types, all data types):
+
+```python
+{
+    "trade_type": str,      # "spot" | "um" | "cm"
+    "data_type": str,        # "klines" | "aggTrades" | "fundingRate"
+    "symbol": str,           # "BTCUSDT"
+    "open_time": int,        # epoch ms (for klines)
+    "open": Decimal,         # standard price fields
+    "high": Decimal,
+    "low": Decimal,
+    "close": Decimal,
+    "volume": Decimal,
+    # ... type-specific fields
+}
+```
+
+**Implementation order**:
+1. Polars-based archive reader (read ZIP CSVs + filled CSVs)
+2. Schema normalization per data type
+3. Parquet writer (partitioned by trade_type/data_type/date)
+4. DuckDB sink (CREATE TABLE AS, incremental INSERT)
+5. Iceberg catalog integration (pyiceberg)
+
+**Estimated effort**: 2-3 sprints (4-6 weeks)
 
 ---
-
-## 11. Summary
 
 This requirements document formalizes the project vision, architecture, data models, and development process. It serves as:
 

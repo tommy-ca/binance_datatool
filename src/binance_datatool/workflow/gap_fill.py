@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import re
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
+
+from binance_datatool.lineage import LineageEvent, LineageEventType
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -15,6 +19,7 @@ if TYPE_CHECKING:
     from binance_datatool.common.enums import TradeType
     from binance_datatool.common.types import KlineData
     from binance_datatool.exchange.client import ExchangeClient
+    from binance_datatool.lineage import LineageTracker
 
 
 def _archive_path(
@@ -111,12 +116,17 @@ def _checksum(path: Path) -> str:
     return h.hexdigest()
 
 
+_DATE_PATTERN = re.compile(r".*?-(\d{4}-\d{2}-\d{2})(?:\.zip|\.csv|\.filled\.csv)")
+
+
 class GapFillResult:
     """Result of a gap-fill operation."""
 
     def __init__(self) -> None:
         self.filled: list[Path] = []
         self.failed: list[tuple[str, str]] = []
+        self.gaps_detected: list[tuple[str, int, int]] = []
+        self.lineage_events: list[LineageEvent] = []
 
     @property
     def files_filled(self) -> int:
@@ -125,6 +135,83 @@ class GapFillResult:
     @property
     def files_failed(self) -> int:
         return len(self.failed)
+
+
+def _scan_existing_dates(symbol_dir: Path) -> set[str]:
+    """Scan a symbol directory for existing archive files and extract dates."""
+    dates: set[str] = set()
+    if not symbol_dir.exists():
+        return dates
+    for entry in symbol_dir.iterdir():
+        if entry.is_dir() and entry.name == "_filled":
+            continue
+        if entry.is_dir():
+            dates.update(_scan_existing_dates(entry))
+            continue
+        m = _DATE_PATTERN.match(entry.name)
+        if m:
+            dates.add(m.group(1))
+    return dates
+
+
+def _detect_date_gaps(
+    existing_dates: set[str],
+    trade_type: TradeType,
+    lookback_days: int = 30,
+) -> list[tuple[int, int]]:
+    """Detect date gaps in the last N days.
+
+    Returns list of (start_ms, end_ms) for each gap.
+    """
+    if not existing_dates:
+        now = datetime.now(UTC)
+        end = int(now.timestamp() * 1000)
+        start = int((now - timedelta(days=lookback_days)).timestamp() * 1000)
+        return [(start, end)]
+
+    existing_parsed = sorted(
+        datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=UTC) for d in existing_dates
+    )
+    now = datetime.now(UTC)
+    gaps: list[tuple[int, int]] = []
+
+    # Gap before earliest date
+    earliest = existing_parsed[0]
+    if (now - earliest).days < lookback_days:
+        expected_earliest = now - timedelta(days=lookback_days)
+        if earliest > expected_earliest:
+            gaps.append(
+                (
+                    int(expected_earliest.timestamp() * 1000),
+                    int(earliest.timestamp() * 1000),
+                )
+            )
+
+    # Gaps between dates
+    for i in range(len(existing_parsed) - 1):
+        current = existing_parsed[i]
+        next_date = existing_parsed[i + 1]
+        gap_days = (next_date - current).days
+        if gap_days > 1:
+            gaps.append(
+                (
+                    int((current + timedelta(days=1)).timestamp() * 1000),
+                    int(next_date.timestamp() * 1000),
+                )
+            )
+
+    # Gap after latest date
+    latest = existing_parsed[-1]
+    days_since_latest = (now - latest).days
+    if days_since_latest >= 1:
+        gaps.append(
+            (
+                int((latest + timedelta(days=1)).timestamp() * 1000),
+                int(now.timestamp() * 1000),
+            )
+        )
+
+    return gaps
 
 
 class GapFillWorkflow:
@@ -137,32 +224,96 @@ class GapFillWorkflow:
         symbols: Sequence[str],
         data_type: str,
         interval: str | None = None,
+        tracker: LineageTracker | None = None,
+        lookback_days: int = 30,
     ) -> None:
         self._client = exchange_client
         self._archive_home = Path(archive_home)
         self._symbols = symbols
         self._data_type = data_type
         self._interval = interval
+        self._tracker = tracker
+        self._lookback_days = lookback_days
+
+    def detect_gaps(
+        self,
+        trade_type: TradeType,
+    ) -> list[tuple[str, int, int]]:
+        """Detect date gaps for each symbol.
+
+        Returns list of (symbol, start_ms, end_ms).
+        """
+        gaps: list[tuple[str, int, int]] = []
+        for symbol in self._symbols:
+            symbol_dir = _archive_path(
+                self._archive_home, trade_type, self._data_type, symbol, self._interval
+            )
+            existing = _scan_existing_dates(symbol_dir)
+            symbol_gaps = _detect_date_gaps(existing, trade_type, self._lookback_days)
+            for start_ms, end_ms in symbol_gaps:
+                gaps.append((symbol, start_ms, end_ms))
+                logger.info("Gap detected for {}: {} -> {}", symbol, start_ms, end_ms)
+        return gaps
 
     async def run(
         self,
         start_time: int | None = None,
         end_time: int | None = None,
+        detect_gaps: bool = False,
     ) -> GapFillResult:
-        """Run the gap-fill workflow."""
+        """Run the gap-fill workflow.
+
+        Args:
+            start_time: Explicit start time (ms). Ignored if detect_gaps=True.
+            end_time: Explicit end time (ms). Ignored if detect_gaps=True.
+            detect_gaps: Auto-detect gaps before filling.
+        """
         result = GapFillResult()
         trade_type = self._client.trade_type
 
-        for symbol in self._symbols:
-            logger.info("Filling gaps for {} {}", symbol, self._data_type)
+        if detect_gaps:
+            gaps = self.detect_gaps(trade_type)
+            result.gaps_detected = gaps
+            if not gaps:
+                logger.info("No gaps detected for any symbol")
+                return result
+            logger.info("Detected {} gaps to fill", len(gaps))
+        elif start_time is not None or end_time is not None:
+            gaps = [(s, start_time or 0, end_time or 0) for s in self._symbols]
+        else:
+            logger.info("No gaps specified (use detect_gaps or start/end time)")
+            return result
+
+        for symbol, s_time, e_time in gaps:
+            logger.info("Filling gap for {} {} [{}, {}]", symbol, self._data_type, s_time, e_time)
             try:
-                data = await self._fetch_data(symbol, start_time, end_time)
+                data = await self._fetch_data(symbol, s_time, e_time)
                 if not data:
                     logger.info("No data returned for {}", symbol)
                     continue
                 paths = self._save_filled(trade_type, symbol, data)
                 result.filled.extend(paths)
-                logger.info("Filled {} files for {}", len(paths), symbol)
+                row_count = len(data)
+                logger.info("Filled {} rows for {} -> {}", row_count, symbol, paths)
+
+                if self._tracker:
+                    event = LineageEvent(
+                        source=f"binance_{trade_type.value}",
+                        symbol=symbol,
+                        event_type=LineageEventType.FILLED,
+                        timestamp=datetime.now(UTC),
+                        message=f"Gap filled: {self._data_type} from REST API",
+                        metadata={
+                            "data_type": self._data_type,
+                            "interval": self._interval,
+                            "start_ms": s_time,
+                            "end_ms": e_time,
+                            "row_count": row_count,
+                            "files": [str(p) for p in paths],
+                        },
+                    )
+                    self._tracker.record(event)
+                    result.lineage_events.append(event)
             except Exception as e:
                 logger.error("Failed to fill {}: {}", symbol, e)
                 result.failed.append((symbol, str(e)))
