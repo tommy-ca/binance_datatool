@@ -203,7 +203,7 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
     │               └── date=2026-05-08/
     │                   └── data.parquet        # Written by Polars
     └── main/                                    # DuckLake managed path
-        └── spot_klines/
+        └── klines/
             └── symbol=BTCUSDT/
                 └── interval=1h/
                     └── ducklake-*.parquet       # Managed by DuckDB
@@ -247,14 +247,15 @@ from binance_datatool.workflow.catalog import DuckLakeCatalog
 catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
 
-# Create DuckLake native table with partitioning
-#  ALTER TABLE spot_klines SET PARTITIONED BY (symbol, interval)
-catalog.ensure_table(con, "spot_klines")
+# Create unified DuckLake native table with partitioning
+#  ALTER TABLE klines SET PARTITIONED BY (trade_type, symbol, interval, ts_date)
+catalog.ensure_table(con, "klines")
 
 # Ingest externally-written Parquet into managed DuckLake table
-#  INSERT INTO spot_klines SELECT * FROM read_parquet('path/to/data.parquet')
+#  INSERT INTO klines SELECT *, CAST(epoch_ms(ts_event) AS DATE) AS ts_date
+#  FROM read_parquet('path/to/data.parquet')
 parquet_files = catalog.find_parquet_files("spot", "klines", interval="1h")
-catalog.ingest_parquet(con, "spot_klines", parquet_files)
+catalog.ingest_parquet(con, "klines", parquet_files)
 
 # Create analytics views (daily_ohlcv, stale_symbols)
 catalog.create_analytics_views(con)
@@ -265,32 +266,21 @@ catalog.create_analytics_views(con)
 DuckLake uses DuckDB's lake extensions to query Parquet files in-place.
 No data is copied into DuckDB — views scan the lake directly.
 
-### Lake Views (zero-copy)
-| View | Lake Source | Description |
-|------|-------------|-------------|
-| `spot_klines` | `lake/spot/klines/**/*.parquet` | Spot klines (all intervals) |
-| `um_klines` | `lake/um/klines/**/*.parquet` | UM klines (all intervals) |
-| `cm_klines` | `lake/cm/klines/**/*.parquet` | CM klines (all intervals) |
-| `um_fundingRate` | `lake/um/fundingRate/**/*.parquet` | UM funding rate |
-| `cm_fundingRate` | `lake/cm/fundingRate/**/*.parquet` | CM funding rate |
+### DuckLake Native Tables (unified across trade types)
+| Table | Columns | Partition | Description |
+|-------|---------|-----------|-------------|
+| `klines` | 18 | `trade_type, symbol, interval, ts_date` | Unified OHLCV across spot/um/cm |
+| `aggTrades` | 15 | `trade_type, symbol, ts_date` | Unified aggregated trades |
+| `fundingRate` | 10 | `trade_type, symbol, ts_date` | Unified funding rates (um/cm) |
+| `venues` | 7 | none | Venue metadata |
+| `symbols` | 11 | `trade_type` | Symbol metadata |
 
-Kline views can optionally filter by interval partition:
+Tables are unified: `trade_type` column differentiates spot/um/cm within each table.
 ```sql
--- All intervals
-SELECT * FROM spot_klines WHERE interval = '1h';
--- DuckDB partition pruning: only scans interval=1h/ directory
-```
-
-For kline-class data, Parquet files are partitioned by `interval` then `date`:
-```
-spot/klines/interval=1h/date=2026-05-08/spot_klines.parquet
-spot/klines/interval=1m/date=2026-05-08/spot_klines.parquet
-```
-
-Non-kline data types (aggTrades, fundingRate) use flat date partitioning:
-```
-spot/aggTrades/date=2026-05-08/spot_aggTrades.parquet
-um/fundingRate/date=2026-05-08/um_fundingRate.parquet
+-- Query spot klines only
+SELECT * FROM klines WHERE trade_type = 'spot';
+-- Cross-market comparison
+SELECT trade_type, AVG(close) FROM klines WHERE symbol = 'BTCUSDT' GROUP BY trade_type;
 ```
 
 ### Analytics Views
@@ -302,14 +292,14 @@ SELECT CAST(ts_event / 86400000 AS DATE) AS trade_date,
        FIRST(open) AS open, MAX(high) AS high,
        MIN(low) AS low, LAST(close) AS close,
        SUM(volume) AS volume
-FROM spot_klines WHERE interval = '1h'
+FROM klines WHERE interval = '1h'
 GROUP BY trade_date, symbol, trade_type;
 
 -- Latest data per symbol
 CREATE OR REPLACE VIEW latest_klines AS
 SELECT DISTINCT ON (symbol, trade_type, interval)
        symbol, trade_type, interval, ts_event, close, volume, ingested_at
-FROM spot_klines
+FROM klines
 ORDER BY symbol, trade_type, interval, ts_event DESC;
 
 -- Stale symbol detection
@@ -318,7 +308,7 @@ SELECT symbol, trade_type,
        MAX(ts_event) AS latest_ts,
        CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
        DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
-FROM spot_klines GROUP BY symbol, trade_type
+FROM klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 ```
 
@@ -331,7 +321,7 @@ from binance_datatool.workflow.catalog import DuckLakeCatalog
 # Create DuckLake catalog (ATTACH 'ducklake:metadata.ducklake' v1.0 format)
 catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
-# Registers: spot_klines, um_klines, cm_klines, um_fundingRate, cm_fundingRate
+# Registers: klines, aggTrades, fundingRate, venues, symbols
 catalog.register_lake_views(con)
 # Registers: daily_ohlcv, latest_klines, stale_symbols
 catalog.create_analytics_views(con)
@@ -354,7 +344,7 @@ LOAD ducklake;
 ATTACH 'ducklake:/path/to/lake/metadata.ducklake' AS binance_lake (DATA_PATH '/path/to/lake/data');
 USE binance_lake;
 -- Lake views scan Parquet in-place
-SELECT symbol, COUNT(*) FROM spot_klines GROUP BY symbol;
+SELECT symbol, COUNT(*) FROM klines GROUP BY symbol;
 ```
 
 ### Catalog Structure (DuckLake)

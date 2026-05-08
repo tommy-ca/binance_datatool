@@ -382,7 +382,7 @@ class SinkWorkflow:
             logger.info("No parquet files found for {}/{}", trade_type, data_type)
             return
 
-        table_name = f"{trade_type}_{data_type}".replace("-", "_")
+        table_name = data_type.replace("-", "_")
 
         con = catalog.connect()
         try:

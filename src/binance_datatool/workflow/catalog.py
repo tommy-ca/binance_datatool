@@ -162,7 +162,7 @@ class IcebergCatalog:
 
 
 _DUCKLAKE_ANALYTICS_VIEWS = """
--- Analytics views on top of lake-scanned tables.
+-- Analytics views on top of unified DuckLake tables.
 
 CREATE OR REPLACE VIEW daily_ohlcv AS
 SELECT CAST(epoch_ms(ts_event) AS DATE) AS trade_date,
@@ -171,13 +171,13 @@ SELECT CAST(epoch_ms(ts_event) AS DATE) AS trade_date,
        MIN(low) AS low, LAST(close) AS close,
        SUM(volume) AS volume, SUM(quote_volume) AS quote_volume,
        COUNT(*) AS bar_count
-FROM spot_klines WHERE interval = '1h'
+FROM klines WHERE interval = '1h'
 GROUP BY trade_date, symbol, trade_type;
 
 CREATE OR REPLACE VIEW latest_klines AS
 SELECT DISTINCT ON (symbol, trade_type, interval)
        symbol, trade_type, interval, ts_event, close, volume, ingested_at
-FROM spot_klines
+FROM klines
 ORDER BY symbol, trade_type, interval, ts_event DESC;
 
 CREATE OR REPLACE VIEW stale_symbols AS
@@ -185,7 +185,7 @@ SELECT symbol, trade_type,
        MAX(ts_event) AS latest_ts,
        CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
        DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
-FROM spot_klines GROUP BY symbol, trade_type
+FROM klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 """
 
@@ -208,28 +208,19 @@ class DuckLakeCatalog:
 
     # Column order must match the Silver Parquet output from sink.py
     # for INSERT INTO ... SELECT * FROM read_parquet() to work correctly.
+    # Unified tables (merged across trade types — use trade_type column for filtering)
     TABLE_DEFS: dict[str, str] = {
-        "spot_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "um_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "cm_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "um_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "cm_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "spot_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "um_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "cm_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
         "venues": "venue VARCHAR, trade_type VARCHAR, exchange VARCHAR, source VARCHAR, symbol_count BIGINT, data_types VARCHAR, fetched_at BIGINT",
         "symbols": "symbol VARCHAR, trade_type VARCHAR, exchange VARCHAR, base_asset VARCHAR, quote_asset VARCHAR, contract_type VARCHAR, is_leverage BOOLEAN, is_stable_pair BOOLEAN, source VARCHAR, status VARCHAR, fetched_at BIGINT",
     }
 
     TABLE_PARTITIONS: dict[str, str] = {
-        "spot_klines": "symbol, interval, ts_date",
-        "um_klines": "symbol, interval, ts_date",
-        "cm_klines": "symbol, interval, ts_date",
-        "spot_aggTrades": "symbol, ts_date",
-        "um_aggTrades": "symbol, ts_date",
-        "cm_aggTrades": "symbol, ts_date",
-        "um_fundingRate": "symbol, ts_date",
-        "cm_fundingRate": "symbol, ts_date",
+        "klines": "trade_type, symbol, interval, ts_date",
+        "aggTrades": "trade_type, symbol, ts_date",
+        "fundingRate": "trade_type, symbol, ts_date",
         "symbols": "trade_type",
     }
 
