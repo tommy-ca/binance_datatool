@@ -28,6 +28,16 @@ src/binance_datatool/
 │   ├── downloader.py        # aria2c batch downloader with per-file retry and proxy control
 │   └── symbol_dir.py        # SymbolArchiveDir, local marker management, directory scanning
 │
+├── exchange/                # Live exchange API clients (Phase 6a/6b ✅)
+│   ├── __init__.py          # Re-exports ExchangeClient protocol + implementations
+│   ├── client.py            # ExchangeClient Protocol (fetch_ohlcv, stream_ohlcv)
+│   ├── binance_rest.py      # BinanceSpotRestClient, BinanceUmRestClient, BinanceCmRestClient
+│   ├── binance_ws.py        # BinanceSpotWsClient, BinanceUmWsClient, BinanceCmWsClient
+│   ├── ccxt_rest.py         # CCXTExchangeClient(trade_type) — REST via ccxt
+│   ├── ccxt_pro.py         # CCXTProExchangeClient(trade_type) — WebSocket via ccxt.pro
+│   ├── registry.py          # ExchangeRegistry — register/list exchange clients (Planned)
+│   └── factory.py           # create_client(exchange_id) → ExchangeClient instance (Planned)
+│
 ├── workflow/                # Business logic orchestration
 │   ├── __init__.py          # Re-exports all workflow classes and result types
 │   ├── _shared.py           # Shared helpers (infer_symbol_info, validate_interval)
