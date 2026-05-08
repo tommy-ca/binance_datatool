@@ -27,6 +27,7 @@ from binance_datatool.workflow import (
     ArchiveVerifyWorkflow,
     DiffResult,
     DownloadResult,
+    GapFillWorkflow,
     SymbolListingError,
     VerifyDiffResult,
     VerifyResult,
@@ -35,6 +36,25 @@ from binance_datatool.workflow import (
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+
+    from binance_datatool.exchange.client import ExchangeClient
+
+
+def _exchange_client_for_trade_type(trade_type: TradeType) -> ExchangeClient:
+    """Create a REST exchange client for the given trade type."""
+    match trade_type:
+        case TradeType.spot:
+            from binance_datatool.exchange import BinanceSpotRestClient
+
+            return BinanceSpotRestClient()
+        case TradeType.um:
+            from binance_datatool.exchange import BinanceUmRestClient
+
+            return BinanceUmRestClient()
+        case TradeType.cm:
+            from binance_datatool.exchange import BinanceCmRestClient
+
+            return BinanceCmRestClient()
 
 
 @app.command("list-symbols")
@@ -482,3 +502,64 @@ def verify_command(
         typer.echo("Failed files were kept because --keep-failed is enabled.", err=True)
 
     _warn_if_empty_local_scan(total_zips=result.total_zips)
+
+
+@app.command("gap-fill")
+def gap_fill_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type to fill."),
+    ] = DataType.klines,
+    symbol: Annotated[
+        str, typer.Option("--symbol", help="Trading symbol (e.g. BTCUSDT).")
+    ] = "BTCUSDT",
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Kline interval (required for klines)."),
+    ] = None,
+    start_time: Annotated[
+        int | None,
+        typer.Option("--start-time", help="Start time in ms."),
+    ] = None,
+    end_time: Annotated[
+        int | None,
+        typer.Option("--end-time", help="End time in ms."),
+    ] = None,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Fill archive data gaps via REST API.
+
+    Uses the Binance REST API (via official SDK) to fill gaps in archive data
+    for klines, aggregated trades, or funding rate data.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+
+    if data_type.has_interval_layer and interval is None:
+        typer.echo("Error: --interval is required for kline-class data types", err=True)
+        raise typer.Exit(code=2)
+    if not data_type.has_interval_layer and interval is not None:
+        typer.echo("Error: --interval is not applicable for non-kline data types", err=True)
+        raise typer.Exit(code=2)
+
+    client = _exchange_client_for_trade_type(trade_type)
+    workflow = GapFillWorkflow(
+        exchange_client=client,
+        archive_home=archive_home,
+        symbols=[symbol],
+        data_type=data_type.value,
+        interval=interval,
+    )
+
+    result = asyncio.run(workflow.run(start_time=start_time, end_time=end_time))
+
+    typer.echo(f"Filled: {result.files_filled} files, Failed: {result.files_failed}", err=True)
+    for p in result.filled:
+        typer.echo(str(p.relative_to(archive_home)))
+    if result.failed:
+        for sym, err in result.failed:
+            typer.echo(f"Failed {sym}: {err}", err=True)
+        raise typer.Exit(code=2)

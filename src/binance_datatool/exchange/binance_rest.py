@@ -43,6 +43,18 @@ _REST_API_METHOD = {
     TradeType.cm: "kline_candlestick_data",
 }
 
+_AGG_TRADES_METHOD = {
+    TradeType.spot: "agg_trades",
+    TradeType.um: "compressed_aggregate_trades_list",
+    TradeType.cm: "compressed_aggregate_trades_list",
+}
+
+_FUNDING_RATE_METHOD = {
+    TradeType.spot: None,
+    TradeType.um: "get_funding_rate_history",
+    TradeType.cm: "get_funding_rate_history_of_perpetual_futures",
+}
+
 
 class _BinanceRestClientBase:
     """Base class for Binance REST clients using official SDK.
@@ -61,7 +73,7 @@ class _BinanceRestClientBase:
             api_key="",
             api_secret="",
             base_path=base_url,
-            timeout=timeout_seconds,
+            timeout=int(timeout_seconds * 1000),
         )
         self._client = _SDK_CLASSES[trade_type](config_rest_api=config)
 
@@ -85,20 +97,66 @@ class _BinanceRestClientBase:
         rest_api = self._client.rest_api
         method = getattr(rest_api, method_name)
 
-        params = {
+        params: dict = {
             "symbol": symbol.upper(),
             "interval": interval,
             "limit": limit,
         }
         if start_time is not None:
-            params["startTime"] = start_time
+            params["start_time"] = start_time
         if end_time is not None:
-            params["endTime"] = end_time
+            params["end_time"] = end_time
 
         response = method(**params)
         data = response.data()
 
         return [KlineData.from_binance_api(kline) for kline in data]
+
+    async def fetch_agg_trades(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        method_name = _AGG_TRADES_METHOD[self._trade_type]
+        rest_api = self._client.rest_api
+        method = getattr(rest_api, method_name)
+
+        params: dict = {"symbol": symbol.upper()}
+        if since is not None:
+            params["start_time"] = since
+        if until is not None:
+            params["end_time"] = until
+        if limit is not None:
+            params["limit"] = limit
+
+        response = method(**params)
+        return response.data()
+
+    async def fetch_funding_rate(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        method_name = _FUNDING_RATE_METHOD.get(self._trade_type)
+        if method_name is None:
+            raise NotImplementedError(f"Funding rate not supported for {self._trade_type}")
+        rest_api = self._client.rest_api
+        method = getattr(rest_api, method_name)
+
+        params: dict = {"symbol": symbol.upper()}
+        if since is not None:
+            params["start_time"] = since
+        if until is not None:
+            params["end_time"] = until
+        if limit is not None:
+            params["limit"] = limit
+
+        response = method(**params)
+        return response.data()
 
     async def close(self) -> None:
         return
@@ -122,7 +180,7 @@ class BinanceSpotRestClient(_BinanceRestClientBase):
             api_key="",
             api_secret="",
             base_path=base_url,
-            timeout=timeout_seconds,
+            timeout=int(timeout_seconds * 1000),
         )
         self._client = Spot(config_rest_api=config)
 

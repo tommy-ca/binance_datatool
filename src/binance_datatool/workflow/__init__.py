@@ -1,6 +1,7 @@
 """Workflow helpers for archive operations."""
 
 from .download import ArchiveDownloadWorkflow
+from .gap_fill import GapFillResult, GapFillWorkflow
 from .list_files import ArchiveListFilesWorkflow
 from .list_symbols import ArchiveListSymbolsWorkflow
 from .results import (
@@ -24,6 +25,8 @@ __all__ = [
     "DiffEntry",
     "DiffResult",
     "DownloadResult",
+    "GapFillResult",
+    "GapFillWorkflow",
     "ListFilesResult",
     "ListSymbolsResult",
     "SymbolListFilesResult",

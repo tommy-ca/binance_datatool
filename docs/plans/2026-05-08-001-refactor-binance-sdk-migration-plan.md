@@ -1,8 +1,9 @@
 ---
 title: Migrate Binance Exchange Clients to Official SDK
 type: refactor
-status: active
+status: completed
 date: 2026-05-08
+completed: 2026-05-08
 origin: docs/brainstorms/2026-05-08-binance-sdk-migration-requirements.md
 ---
 

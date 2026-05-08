@@ -729,6 +729,14 @@ class ArchiveListFilesWorkflow:
   - Replaced hand-rolled `aiohttp` WS clients with SDK `websocket_streams` + async generator wrapper
   - Preserved `ExchangeClient` protocol and backward-compatible aliases
   - Archive client (`archive/` module) kept intact (still uses `aiohttp` for S3 access)
+- ✅ **Extended ExchangeClient protocol** with `fetch_agg_trades()` and `fetch_funding_rate()` methods
+  - Spot: SDK `rest_api.agg_trades()` for aggTrades
+  - UM: `rest_api.compressed_aggregate_trades_list()` + `get_funding_rate_history()`
+  - CM: same as UM + `get_funding_rate_history_of_perpetual_futures()`
+- ✅ **Gap-fill workflow** (`workflow/gap_fill.py`) detects and fills missing archive data via REST API
+  - CLI: `binance-datatool gap-fill` command
+  - Supports klines, aggTrades, fundingRate
+  - Saves filled data as CSV with SHA256 checksum in `_filled/` subdirectory
 - ⏳ Implement `ExchangeRegistry` and `create_client()` factory
 - ⏳ Wire up new clients to CLI commands (Phase 6c)
 

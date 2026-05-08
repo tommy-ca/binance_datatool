@@ -105,6 +105,12 @@ class _BinanceWsClientBase:
     async def fetch_ohlcv(self, symbol: str, interval: str, **kwargs) -> list[KlineData]:
         raise NotImplementedError("Use REST client for historical klines")
 
+    async def fetch_agg_trades(self, symbol: str, **kwargs) -> list:
+        raise NotImplementedError("Use REST client for aggregated trades")
+
+    async def fetch_funding_rate(self, symbol: str, **kwargs) -> list:
+        raise NotImplementedError("Use REST client for funding rate")
+
     async def _connect(self) -> None:
         ws_config = ConfigurationWebSocketStreams(stream_url=self._ws_url)
         sdk_class = _SDK_WS_CLASSES[self._market_type]
