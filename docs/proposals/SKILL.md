@@ -224,7 +224,7 @@ src/binance_datatool/
 └── source_registry.py  # SourceRegistry (source selection)
 ```
 
-**Total**: 251 tests passing, 9 skipped, ~6,000 LOC.
+**Total**: 229 tests passing, 8 skipped, ~6,000 LOC.
 
 ## Exchange Clients (Live API)
 
