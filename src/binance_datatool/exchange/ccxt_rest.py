@@ -17,11 +17,14 @@ __all__ = ["CCXTExchangeClient"]
 class CCXTExchangeClient:
     """CCXT REST client for Binance Spot, UM, and CM markets.
 
-    Wraps ``ccxt.binance``, ``ccxt.binanceusdm``, or ``ccxt.binancecoin``
+    Wraps ``ccxt.binance``, ``ccxt.binanceusdm``, or ``ccxt.binancecoinm``
     depending on the requested market type.
 
     Implements the :class:`~binance_datatool.exchange.client.ExchangeClient`
     protocol.
+
+    Note:
+        CCXT is optional. Install with ``uv add binance-datatool[exchange]``.
     """
 
     def __init__(
@@ -34,12 +37,21 @@ class CCXTExchangeClient:
         Args:
             trade_type: Market segment (spot, um, cm).
             enable_rate_limit: Let CCXT handle rate limiting.
+
+        Raises:
+            ImportError: If ccxt is not installed.
         """
         if isinstance(trade_type, str):
             trade_type = TradeType(trade_type)
         self._trade_type = trade_type
 
-        import ccxt
+        try:
+            import ccxt
+        except ImportError as exc:
+            raise ImportError(
+                "ccxt is required for CCXTExchangeClient. "
+                "Install with: uv add binance-datatool[exchange]"
+            ) from exc
 
         if trade_type is TradeType.spot:
             self._exchange: ccxt.binance = ccxt.binance(
@@ -50,7 +62,7 @@ class CCXTExchangeClient:
                 {"enableRateLimit": enable_rate_limit}
             )
         elif trade_type is TradeType.cm:
-            self._exchange = ccxt.binancecoin(
+            self._exchange = ccxt.binancecoinm(
                 {"enableRateLimit": enable_rate_limit}
             )
         else:
@@ -92,16 +104,16 @@ class CCXTExchangeClient:
                 f"Expected one of: {VALID_INTERVALS}"
             )
 
-        # CCXT expects since/limit parameters
-        params: dict = {}
+        # CCXT expects since as keyword arg, limit as keyword arg
+        kwargs: dict = {}
         if since is not None:
-            params["since"] = since
-        if until is not None:
-            params["until"] = until
+            kwargs["since"] = since
+        if limit is not None:
+            kwargs["limit"] = limit
 
         # CCXT returns [[timestamp, open, high, low, close, volume], ...]
         ohlcv_list = await self._exchange.fetch_ohlcv(
-            symbol, interval, limit=limit, params=params
+            symbol, interval, **kwargs
         )
 
         # Convert CCXT OHLCV (6 fields) to KlineData (10 fields)

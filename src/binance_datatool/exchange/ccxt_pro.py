@@ -16,15 +16,14 @@ class CCXTProExchangeClient:
     """CCXT Pro WebSocket client for Binance Spot, UM, and CM markets.
 
     Wraps ``ccxt.pro.binance``, ``ccxt.pro.binanceusdm``, or
-    ``ccxt.pro.binancecoin`` depending on the requested market type.
+    ``ccxt.pro.binancecoinm`` depending on the requested market type.
 
     Implements the :class:`~binance_datatool.exchange.client.ExchangeClient`
     protocol.
 
     Note:
-        CCXT Pro is a separate package from CCXT. To use this client,
-        install ccxt with ``uv add ccxt`` and obtain a CCXT Pro license
-        for access to the ``ccxt.pro`` module.
+        CCXT Pro is included in ccxt since v1.95 (2022). No separate
+        license needed. Install with ``uv add binance-datatool[exchange]``.
     """
 
     def __init__(
@@ -37,6 +36,9 @@ class CCXTProExchangeClient:
         Args:
             trade_type: Market segment (spot, um, cm).
             enable_rate_limit: Let CCXT handle rate limiting.
+
+        Raises:
+            ImportError: If ccxt is not installed.
         """
         if isinstance(trade_type, str):
             trade_type = TradeType(trade_type)
@@ -46,8 +48,8 @@ class CCXTProExchangeClient:
             ccxt_pro = importlib.import_module("ccxt.pro")
         except ImportError as exc:
             raise ImportError(
-                "ccxt.pro is required for CCXTProExchangeClient. "
-                "Install ccxt and obtain a CCXT Pro license."
+                "ccxt is required for CCXTProExchangeClient. "
+                "Install with: uv add binance-datatool[exchange]"
             ) from exc
 
         if trade_type is TradeType.spot:
@@ -59,7 +61,7 @@ class CCXTProExchangeClient:
                 {"enableRateLimit": enable_rate_limit}
             )
         elif trade_type is TradeType.cm:
-            self._exchange = ccxt_pro.binancecoin(
+            self._exchange = ccxt_pro.binancecoinm(
                 {"enableRateLimit": enable_rate_limit}
             )
         else:
@@ -107,10 +109,11 @@ class CCXTProExchangeClient:
             )
 
         interval_ms = self._interval_to_ms(interval)
+        ccxt_symbol = self._to_ccxt_symbol(symbol)
 
         while True:
             try:
-                ohlcv_list = await self._exchange.watch_ohlcv(symbol, interval)
+                ohlcv_list = await self._exchange.watch_ohlcv(ccxt_symbol, interval)
 
                 for ohlcv in ohlcv_list:
                     yield KlineData(
