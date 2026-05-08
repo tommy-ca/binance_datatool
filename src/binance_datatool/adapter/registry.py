@@ -13,11 +13,9 @@ To add a new adapter:
 from __future__ import annotations
 
 from binance_datatool.adapter.binance import BinanceAdapter
-from binance_datatool.adapter.coinbase import CoinbaseAdapter
 from binance_datatool.source_registry import SourceRegistry
 
 # Register adapters
 SourceRegistry.register("binance", lambda: BinanceAdapter())
-SourceRegistry.register("coinbase", lambda: CoinbaseAdapter())
 
-__all__ = ["BinanceAdapter", "CoinbaseAdapter"]
+__all__ = ["BinanceAdapter"]
