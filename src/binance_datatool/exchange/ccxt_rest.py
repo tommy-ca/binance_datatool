@@ -15,10 +15,10 @@ __all__ = ["CCXTExchangeClient"]
 
 
 class CCXTExchangeClient:
-    """CCXT REST client for Binance Spot, UM, and CM markets.
+    """CCXT REST client for multi-exchange OHLCV data.
 
-    Wraps ``ccxt.binance``, ``ccxt.binanceusdm``, or ``ccxt.binancecoinm``
-    depending on the requested market type.
+    Supports Binance (spot/um/cm), OKX, Bybit, and 100+ other exchanges
+    via CCXT's unified API.
 
     Implements the :class:`~binance_datatool.exchange.client.ExchangeClient`
     protocol.
@@ -29,21 +29,23 @@ class CCXTExchangeClient:
 
     def __init__(
         self,
-        trade_type: TradeType | str = TradeType.spot,
+        exchange_id: str = "binance",
+        market_type: str = "spot",
         enable_rate_limit: bool = True,
     ) -> None:
         """Initialize the CCXT client.
 
         Args:
-            trade_type: Market segment (spot, um, cm).
+            exchange_id: Exchange identifier (binance, okex, bybit, etc.).
+            market_type: Market type (spot, swap, future, option).
             enable_rate_limit: Let CCXT handle rate limiting.
 
         Raises:
             ImportError: If ccxt is not installed.
+            ValueError: If exchange_id is not supported.
         """
-        if isinstance(trade_type, str):
-            trade_type = TradeType(trade_type)
-        self._trade_type = trade_type
+        self._exchange_id = exchange_id
+        self._market_type = market_type
 
         try:
             import ccxt
@@ -53,20 +55,57 @@ class CCXTExchangeClient:
                 "Install with: uv add binance-datatool[exchange]"
             ) from exc
 
-        if trade_type is TradeType.spot:
-            self._exchange: ccxt.binance = ccxt.binance(
+        # Map exchange_id to CCXT class
+        exchange_map = {
+            "binance": self._init_binance,
+            "okex": self._init_okx,
+            "bybit": self._init_bybit,
+        }
+
+        init_func = exchange_map.get(exchange_id)
+        if init_func is None:
+            # Generic CCXT exchange (may not support all features)
+            if not hasattr(ccxt, exchange_id):
+                raise ValueError(f"Unsupported exchange_id: {exchange_id}")
+            exchange_class = getattr(ccxt, exchange_id)
+            self._exchange = exchange_class(
                 {"enableRateLimit": enable_rate_limit}
             )
-        elif trade_type is TradeType.um:
+        else:
+            init_func(self, ccxt, enable_rate_limit)
+
+        # Set market type for exchanges that support it
+        if market_type != "spot" and hasattr(self._exchange, "options"):
+            self._exchange.options["defaultType"] = market_type
+
+    def _init_binance(self, ccxt, enable_rate_limit: bool) -> None:
+        """Initialize Binance with market type mapping."""
+        if self._market_type == "spot":
+            self._exchange = ccxt.binance(
+                {"enableRateLimit": enable_rate_limit}
+            )
+        elif self._market_type in ("um", "swap"):
             self._exchange = ccxt.binanceusdm(
                 {"enableRateLimit": enable_rate_limit}
             )
-        elif trade_type is TradeType.cm:
+        elif self._market_type in ("cm", "future"):
             self._exchange = ccxt.binancecoinm(
                 {"enableRateLimit": enable_rate_limit}
             )
         else:
-            raise ValueError(f"Unsupported trade_type: {trade_type}")
+            raise ValueError(f"Unsupported Binance market_type: {self._market_type}")
+
+    def _init_okx(self, ccxt, enable_rate_limit: bool) -> None:
+        """Initialize OKX (ccxt.okex)."""
+        self._exchange = ccxt.okex(  # type: ignore[attr-defined]
+            {"enableRateLimit": enable_rate_limit}
+        )
+
+    def _init_bybit(self, ccxt, enable_rate_limit: bool) -> None:
+        """Initialize Bybit."""
+        self._exchange = ccxt.bybit(  # type: ignore[attr-defined]
+            {"enableRateLimit": enable_rate_limit}
+        )
 
     @property
     def exchange_id(self) -> str:

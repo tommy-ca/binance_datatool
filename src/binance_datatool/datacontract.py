@@ -56,12 +56,9 @@ from typing import Any, Callable, Optional
 
 
 class DataSource(str, Enum):
-    """Supported data sources / exchanges."""
-
     BINANCE = "binance"
-    COINBASE = "coinbase"
-    KRAKEN = "kraken"
     BYBIT = "bybit"
+    OKX = "okx"
 
 
 class MarketType(str, Enum):
