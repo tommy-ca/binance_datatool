@@ -208,6 +208,7 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     return df.with_columns(
         pl.lit(None, pl.Utf8).alias("side"),
         pl.lit(None, pl.Int64).alias("agg_trade_id"),
+        pl.lit("agg").alias("rtype"),
     )
 
 
