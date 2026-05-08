@@ -230,6 +230,7 @@ class DuckLakeCatalog:
         "cm_aggTrades": "symbol, ts_date",
         "um_fundingRate": "symbol, ts_date",
         "cm_fundingRate": "symbol, ts_date",
+        "symbols": "trade_type",
     }
 
     def __init__(
