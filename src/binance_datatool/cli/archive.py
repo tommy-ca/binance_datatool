@@ -746,6 +746,10 @@ def refresh_metadata_command(
         bool,
         typer.Option("--from-api", help="Fetch symbols from REST API instead of archive."),
     ] = False,
+    duckdb_path: Annotated[
+        str | None,
+        typer.Option("--duckdb", help="Also register in DuckLake catalog (path to .duckdb)."),
+    ] = None,
     catalog_path: Annotated[
         str | None,
         typer.Option("--catalog", help="Output catalog directory."),
@@ -757,8 +761,8 @@ def refresh_metadata_command(
 ) -> None:
     """Refresh venue and symbol metadata tables.
 
-    Lists symbols from the Binance archive (or REST API) and saves as
-    Parquet for the Iceberg catalog.
+    Lists symbols from the Binance archive (or REST API), saves as Parquet,
+    and optionally registers in a DuckLake catalog as native tables.
     """
     import asyncio
 
@@ -775,16 +779,33 @@ def refresh_metadata_command(
         source_label=source_label,
     )
 
-    # Save venues
-    venues = workflow.refresh_venues()
-    venue_path = workflow.save_venues(venues)
+    # Save venues (local var must not collide with SQL table name 'venues')
+    venue_rows = workflow.refresh_venues()
+    venue_path = workflow.save_venues(venue_rows)
     typer.echo(f"Venues -> {venue_path}", err=True)
 
     # Save symbols
     if from_api:
-        symbols = asyncio.run(workflow.refresh_symbols_from_api(trade_type))
+        symbol_rows = asyncio.run(workflow.refresh_symbols_from_api(trade_type))
     else:
-        symbols = asyncio.run(workflow.refresh_symbols(trade_type, data_freq, data_type))
-    sym_path = workflow.save_symbols(symbols)
+        symbol_rows = asyncio.run(workflow.refresh_symbols(trade_type, data_freq, data_type))
+    sym_path = workflow.save_symbols(symbol_rows)
     typer.echo(f"Symbols -> {sym_path}", err=True)
-    typer.echo(f"Saved {len(symbols)} symbols for {trade_type.value}", err=True)
+    typer.echo(f"Saved {len(symbol_rows)} symbols for {trade_type.value}", err=True)
+
+    # Optionally register metadata in DuckLake as native tables
+    if duckdb_path:
+        from binance_datatool.workflow.catalog import DuckLakeCatalog
+
+        dl_catalog = DuckLakeCatalog(lake_path=catalog, db_path=duckdb_path)
+        dl_con = dl_catalog.connect()
+        try:
+            dl_catalog.register_metadata(dl_con, catalog)
+            v_count = dl_con.execute("SELECT COUNT(*) FROM venues").fetchone()[0]
+            s_count = dl_con.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
+            typer.echo(
+                f"DuckLake: registered {v_count} venues + {s_count} symbols as native tables",
+                err=True,
+            )
+        finally:
+            dl_con.close()

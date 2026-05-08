@@ -212,6 +212,8 @@ class DuckLakeCatalog:
         "cm_klines": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
         "um_fundingRate": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, data_type VARCHAR, ingested_at BIGINT",
         "cm_fundingRate": "symbol VARCHAR, ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "venues": "venue VARCHAR, trade_type VARCHAR, exchange VARCHAR, source VARCHAR, symbol_count BIGINT, data_types VARCHAR, fetched_at BIGINT",
+        "symbols": "symbol VARCHAR, trade_type VARCHAR, exchange VARCHAR, base_asset VARCHAR, quote_asset VARCHAR, contract_type VARCHAR, is_leverage BOOLEAN, is_stable_pair BOOLEAN, source VARCHAR, status VARCHAR, fetched_at BIGINT",
     }
 
     TABLE_PARTITIONS: dict[str, str] = {
@@ -300,6 +302,29 @@ class DuckLakeCatalog:
                 logger.warning("DuckLake: failed to ingest {}: {}", path, e)
         logger.info("DuckLake: ingested {} files into table {}", ingested, table_name)
         return ingested
+
+    def register_metadata(self, con: Any, lake_path: Path) -> None:
+        """Register metadata Parquet files as DuckLake native tables.
+
+        Ingest venues.parquet and symbols.parquet (written by MetadataWorkflow)
+        into DuckLake-managed tables with schema enforcement.
+        """
+        for table_name in ("venues", "symbols"):
+            meta_path = lake_path / f"{table_name}.parquet"
+            if not meta_path.exists():
+                logger.info("DuckLake: {} not found, skipping", meta_path)
+                continue
+            self.ensure_table(con, table_name)
+            count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+            if count > 0:
+                logger.info("DuckLake: {} already has {} rows", table_name, count)
+                continue
+            try:
+                con.execute(f"INSERT INTO {table_name} SELECT * FROM read_parquet('{meta_path}')")
+                count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+                logger.info("DuckLake: ingested {} rows into {}", count, table_name)
+            except Exception as e:
+                logger.warning("DuckLake: failed to ingest {}: {}", table_name, e)
 
     def find_parquet_files(
         self,

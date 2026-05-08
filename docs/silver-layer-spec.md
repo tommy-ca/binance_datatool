@@ -29,8 +29,8 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 | `data/exchange=binance-perps-cm/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet` | CM klines (1h) | `exchange, data-type, symbol, interval, date` |
 | `data/exchange=binance-spot/data-type=aggTrades/symbol=BTCUSDT/date=N/data.parquet` | Spot aggTrades | `exchange, data-type, symbol, date` |
 | `data/exchange=binance-perps-um/data-type=fundingRate/symbol=BTCUSDT/date=N/data.parquet` | UM funding rate | `exchange, data-type, symbol, date` |
-| `metadata/venues.parquet` | Venue metadata | None |
-| `metadata/symbols.parquet` | Symbol metadata | None |
+| `{lake}/venues.parquet` | Venue metadata (DuckLake native table opt-in) | None |
+| `{lake}/symbols.parquet` | Symbol metadata (DuckLake native table opt-in) | None |
 
 ## Metadata Tables
 
