@@ -55,25 +55,30 @@ This index provides a complete picture of the binance-datatool project after com
      - verify-partition (hash and verify files)
      - validate-contract (schema validation + lineage)
 
-### 6. **implementation-guide.md** ⭐ BUILD THIS NEXT
+### 6. **implementation-guide.md** ⭐ UPDATED
    - **Purpose**: Roadmap for implementing specifications
    - **Covers**: 5 implementation phases, TDD approach, code examples, checklists
    - **Length**: ~400 lines
-   - **Current Phase**: Phase 2 (Adapter Pattern & Multi-Source)
+   - **Current Phase**: Phase 4 Complete (Lineage & Observability)
+   - **Completed**:
+     - ✅ Phase 2: Adapter Pattern (BinanceAdapter, SourceRegistry)
+     - ✅ Phase 3: Data Contracts (datacontract.py, ContractRegistry)
+     - ✅ Phase 4: Lineage Tracking (lineage.py, LineageTracker)
+     - ✅ Phase 6: Exchange Clients (exchange/ module)
    - **Next Steps**:
-     - LineageTracker (lineage.py)
-     - BinanceAdapter (adapter/binance.py)
-     - CoinbaseAdapter (adapter/coinbase.py)
-     - CLI integration with SourceRegistry
+     - 🔄 CoinbaseAdapter (skeleton done, implement methods)
+     - ⏳ CLI integration with SourceRegistry (--source flag)
+     - ⏳ Skills/subagents implementation
 
 ### 7. **audit.md**
    - **Purpose**: Findings from code review
    - **Covers**: Current implementation, risks, priorities, recommendations
    - **Priorities**:
-     1. Data contracts + validation (DONE: datacontract.py)
-     2. Lineage tracking (TODO: Phase 2)
-     3. Multi-source adapter (TODO: Phase 2)
-     4. Skills/subagents (TODO: Phase 3)
+     1. Data contracts + validation (✅ DONE: datacontract.py)
+     2. Lineage tracking (✅ DONE: lineage.py)
+     3. Multi-source adapter (✅ DONE: adapter/binance.py, 🔄 CoinbaseAdapter skeleton)
+     4. Exchange clients (✅ DONE: exchange/ module)
+     5. Skills/subagents (⏳ TODO: implement from skills-subagents.md)
 
 ---
 
