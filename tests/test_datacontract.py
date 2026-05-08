@@ -275,7 +275,7 @@ class TestContractRegistry:
     def test_get_unregistered_contract(self):
         """Returns None for unregistered contracts."""
         contract = ContractRegistry.get(
-            DataSource.COINBASE,
+            DataSource.OKX,
             MarketType.SPOT,
             DataType.KLINES,
         )
@@ -284,29 +284,29 @@ class TestContractRegistry:
     def test_register_custom_contract(self):
         """Can register new contracts."""
         custom_contract = DataContract(
-            source=DataSource.COINBASE,
+            source=DataSource.OKX,
             market_type=MarketType.SPOT,
             data_type=DataType.KLINES,
             partition_freq=PartitionFreq.DAILY,
             schema={"timestamp": int, "price": Decimal},
             key_cols=["timestamp"],
-            description="Custom Coinbase contract",
+            description="Custom OKX contract",
         )
 
         ContractRegistry.register(
-            DataSource.COINBASE,
+            DataSource.OKX,
             MarketType.SPOT,
             DataType.KLINES,
             custom_contract,
         )
 
         retrieved = ContractRegistry.get(
-            DataSource.COINBASE,
+            DataSource.OKX,
             MarketType.SPOT,
             DataType.KLINES,
         )
         assert retrieved is custom_contract
-        assert retrieved.description == "Custom Coinbase contract"
+        assert retrieved.description == "Custom OKX contract"
 
     def test_all_contracts(self):
         """Returns all registered contracts."""
