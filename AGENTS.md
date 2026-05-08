@@ -104,6 +104,29 @@ The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `
   `[open_time, open, high, low, close, volume, close_time, quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]`
 - WS kline stream returns dict with structure `{"k": {"t": ..., "o": ..., ...}}`
 
+## Data Pipeline Architecture
+
+```
+Archive (S3) → Download → Verify
+                    ↓
+GapFillWorkflow (--auto-detect)
+  ├── detect_gaps() → parse dates from filenames
+  └── run() → fetch via SDK REST → save as CSV + .CHECKSUM
+                    ↓
+LineageTracker.record(FILLED)
+                    ↓
+HealthCheckWorkflow
+  ├── completeness (date coverage)
+  ├── freshness (staleness check)
+  └── integrity (SHA256 verification)
+                    ↓
+SinkWorkflow (binance-datatool sink)
+  ├── Polars: read ZIP CSVs + filled CSVs
+  ├── normalize to Silver schemas (ts_event, ts_recv)
+  ├── write partitioned Parquet (self-describing paths)
+  └── DuckLake v1.0 native tables (ACID, snapshots)
+```
+
 ## CLI Commands Reference
 
 ### archive commands
@@ -136,18 +159,14 @@ binance-datatool sink spot --type klines --interval 1h --target parquet --catalo
 binance-datatool sink spot --type klines --interval 1h --target all --duckdb /path/to/db.duckdb BTCUSDT
 ```
 
-## Data Pipeline Architecture
-
-```
-Archive (local ZIPs + filled CSVs)
-  ↓ Polars read + normalize
-Normalized DataFrames (standardized schema per data type)
-  ↓ write_parquet (partitioned by exchange/data-type/symbol/interval/date)
-Parquet files (columnar, queryable)
-  ↓ DuckLake catalog (read_parquet view — zero copy)
-DuckDB (local SQL analytics)
-  ↓ Future: pyiceberg catalog
-Iceberg (multi-engine lakehouse)
+### refresh-metadata (venue/symbol tables)
+```bash
+# From archive (symbols discovered via S3 listing)
+binance-datatool refresh-metadata spot --catalog /path/to/lake
+# From REST API (richer metadata: status, contract type)
+binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
+# Register as DuckLake native tables:
+binance-datatool refresh-metadata spot --catalog /path/to/lake --duckdb /path/to/db.duckdb
 ```
 
 ## Key Design Patterns
