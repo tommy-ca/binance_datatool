@@ -9,7 +9,7 @@ LineageTracker records and queries data source operations to enable:
 Example:
     ```python
     tracker = LineageTracker()
-    
+
     # Record a download event
     tracker.record(LineageEvent(
         source="binance",
@@ -18,10 +18,10 @@ Example:
         event_type=LineageEventType.DOWNLOADED,
         metadata={"file": "BTCUSDT-1d-2024-01-01.zip"}
     ))
-    
+
     # Query lineage for a symbol
     events = tracker.query(symbol="BTCUSDT")
-    
+
     # Export all events
     json_str = tracker.export(format="json")
     ```
@@ -33,7 +33,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class LineageEventType(str, Enum):
@@ -70,7 +69,7 @@ class LineageEvent:
     symbol: str
     event_type: LineageEventType
     timestamp: datetime
-    date: Optional[str] = None
+    date: str | None = None
     message: str = ""
     metadata: dict = field(default_factory=dict)
 
@@ -110,11 +109,11 @@ class LineageTracker:
 
     def query(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-        date: Optional[str] = None,
-        event_type: Optional[LineageEventType] = None,
-        date_range: Optional[tuple[datetime, datetime]] = None,
+        source: str | None = None,
+        symbol: str | None = None,
+        date: str | None = None,
+        event_type: LineageEventType | None = None,
+        date_range: tuple[datetime, datetime] | None = None,
     ) -> list[LineageEvent]:
         """Query lineage events with optional filters.
 
@@ -151,9 +150,9 @@ class LineageTracker:
 
     def get_latest(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-    ) -> Optional[LineageEvent]:
+        source: str | None = None,
+        symbol: str | None = None,
+    ) -> LineageEvent | None:
         """Get the most recent lineage event matching filters.
 
         Args:
@@ -170,9 +169,9 @@ class LineageTracker:
 
     def count(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-        event_type: Optional[LineageEventType] = None,
+        source: str | None = None,
+        symbol: str | None = None,
+        event_type: LineageEventType | None = None,
     ) -> int:
         """Count lineage events matching filters.
 
@@ -213,10 +212,7 @@ class LineageTracker:
         elif format == "csv":
             return self._export_csv()
         else:
-            raise ValueError(
-                f"Unsupported export format: {format}. "
-                "Supported: json, jsonl, csv"
-            )
+            raise ValueError(f"Unsupported export format: {format}. Supported: json, jsonl, csv")
 
     def _export_json(self) -> str:
         """Export events as JSON array."""
@@ -297,9 +293,7 @@ class LineageTracker:
             )
 
             # Count by source
-            stats_dict["by_source"][event.source] = (
-                stats_dict["by_source"].get(event.source, 0) + 1
-            )
+            stats_dict["by_source"][event.source] = stats_dict["by_source"].get(event.source, 0) + 1
 
             # Track unique symbols
             stats_dict["by_symbol"].add(event.symbol)

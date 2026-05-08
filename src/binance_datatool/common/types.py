@@ -60,6 +60,28 @@ class KlineData:
     taker_buy_volume: str
     taker_buy_quote_volume: str
 
+    @classmethod
+    def from_binance_api(cls, kline: list) -> KlineData:
+        """Create a KlineData from a Binance REST API kline response.
+
+        The Binance klines endpoint returns an array of 12 elements:
+        [open_time, open, high, low, close, volume, close_time,
+         quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]
+        """
+        return cls(
+            open_time=int(kline[0]),
+            open=str(kline[1]),
+            high=str(kline[2]),
+            low=str(kline[3]),
+            close=str(kline[4]),
+            volume=str(kline[5]),
+            close_time=int(kline[6]),
+            quote_volume=str(kline[7]),
+            num_trades=int(kline[8]),
+            taker_buy_volume=str(kline[9]),
+            taker_buy_quote_volume=str(kline[10]),
+        )
+
 
 __all__ = [
     "SymbolInfoBase",

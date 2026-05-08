@@ -17,19 +17,12 @@ Example:
 
 from __future__ import annotations
 
-import asyncio
-import re
-from typing import TYPE_CHECKING
-
 import aiohttp
 
 from binance_datatool.archive.client import ArchiveClient, ArchiveFile
 from binance_datatool.common.enums import DataFrequency, DataType, TradeType
 
 from . import FileMetadata
-
-if TYPE_CHECKING:
-    pass
 
 
 class BinanceAdapter:
@@ -50,18 +43,14 @@ class BinanceAdapter:
             timeout_seconds: HTTP timeout for S3 requests.
             trust_env: Honor HTTP proxy environment variables.
         """
-        self._client = ArchiveClient(
-            timeout_seconds=timeout_seconds, trust_env=trust_env
-        )
+        self._client = ArchiveClient(timeout_seconds=timeout_seconds, trust_env=trust_env)
 
     @property
     def source_name(self) -> str:
         """Return the source identifier."""
         return "binance"
 
-    async def list_symbols(
-        self, market_type: str, partition: str, data_type: str
-    ) -> list[str]:
+    async def list_symbols(self, market_type: str, partition: str, data_type: str) -> list[str]:
         """List available symbols for the requested parameters.
 
         Args:
@@ -118,14 +107,12 @@ class BinanceAdapter:
         data_type_enum = self._validate_data_type(data_type)
 
         # Call ArchiveClient
-        archive_files: list[ArchiveFile] = (
-            await self._client.list_symbol_files(
-                trade_type=trade_type,
-                data_freq=data_freq,
-                data_type=data_type_enum,
-                symbol=symbol,
-                interval=interval,
-            )
+        archive_files: list[ArchiveFile] = await self._client.list_symbol_files(
+            trade_type=trade_type,
+            data_freq=data_freq,
+            data_type=data_type_enum,
+            symbol=symbol,
+            interval=interval,
         )
 
         # Convert to FileMetadata
@@ -156,16 +143,16 @@ class BinanceAdapter:
             IOError: If file write fails.
         """
         timeout = aiohttp.ClientTimeout(total=self._client.timeout_seconds)
-        async with aiohttp.ClientSession(
-            timeout=timeout, trust_env=self._client.trust_env
-        ) as session:
-            async with session.get(url) as response:
-                response.raise_for_status()
+        async with (
+            aiohttp.ClientSession(timeout=timeout, trust_env=self._client.trust_env) as session,
+            session.get(url) as response,
+        ):
+            response.raise_for_status()
 
-                # Write response to file in chunks
-                with open(destination_path, "wb") as f:
-                    async for chunk in response.content.iter_chunked(8192):
-                        f.write(chunk)
+            # Write response to file in chunks
+            with open(destination_path, "wb") as f:
+                async for chunk in response.content.iter_chunked(8192):
+                    f.write(chunk)
 
     def parse_symbol(self, raw_symbol: str) -> dict | None:
         """Parse raw symbol string into metadata dict.
@@ -250,8 +237,7 @@ class BinanceAdapter:
         }
         if market_type not in mapping:
             raise ValueError(
-                f"Invalid market_type: {market_type}. "
-                f"Expected one of: {list(mapping.keys())}"
+                f"Invalid market_type: {market_type}. Expected one of: {list(mapping.keys())}"
             )
         return mapping[market_type]
 
@@ -274,8 +260,7 @@ class BinanceAdapter:
         }
         if partition not in mapping:
             raise ValueError(
-                f"Invalid partition: {partition}. "
-                f"Expected one of: {list(mapping.keys())}"
+                f"Invalid partition: {partition}. Expected one of: {list(mapping.keys())}"
             )
         return mapping[partition]
 
@@ -303,8 +288,7 @@ class BinanceAdapter:
                 return dt
 
         raise ValueError(
-            f"Invalid data_type: {data_type}. "
-            f"Expected one of: {[dt.value for dt in DataType]}"
+            f"Invalid data_type: {data_type}. Expected one of: {[dt.value for dt in DataType]}"
         )
 
 

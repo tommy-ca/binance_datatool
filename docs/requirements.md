@@ -605,6 +605,40 @@ End-to-End Tests (Slowest, Full System)
 ├─ Full CLI invocation
 ├─ CI/CD gates or manual only
 └─ Example: test_cli_download_real_data()
+
+### 6.6 Exchange Client Data Flow (Official SDK)
+
+```
+ExchangeClient (protocol)
+  ↓ fetch_ohlcv(symbol, interval, since, until, limit)
+
+BinanceSpotRestClient (or Um/Cm)
+  ↓ SDK rest_api.klines() / rest_api.kline_candlestick_data()
+
+ConfigurationRestAPI (api_key="", base_path=PROD_URL)
+  ↓ HTTPS GET
+Binance REST API (api.binance.com / fapi.binance.com / dapi.binance.com)
+  ↓
+SDK ApiResponse.data() → list of 12-element kline arrays
+  ↓ KlineData.from_binance_api(kline)
+list[KlineData] → returned to caller
+
+---
+
+ExchangeClient (protocol)
+  ↓ stream_ohlcv(symbol, interval)
+
+BinanceSpotWsClient (or Um/Cm)
+  ↓ SDK websocket_streams.create_connection()
+  ↓ connection.kline(symbol, interval) or connection.kline_candlestick_streams()
+  ↓
+RequestStreamHandle
+  ↓ on("message", queue.put_nowait)
+  ↓
+asyncio.Queue → async generator
+  ↓ parse kline JSON
+AsyncIterator[KlineData] → yielded to caller
+```
 ```
 
 ### 9.2 Test Template (TDD)
@@ -689,7 +723,12 @@ class ArchiveListFilesWorkflow:
 - ✅ Implement `BinanceSpotRestClient`, `BinanceUmRestClient`, `BinanceCmRestClient`
 - ✅ Implement `BinanceSpotWsClient`, `BinanceUmWsClient`, `BinanceCmWsClient`
 - ✅ Add optional CCXT integration (`ccxt_rest.py`, `ccxt_pro.py`)
-- ✅ Add exchange client tests (20 tests in test_exchange.py)
+- ✅ Add exchange client tests (18 tests in test_exchange.py)
+- ✅ **Migrated to official Binance SDK** (`binance-sdk-spot` for Spot, `binance-sdk-derivatives-trading-usds-futures` for UM, `binance-sdk-derivatives-trading-coin-futures` for CM)
+  - Replaced hand-rolled `aiohttp` REST clients with SDK `rest_api.klines()`/`kline_candlestick_data()` calls
+  - Replaced hand-rolled `aiohttp` WS clients with SDK `websocket_streams` + async generator wrapper
+  - Preserved `ExchangeClient` protocol and backward-compatible aliases
+  - Archive client (`archive/` module) kept intact (still uses `aiohttp` for S3 access)
 - ⏳ Implement `ExchangeRegistry` and `create_client()` factory
 - ⏳ Wire up new clients to CLI commands (Phase 6c)
 

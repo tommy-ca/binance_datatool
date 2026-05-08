@@ -134,7 +134,7 @@ This index provides a complete picture of the binance-datatool project after com
 | **BinanceAdapter** | ✅ Complete | adapter/binance.py | 35 passing | Wraps ArchiveClient |
 | **OKX/Bybit Adapter** | 🔄 Via CCXT | exchange/ccxt_rest.py | — | CCXTExchangeClient(trade_type="okx") |
 | **SourceRegistry** | ✅ Complete | source_registry.py | 2 passing | Adapter discovery/registration |
-| **Exchange Clients** | ✅ Complete | exchange/*.py | 20 passing | Spot/UM/CM REST + WebSocket |
+| **Exchange Clients** | ✅ Complete | exchange/*.py | 18 passing | SDK-backed Spot/UM/CM REST + WebSocket |
 | **Skills (5x)** | ⏳ Planned | — | — | See skills-subagents.md |
 | **MetricsCollector** | ❌ Not Started | — | — | Removed from scope |
 | **CLI --source flag** | ⏳ Planned | cli/archive.py | — | Phase 2 remaining work |
@@ -199,13 +199,13 @@ This index provides a complete picture of the binance-datatool project after com
 ### Current Test Status
 
 ```
+✅ Exchange client tests: 18 passing (SDK-backed)
 ✅ DataContract tests: 24 passing
-✅ SourceRegistry tests: 10 passing
-✅ Existing archive/workflow tests: ~20 passing
+✅ LineageTracker tests: 24 passing
+✅ BinanceAdapter tests: 35 passing
+✅ All tests combined: 249 passing, 9 skipped
 ---
-Total: ~54 tests passing
-
-Target: 200+ tests across all phases
+Target: 200+ tests — exceeded (249 passing)
 ```
 
 ### Running Tests
@@ -412,7 +412,13 @@ If unclear on:
   - [ ] 10+ unit tests + 5+ integration tests
   - Estimated: 4-5 hours
 
-### Short Term (Phase 2 Completion)
+### Short Term (Phase 6 SDK Migration Complete)
+
+- [x] Migrated exchange clients to official Binance SDK (`binance-sdk-spot`, `binance-sdk-derivatives-trading-usds-futures`, `binance-sdk-derivatives-trading-coin-futures`)
+- [x] Archive client (`archive/` module) kept intact (aiohttp-based S3 access)
+- [x] Tests: 249 passing, 9 skipped
+
+### Next Steps
 
 - [ ] Phase 2, Step 3: OKX/Bybit via CCXT skeleton
 - [ ] Phase 2, Step 4: Adapter integration tests

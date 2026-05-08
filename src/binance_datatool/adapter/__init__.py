@@ -39,7 +39,12 @@ class DataSourceAdapter(Protocol):
         """Return available symbols for the requested parameters."""
 
     async def list_files(
-        self, market_type: str, partition: str, data_type: str, symbol: str, interval: str | None = None
+        self,
+        market_type: str,
+        partition: str,
+        data_type: str,
+        symbol: str,
+        interval: str | None = None,
     ) -> list[FileMetadata]:
         """Return files available for one symbol.
 

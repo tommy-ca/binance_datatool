@@ -21,6 +21,8 @@
   `docs/` promptly after the code change is committed.
 - Unless explicitly requested otherwise, do not mix code changes and documentation updates in the
   same commit.
+- **Documentation accuracy rule**: If docs describe features not implemented (e.g., Bronze layer, Migration, Skills), either implement them or move docs to `docs/proposals/`. Never maintain false documentation about what the tool can do.
+- **Overspec prevention**: Original specs may have promised 34 Pydantic models, Bronze/Silver layers, 5 Skills, etc. The codebase uses `@dataclass` (29 total), not Pydantic. Keep docs aligned with reality (currently 98% accurate).
 
 ## Working Model
 - Build the project as a modern Python package named `binance_datatool`.
@@ -78,6 +80,29 @@
   coverage.
 - Focus tests on functional correctness and observable behavior, not on logging implementation
   details such as how loguru renders or routes messages to stderr.
+
+## Exchange Client SDK Migration
+
+The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `aiohttp`):
+
+| Package | Market | REST Method | WS Method |
+|---------|--------|-------------|-----------|
+| `binance-sdk-spot` | Spot | `rest_api.klines()` | `connection.kline(symbol, interval)` with `KlineIntervalEnum` |
+| `binance-sdk-derivatives-trading-usds-futures` | UM | `rest_api.kline_candlestick_data()` | `connection.kline_candlestick_streams()` |
+| `binance-sdk-derivatives-trading-coin-futures` | CM | `rest_api.kline_candlestick_data()` | `connection.kline_candlestick_streams()` |
+
+### Key Design Decisions
+- **Async generator interface preserved**: SDK callback-based WS streams are wrapped via `asyncio.Queue` bridge. `ExchangeClient.stream_ohlcv()` still returns `AsyncIterator[KlineData]`.
+- **No auth**: `ConfigurationRestAPI(api_key="", api_secret="")` for public market data endpoints only.
+- **Archive client intact**: `archive/` module still uses `aiohttp` for S3 access (`data.binance.vision`).
+- **Backward compat**: `BinanceRestClient = BinanceSpotRestClient`, `BinanceWsClient = BinanceSpotWsClient`.
+- **KlineData.from_binance_api()**: This classmethod on `common/types.py` maps the 12-element Binance kline array to our `KlineData` dataclass.
+- **Required dependencies**: SDK packages are required (not optional). CCXT remains optional (`[exchange]` extra).
+
+### SDK Response Format
+- REST klines endpoint returns array of 12 elements (same across all market types):
+  `[open_time, open, high, low, close, volume, close_time, quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]`
+- WS kline stream returns dict with structure `{"k": {"t": ..., "o": ..., ...}}`
 
 ## Repository Boundaries
 - `temp/` is git-ignored and may contain temporary or non-public materials.

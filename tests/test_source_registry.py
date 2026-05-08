@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 
-from binance_datatool.adapter import DataSourceAdapter
 from binance_datatool.source_registry import SourceRegistry
 
 
@@ -16,7 +15,14 @@ class FakeAdapter:
     async def list_symbols(self, market_type: str, partition: str, data_type: str) -> list[str]:
         return ["AAA", "BBB"]
 
-    async def list_files(self, market_type: str, partition: str, data_type: str, symbol: str, interval: str | None = None):
+    async def list_files(
+        self,
+        market_type: str,
+        partition: str,
+        data_type: str,
+        symbol: str,
+        interval: str | None = None,
+    ):
         # Return an empty list to keep this fake tiny
         return []
 

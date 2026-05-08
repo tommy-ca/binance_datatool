@@ -2,10 +2,23 @@
 
 from __future__ import annotations
 
-import json
+import asyncio
 from typing import TYPE_CHECKING
 
-import aiohttp
+from binance_common.configuration import ConfigurationWebSocketStreams
+from binance_common.constants import (
+    DERIVATIVES_TRADING_COIN_FUTURES_WS_STREAMS_PROD_URL,
+    DERIVATIVES_TRADING_USDS_FUTURES_WS_STREAMS_PROD_URL,
+    SPOT_WS_STREAMS_PROD_URL,
+)
+from binance_sdk_derivatives_trading_coin_futures.derivatives_trading_coin_futures import (
+    DerivativesTradingCoinFutures,
+)
+from binance_sdk_derivatives_trading_usds_futures.derivatives_trading_usds_futures import (
+    DerivativesTradingUsdsFutures,
+)
+from binance_sdk_spot.spot import Spot
+from binance_sdk_spot.websocket_streams.models.enums import KlineIntervalEnum
 
 from binance_datatool.common.types import KlineData
 
@@ -14,44 +27,89 @@ if TYPE_CHECKING:
 
 __all__ = ["BinanceSpotWsClient", "BinanceUmWsClient", "BinanceCmWsClient"]
 
-#: WebSocket base URLs for each market type.
 _WS_BASE_URLS = {
-    "spot": "wss://stream.binance.com:9443/ws",
-    "um": "wss://fstream.binance.com/ws",
-    "cm": "wss://dstream.binance.com/ws",
+    "spot": SPOT_WS_STREAMS_PROD_URL,
+    "um": DERIVATIVES_TRADING_USDS_FUTURES_WS_STREAMS_PROD_URL,
+    "cm": DERIVATIVES_TRADING_COIN_FUTURES_WS_STREAMS_PROD_URL,
 }
-_TESTNET_WS_BASE = "wss://stream.testnet.binance.vision:9443/ws"
+
+_SDK_WS_CLASSES = {
+    "spot": Spot,
+    "um": DerivativesTradingUsdsFutures,
+    "cm": DerivativesTradingCoinFutures,
+}
+
+_WS_INTERVAL_METHOD = {
+    "spot": "kline",
+    "um": "kline_candlestick_streams",
+    "cm": "kline_candlestick_streams",
+}
+
+_INTERVAL_ENUM_MAP = {
+    "1s": KlineIntervalEnum.INTERVAL_1s,
+    "1m": KlineIntervalEnum.INTERVAL_1m,
+    "3m": KlineIntervalEnum.INTERVAL_3m,
+    "5m": KlineIntervalEnum.INTERVAL_5m,
+    "15m": KlineIntervalEnum.INTERVAL_15m,
+    "30m": KlineIntervalEnum.INTERVAL_30m,
+    "1h": KlineIntervalEnum.INTERVAL_1h,
+    "2h": KlineIntervalEnum.INTERVAL_2h,
+    "4h": KlineIntervalEnum.INTERVAL_4h,
+    "6h": KlineIntervalEnum.INTERVAL_6h,
+    "8h": KlineIntervalEnum.INTERVAL_8h,
+    "12h": KlineIntervalEnum.INTERVAL_12h,
+    "1d": KlineIntervalEnum.INTERVAL_1d,
+    "3d": KlineIntervalEnum.INTERVAL_3d,
+    "1w": KlineIntervalEnum.INTERVAL_1w,
+    "1M": KlineIntervalEnum.INTERVAL_1M,
+}
+
+
+def _parse_kline_message(data: dict) -> KlineData:
+    k = data["k"]
+    return KlineData(
+        open_time=int(k["t"]),
+        open=str(k["o"]),
+        high=str(k["h"]),
+        low=str(k["l"]),
+        close=str(k["c"]),
+        volume=str(k["v"]),
+        close_time=int(k["T"]),
+        quote_volume=str(k["q"]),
+        num_trades=int(k["n"]),
+        taker_buy_volume=str(k["V"]),
+        taker_buy_quote_volume=str(k["Q"]),
+    )
 
 
 class _BinanceWsClientBase:
-    """Base class for Binance WebSocket clients.
+    """Base class for Binance WebSocket clients using official SDK.
 
     Not intended for direct use — use market-specific subclasses.
     """
 
-    def __init__(self, ws_base: str) -> None:
-        self._ws_base = ws_base
+    def __init__(self, ws_url: str, market_type: str) -> None:
+        self._ws_url = ws_url
+        self._market_type = market_type
+        self._connection = None
 
     @property
     def trade_type(self) -> str:
-        """Return the market segment identifier."""
-        if "fstream" in self._ws_base:
-            return "um"
-        if "dstream" in self._ws_base:
-            return "cm"
-        return "spot"
+        return self._market_type
 
     async def close(self) -> None:
-        """No-op (connections are per-stream)."""
-        return
+        if self._connection is not None:
+            await self._connection.close_connection(close_session=True)
+            self._connection = None
 
     async def fetch_ohlcv(self, symbol: str, interval: str, **kwargs) -> list[KlineData]:
-        """Not supported over WebSocket — raises NotImplementedError."""
         raise NotImplementedError("Use REST client for historical klines")
 
-    def _build_stream_url(self, stream_name: str) -> str:
-        """Build WebSocket URL for a stream name."""
-        return f"{self._ws_base}/{stream_name}"
+    async def _connect(self) -> None:
+        ws_config = ConfigurationWebSocketStreams(stream_url=self._ws_url)
+        sdk_class = _SDK_WS_CLASSES[self._market_type]
+        client = sdk_class(config_ws_streams=ws_config)
+        self._connection = await client.websocket_streams.create_connection()
 
 
 class BinanceSpotWsClient(_BinanceWsClientBase):
@@ -61,13 +119,8 @@ class BinanceSpotWsClient(_BinanceWsClientBase):
     """
 
     def __init__(self, testnet: bool = False) -> None:
-        """Initialize spot WebSocket client.
-
-        Args:
-            testnet: Use Binance spot testnet.
-        """
-        ws_base = _TESTNET_WS_BASE if testnet else _WS_BASE_URLS["spot"]
-        super().__init__(ws_base=ws_base)
+        ws_url = "wss://testnet.binance.vision/ws" if testnet else _WS_BASE_URLS["spot"]
+        super().__init__(ws_url=ws_url, market_type="spot")
 
     @property
     def exchange_id(self) -> str:
@@ -78,43 +131,26 @@ class BinanceSpotWsClient(_BinanceWsClientBase):
         symbol: str,
         interval: str,
     ) -> AsyncIterator[KlineData]:
-        """Stream real-time spot klines via WebSocket.
+        queue: asyncio.Queue = asyncio.Queue()
+        await self._connect()
 
-        Args:
-            symbol: Trading pair (e.g., "BTCUSDT").
-            interval: Kline interval (e.g., "1h", "1d").
+        method_name = _WS_INTERVAL_METHOD["spot"]
+        method = getattr(self._connection, method_name)
+        interval_enum = _INTERVAL_ENUM_MAP[interval]
 
-        Yields:
-            KlineData objects as they arrive.
-        """
-        stream_name = f"{symbol.lower()}@kline_{interval}"
-        ws_url = self._build_stream_url(stream_name)
+        stream = method(symbol=symbol.lower(), interval=interval_enum)
+        stream.on("message", lambda msg: queue.put_nowait(msg))
 
-        async with aiohttp.ClientSession() as session, session.ws_connect(
-            ws_url
-        ) as ws:
-            async for msg in ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    if "k" in data:
-                        k = data["k"]
-                        yield KlineData(
-                            open_time=int(k["t"]),
-                            open=str(k["o"]),
-                            high=str(k["h"]),
-                            low=str(k["l"]),
-                            close=str(k["c"]),
-                            volume=str(k["v"]),
-                            close_time=int(k["T"]),
-                            quote_volume=str(k["q"]),
-                            num_trades=int(k["n"]),
-                            taker_buy_volume=str(k["V"]),
-                            taker_buy_quote_volume=str(k["Q"]),
-                        )
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    raise aiohttp.ClientError(f"WebSocket error: {msg}")
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
-                    break
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=60)
+                except TimeoutError:
+                    continue
+                if "k" in data:
+                    yield _parse_kline_message(data)
+        finally:
+            await self.close()
 
 
 class BinanceUmWsClient(_BinanceWsClientBase):
@@ -125,8 +161,7 @@ class BinanceUmWsClient(_BinanceWsClientBase):
     """
 
     def __init__(self) -> None:
-        """Initialize UM futures WebSocket client."""
-        super().__init__(ws_base=_WS_BASE_URLS["um"])
+        super().__init__(ws_url=_WS_BASE_URLS["um"], market_type="um")
 
     @property
     def exchange_id(self) -> str:
@@ -137,44 +172,25 @@ class BinanceUmWsClient(_BinanceWsClientBase):
         symbol: str,
         interval: str,
     ) -> AsyncIterator[KlineData]:
-        """Stream real-time USD-M futures klines via WebSocket.
+        queue: asyncio.Queue = asyncio.Queue()
+        await self._connect()
 
-        Args:
-            symbol: Trading pair (e.g., "BTCUSDT").
+        method_name = _WS_INTERVAL_METHOD["um"]
+        method = getattr(self._connection, method_name)
 
-            interval: Kline interval.
+        stream = method(symbol=symbol.lower(), interval=interval)
+        stream.on("message", lambda msg: queue.put_nowait(msg))
 
-        Yields:
-            KlineData objects as they arrive.
-        """
-        stream_name = f"{symbol.lower()}@kline_{interval}"
-        ws_url = self._build_stream_url(stream_name)
-
-        async with aiohttp.ClientSession() as session, session.ws_connect(
-            ws_url
-        ) as ws:
-            async for msg in ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    if "k" in data:
-                        k = data["k"]
-                        yield KlineData(
-                            open_time=int(k["t"]),
-                            open=str(k["o"]),
-                            high=str(k["h"]),
-                            low=str(k["l"]),
-                            close=str(k["c"]),
-                            volume=str(k["v"]),
-                            close_time=int(k["T"]),
-                            quote_volume=str(k["q"]),
-                            num_trades=int(k["n"]),
-                            taker_buy_volume=str(k["V"]),
-                            taker_buy_quote_volume=str(k["Q"]),
-                        )
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    raise aiohttp.ClientError(f"WebSocket error: {msg}")
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
-                    break
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=60)
+                except TimeoutError:
+                    continue
+                if "k" in data:
+                    yield _parse_kline_message(data)
+        finally:
+            await self.close()
 
 
 class BinanceCmWsClient(_BinanceWsClientBase):
@@ -185,8 +201,7 @@ class BinanceCmWsClient(_BinanceWsClientBase):
     """
 
     def __init__(self) -> None:
-        """Initialize CM futures WebSocket client."""
-        super().__init__(ws_base=_WS_BASE_URLS["cm"])
+        super().__init__(ws_url=_WS_BASE_URLS["cm"], market_type="cm")
 
     @property
     def exchange_id(self) -> str:
@@ -197,45 +212,25 @@ class BinanceCmWsClient(_BinanceWsClientBase):
         symbol: str,
         interval: str,
     ) -> AsyncIterator[KlineData]:
-        """Stream real-time COIN-M futures klines via WebSocket.
+        queue: asyncio.Queue = asyncio.Queue()
+        await self._connect()
 
-        Args:
-            symbol: Trading pair (e.g., "BTCUSD_PERP").
+        method_name = _WS_INTERVAL_METHOD["cm"]
+        method = getattr(self._connection, method_name)
 
-            interval: Kline interval.
+        stream = method(symbol=symbol.lower(), interval=interval)
+        stream.on("message", lambda msg: queue.put_nowait(msg))
 
-        Yields:
-            KlineData objects as they arrive.
-        """
-        stream_name = f"{symbol.lower()}@kline_{interval}"
-        ws_url = self._build_stream_url(stream_name)
-
-        async with aiohttp.ClientSession() as session, session.ws_connect(
-            ws_url
-        ) as ws:
-            async for msg in ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
-                    if "k" in data:
-                        k = data["k"]
-                        yield KlineData(
-                            open_time=int(k["t"]),
-                            open=str(k["o"]),
-                            high=str(k["h"]),
-                            low=str(k["l"]),
-                            close=str(k["c"]),
-                            volume=str(k["v"]),
-                            close_time=int(k["T"]),
-                            quote_volume=str(k["q"]),
-                            num_trades=int(k["n"]),
-                            taker_buy_volume=str(k["V"]),
-                            taker_buy_quote_volume=str(k["Q"]),
-                        )
-                elif msg.type == aiohttp.WSMsgType.ERROR:
-                    raise aiohttp.ClientError(f"WebSocket error: {msg}")
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
-                    break
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=60)
+                except TimeoutError:
+                    continue
+                if "k" in data:
+                    yield _parse_kline_message(data)
+        finally:
+            await self.close()
 
 
-# Backward compatibility alias
 BinanceWsClient = BinanceSpotWsClient

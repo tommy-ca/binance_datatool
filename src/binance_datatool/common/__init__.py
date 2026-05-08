@@ -17,9 +17,9 @@ from binance_datatool.common.filter import (
     UmSymbolFilter,
     build_symbol_filter,
 )
+from binance_datatool.common.intervals import VALID_INTERVALS, interval_to_ms
 from binance_datatool.common.logging import configure_cli_logging
 from binance_datatool.common.path import ArchiveHomeNotConfiguredError, resolve_archive_home
-from binance_datatool.common.intervals import VALID_INTERVALS, interval_to_ms
 from binance_datatool.common.symbols import infer_cm_info, infer_spot_info, infer_um_info
 from binance_datatool.common.types import (
     CmSymbolInfo,
