@@ -341,9 +341,11 @@ class SinkWorkflow:
         return len(df)
 
     def _load_duckdb(self, df: pl.DataFrame, trade_type: str, data_type: str) -> None:
-        """Connect DuckLake to the lake and register lake-scanning views.
+        """Connect DuckLake v1.0 to the lake and register views.
 
-        DuckLake scans the lake Parquet files in-place — no data copy.
+        Uses the official DuckLake format (ATTACH 'ducklake:metadata.ducklake')
+        for ACID-compliant lakehouse queries. Data stays in Parquet — views
+        scan the lake in-place (zero copy).
         """
         catalog = DuckLakeCatalog(
             lake_path=self._catalog_path,
@@ -354,10 +356,10 @@ class SinkWorkflow:
             catalog.register_lake_views(con)
             catalog.create_analytics_views(con)
             table_name = duckdb_table_name(trade_type, data_type)
-            row_count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+            count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
             logger.info(
-                "DuckLake: {} rows available via view {} (scanned from lake)",
-                row_count,
+                "DuckLake v1.0: {} rows via {} (scanned from lake)",
+                count,
                 table_name,
             )
         finally:

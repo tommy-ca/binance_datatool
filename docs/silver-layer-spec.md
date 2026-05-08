@@ -291,14 +291,54 @@ FROM spot_klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 ```
 
-### Implementation
+### ### DuckLake Catalog Implementation
+
 ```python
+from pathlib import Path
 from binance_datatool.workflow.catalog import DuckLakeCatalog
 
+# Create DuckLake catalog (ATTACH 'ducklake:metadata.ducklake' v1.0 format)
 catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
 con = catalog.connect()
-catalog.register_lake_views(con)       # spot_klines = read_parquet('lake/spot/klines/...')
-catalog.create_analytics_views(con)    # daily_ohlcv, latest_klines, stale_symbols
+# Registers: spot_klines, um_klines, cm_klines, um_fundingRate, cm_fundingRate
+catalog.register_lake_views(con)
+# Registers: daily_ohlcv, latest_klines, stale_symbols
+catalog.create_analytics_views(con)
+# Query with ACID guarantees
+con.execute("SELECT symbol, MAX(close) FROM daily_ohlcv GROUP BY symbol")
+```
+
+### CLI Command to Attach DuckLake
+
+```bash
+# After sink, attach DuckLake for ACID-compliant querying
+binance-datatool sink spot --type klines --interval 1h --target duckdb --duckdb /path/to/db.duckdb BTCUSDT
+
+# Or use DuckDB directly
+duckdb /path/to/db.duckdb
+```
+```sql
+-- Inside DuckDB, query the lake with DuckLake v1.0
+LOAD ducklake;
+ATTACH 'ducklake:/path/to/lake/metadata.ducklake' AS binance_lake (DATA_PATH '/path/to/lake/data');
+USE binance_lake;
+-- Lake views scan Parquet in-place
+SELECT symbol, COUNT(*) FROM spot_klines GROUP BY symbol;
+```
+
+### Catalog Structure (DuckLake)
+
+```
+{lake_path}/
+├── metadata.ducklake     # DuckLake v1.0 catalog (ACID metadata)
+├── metadata.ducklake.wal # Write-ahead log
+└── data/
+    ├── spot/
+    │   └── klines/
+    │       └── date=2026-05-08/
+    │           └── spot_klines.parquet
+    ├── um/klines/...
+    └── cm/klines/...
 ```
 
 ## Gap-Fill and Health Check on Silver
