@@ -24,9 +24,10 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 | Catalog Path | Description | Partitioning |
 |---|---|---|
-| `{catalog}/spot/klines/date=N/spot_klines.parquet` | Spot klines | `date` |
-| `{catalog}/um/klines/date=N/um_klines.parquet` | UM klines | `date` |
-| `{catalog}/cm/klines/date=N/cm_klines.parquet` | CM klines | `date` |
+| `{catalog}/spot/klines/interval=1h/date=N/spot_klines.parquet` | Spot klines (1h) | `interval, date` |
+| `{catalog}/spot/klines/interval=1m/date=N/spot_klines.parquet` | Spot klines (1m) | `interval, date` |
+| `{catalog}/um/klines/interval=1h/date=N/um_klines.parquet` | UM klines (1h) | `interval, date` |
+| `{catalog}/cm/klines/interval=1h/date=N/cm_klines.parquet` | CM klines (1h) | `interval, date` |
 | `{catalog}/spot/aggTrades/date=N/spot_aggTrades.parquet` | Spot aggregated trades | `date` |
 | `{catalog}/um/fundingRate/date=N/um_fundingRate.parquet` | UM funding rate | `date` |
 | `{catalog}/venues.parquet` | Venue metadata | None |
@@ -194,16 +195,22 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ├── symbols.parquet          # Symbol metadata (all trade types)
 ├── spot/
 │   └── klines/
-│       └── date=2026-05-08/
-│           └── spot_klines.parquet
+│       ├── interval=1h/
+│       │   └── date=2026-05-08/
+│       │       └── spot_klines.parquet
+│       └── interval=1m/
+│           └── date=2026-05-08/
+│               └── spot_klines.parquet
 ├── um/
 │   └── klines/
-│       └── date=2026-05-08/
-│           └── um_klines.parquet
+│       └── interval=1h/
+│           └── date=2026-05-08/
+│               └── um_klines.parquet
 └── cm/
     └── klines/
-        └── date=2026-05-08/
-            └── cm_klines.parquet
+        └── interval=1h/
+            └── date=2026-05-08/
+                └── cm_klines.parquet
 ```
 
 ## Iceberg Catalog Design
@@ -214,9 +221,9 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 ### Tables
 | Table | Partition By | Sort Order | Compress |
 |-------|-------------|------------|----------|
-| `klines` | `days(ts_event)` | `symbol, ts_event` | zstd |
-| `klines_1h` | `days(ts_event)` | `symbol, ts_event` | zstd |
-| `klines_1d` | `months(ts_event)` | `symbol, ts_event` | zstd |
+| `klines` | `interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
+| `klines_1h` | `interval, days(ts_event)` | `symbol, interval, ts_event` | zstd |
+| `klines_1d` | `interval, months(ts_event)` | `symbol, interval, ts_event` | zstd |
 | `trades` | `days(ts_event)` | `symbol, ts_event` | zstd |
 | `aggTrades` | `days(ts_event)` | `symbol, ts_event` | zstd |
 | `fundingRate` | `days(ts_event)` | `symbol, ts_event` | zstd |
@@ -236,12 +243,20 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 
 ### Implementation
 ```python
-from binance_datatool.workflow.catalog import IcebergCatalog
+from pathlib import Path
+from binance_datatool.workflow.catalog import DuckLakeCatalog
 
-catalog = IcebergCatalog(warehouse_path)
-catalog.create_namespace()  # Creates binance/iceberg/binance/
-catalog.register_parquet(df, "klines", trade_type="spot")
-# → iceberg/binance/klines/date=2026-05-08/klines_spot.parquet
+# Create DuckLake catalog
+catalog = DuckLakeCatalog(lake_path=Path("/path/to/lake"), db_path="/path/to/db.duckdb")
+con = catalog.connect()
+
+# Register interval-aware lake views
+# For klines: scans interval-partitioned directories
+catalog.register_lake_views(con, interval="1h")  # only scans interval=1h/
+catalog.register_lake_views(con)                  # scans all intervals
+
+# Create analytics views
+catalog.create_analytics_views(con)
 ```
 
 ## DuckLake Catalog Design
@@ -252,15 +267,30 @@ No data is copied into DuckDB — views scan the lake directly.
 ### Lake Views (zero-copy)
 | View | Lake Source | Description |
 |------|-------------|-------------|
-| `spot_klines` | `lake/spot/klines/*/*.parquet` | Spot klines |
-| `um_klines` | `lake/um/klines/*/*.parquet` | UM klines |
-| `cm_klines` | `lake/cm/klines/*/*.parquet` | CM klines |
-| `um_fundingRate` | `lake/um/fundingRate/*/*.parquet` | UM funding rate |
-| `cm_fundingRate` | `lake/cm/fundingRate/*/*.parquet` | CM funding rate |
+| `spot_klines` | `lake/spot/klines/**/*.parquet` | Spot klines (all intervals) |
+| `um_klines` | `lake/um/klines/**/*.parquet` | UM klines (all intervals) |
+| `cm_klines` | `lake/cm/klines/**/*.parquet` | CM klines (all intervals) |
+| `um_fundingRate` | `lake/um/fundingRate/**/*.parquet` | UM funding rate |
+| `cm_fundingRate` | `lake/cm/fundingRate/**/*.parquet` | CM funding rate |
 
-Views use `read_parquet('.../*/*.parquet', union_by_name=true)` to scan
-the entire lake directory. DuckDB's Parquet reader handles partition
-pruning and projection pushdown automatically.
+Kline views can optionally filter by interval partition:
+```sql
+-- All intervals
+SELECT * FROM spot_klines WHERE interval = '1h';
+-- DuckDB partition pruning: only scans interval=1h/ directory
+```
+
+For kline-class data, Parquet files are partitioned by `interval` then `date`:
+```
+spot/klines/interval=1h/date=2026-05-08/spot_klines.parquet
+spot/klines/interval=1m/date=2026-05-08/spot_klines.parquet
+```
+
+Non-kline data types (aggTrades, fundingRate) use flat date partitioning:
+```
+spot/aggTrades/date=2026-05-08/spot_aggTrades.parquet
+um/fundingRate/date=2026-05-08/um_fundingRate.parquet
+```
 
 ### Analytics Views
 ```sql

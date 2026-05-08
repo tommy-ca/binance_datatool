@@ -319,10 +319,12 @@ class SinkWorkflow:
         combined = pl.concat(all_dfs, how="diagonal")
 
         if target in ("parquet", "all"):
-            stats.parquet_files = self._write_parquet(combined, trade_type_str, data_type_str)
+            stats.parquet_files = self._write_parquet(
+                combined, trade_type_str, data_type_str, interval
+            )
 
         if target in ("duckdb", "all") and self._duckdb_path:
-            self._load_duckdb(combined, trade_type_str, data_type_str)
+            self._load_duckdb(combined, trade_type_str, data_type_str, interval)
 
         stats.symbols = len(seen_symbols)
         return stats
@@ -332,15 +334,18 @@ class SinkWorkflow:
         df: pl.DataFrame,
         trade_type: str,
         data_type: str,
+        interval: str | None = None,
     ) -> int:
         """Write Silver DataFrame to partitioned Parquet via Iceberg catalog."""
-        table_name = iceberg_table_name(data_type)
+        table_name = iceberg_table_name(data_type, interval)
         iceberg = IcebergCatalog(self._catalog_path)
         iceberg.create_namespace()
-        iceberg.register_parquet(df, table_name, trade_type)
+        iceberg.register_parquet(df, table_name, trade_type, interval=interval)
         return len(df)
 
-    def _load_duckdb(self, df: pl.DataFrame, trade_type: str, data_type: str) -> None:
+    def _load_duckdb(
+        self, df: pl.DataFrame, trade_type: str, data_type: str, interval: str | None = None
+    ) -> None:
         """Connect DuckLake v1.0 to the lake and register views.
 
         Uses the official DuckLake format (ATTACH 'ducklake:metadata.ducklake')
@@ -353,7 +358,7 @@ class SinkWorkflow:
         )
         con = catalog.connect()
         try:
-            catalog.register_lake_views(con)
+            catalog.register_lake_views(con, interval)
             catalog.create_analytics_views(con)
             table_name = duckdb_table_name(trade_type, data_type)
             count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]

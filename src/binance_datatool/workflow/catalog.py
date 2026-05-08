@@ -123,23 +123,24 @@ class IcebergCatalog:
         df: pl.DataFrame,
         table_name: str,
         trade_type: str | None = None,
+        interval: str | None = None,
     ) -> Path:
         """Register a DataFrame as an Iceberg table (file-system catalog).
 
-        Uses Hive-style partitioning: {table}/date={N}/data.parquet.
+        Uses Hive-style partitioning by date (and interval for klines):
+          {table}/interval={I}/date={N}/data.parquet
+          {table}/date={N}/data.parquet                (non-kline types)
         Metadata tables (venues, symbols) are stored flat.
         """
         self._init_catalog()
         table_root = self.table_path(table_name)
 
         if table_name in ("venues", "symbols"):
-            # Unpartitioned metadata tables
             table_root.mkdir(parents=True, exist_ok=True)
             out = table_root / f"{table_name}.parquet"
             df.write_parquet(out)
             return out
 
-        # Partitioned time-series tables
         ts_col = "ts_event" if "ts_event" in df.columns else None
         if ts_col:
             df = df.with_columns(
@@ -151,6 +152,8 @@ class IcebergCatalog:
         written = 0
         for date_val, group in df.group_by("_iceberg_date", maintain_order=True):
             partition_path = table_root / f"date={date_val[0]}"
+            if interval:
+                partition_path = table_root / f"interval={interval}" / f"date={date_val[0]}"
             partition_path.mkdir(parents=True, exist_ok=True)
             suffix = f"_{trade_type}" if trade_type else ""
             out = partition_path / f"{table_name}{suffix}.parquet"
@@ -163,26 +166,6 @@ class IcebergCatalog:
 
 # ── DuckDB Catalog ──────────────────────────────────────────────────────
 
-
-_DUCKLAKE_LAKE_VIEWS = """
--- DuckLake views: scan the lake Parquet files directly.
--- No data copy — queries run against the lake in-place.
-
-CREATE OR REPLACE VIEW spot_klines AS
-    SELECT * FROM read_parquet('{lake_prefix}/spot/klines/*/*.parquet', union_by_name=true);
-
-CREATE OR REPLACE VIEW um_klines AS
-    SELECT * FROM read_parquet('{lake_prefix}/um/klines/*/*.parquet', union_by_name=true);
-
-CREATE OR REPLACE VIEW cm_klines AS
-    SELECT * FROM read_parquet('{lake_prefix}/cm/klines/*/*.parquet', union_by_name=true);
-
-CREATE OR REPLACE VIEW um_fundingRate AS
-    SELECT * FROM read_parquet('{lake_prefix}/um/fundingRate/*/*.parquet', union_by_name=true);
-
-CREATE OR REPLACE VIEW cm_fundingRate AS
-    SELECT * FROM read_parquet('{lake_prefix}/cm/fundingRate/*/*.parquet', union_by_name=true);
-"""
 
 _DUCKLAKE_ANALYTICS_VIEWS = """
 -- Analytics views on top of lake-scanned tables.
@@ -259,18 +242,25 @@ class DuckLakeCatalog:
         con.execute(f"USE {self._catalog_name}")
         return con
 
-    def register_lake_views(self, con: Any) -> None:
-        """Create DuckLake views that scan the lake Parquet in-place (zero-copy)."""
+    def register_lake_views(self, con: Any, interval: str | None = None) -> None:
+        """Create DuckLake views that scan the lake Parquet in-place (zero-copy).
+
+        For kline-class data types, views scan interval-partitioned directories:
+          ``spot/klines/interval={interval}/date=*/*.parquet``
+        For non-kline types, scans the flat directory structure:
+          ``spot/fundingRate/date=*/*.parquet``
+        """
         dp = self._data_path
-        views = [
-            ("spot_klines", dp / "spot" / "klines"),
-            ("um_klines", dp / "um" / "klines"),
-            ("cm_klines", dp / "cm" / "klines"),
-            ("um_fundingRate", dp / "um" / "fundingRate"),
-            ("cm_fundingRate", dp / "cm" / "fundingRate"),
-        ]
+        views = []
+        for tt in ("spot", "um", "cm"):
+            views.append((f"{tt}_klines", dp / tt / "klines"))
+            views.append((f"{tt}_fundingRate", dp / tt / "fundingRate"))
+
         for view_name, path in views:
-            pattern = str(path / "*/*.parquet")
+            if interval and "klines" in view_name:
+                pattern = str(path / f"interval={interval}" / "*/*.parquet")
+            else:
+                pattern = str(path / "*/*.parquet")
             try:
                 con.execute(
                     f"CREATE OR REPLACE VIEW {view_name} AS "
@@ -280,7 +270,7 @@ class DuckLakeCatalog:
                 con.execute(
                     f"CREATE OR REPLACE VIEW {view_name} AS SELECT * FROM (SELECT 1::BIGINT AS ts_event) WHERE 1=0"
                 )
-        logger.info("DuckLake: lacustrine views registered at {}", dp)
+        logger.info("DuckLake: lake views registered at {}", dp)
 
     def create_analytics_views(self, con: Any) -> None:
         """Create analytics views on top of lake tables (in DuckLake catalog)."""
