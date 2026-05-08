@@ -218,9 +218,6 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 | Table | Partition By | Sort Order | Compress |
 |-------|-------------|------------|----------|
 | `klines` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
-| `klines_1h` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
-| `klines_1d` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
-| `trades` | `symbol` | `symbol, ts_event` | zstd |
 | `aggTrades` | `symbol` | `symbol, ts_event` | zstd |
 | `fundingRate` | `symbol` | `symbol, ts_event` | zstd |
 

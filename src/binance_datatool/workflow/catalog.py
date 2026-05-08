@@ -214,6 +214,9 @@ class DuckLakeCatalog:
         "cm_klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT",
         "um_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
         "cm_fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "spot_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker TINYINT, agg_trade_id BIGINT, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "um_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker TINYINT, agg_trade_id BIGINT, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
+        "cm_aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker TINYINT, agg_trade_id BIGINT, source VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT",
         "venues": "venue VARCHAR, trade_type VARCHAR, exchange VARCHAR, source VARCHAR, symbol_count BIGINT, data_types VARCHAR, fetched_at BIGINT",
         "symbols": "symbol VARCHAR, trade_type VARCHAR, exchange VARCHAR, base_asset VARCHAR, quote_asset VARCHAR, contract_type VARCHAR, is_leverage BOOLEAN, is_stable_pair BOOLEAN, source VARCHAR, status VARCHAR, fetched_at BIGINT",
     }
@@ -222,6 +225,9 @@ class DuckLakeCatalog:
         "spot_klines": "symbol, interval",
         "um_klines": "symbol, interval",
         "cm_klines": "symbol, interval",
+        "spot_aggTrades": "symbol",
+        "um_aggTrades": "symbol",
+        "cm_aggTrades": "symbol",
         "um_fundingRate": "symbol",
         "cm_fundingRate": "symbol",
     }
