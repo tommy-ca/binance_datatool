@@ -64,62 +64,67 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 ## Silver Layer Schemas
 
-### silver_klines (unified OHLCV)
+### Klines (unified OHLCV)
 
 Unifies spot/um/cm klines from all sources (archive, API, WS).
+Follows DBN (`ts_event`, `ts_recv`) and tardis.dev (price/size volume) conventions.
 
-| Column | Type | Source | Description |
-|--------|------|--------|-------------|
-| `ts_event` | INT64 (ms) | DBN | Event timestamp, epoch ms (aligned to interval start) |
-| `open` | FLOAT64 | tardis.dev | Open price |
-| `high` | FLOAT64 | tardis.dev | High price |
-| `low` | FLOAT64 | tardis.dev | Low price |
-| `close` | FLOAT64 | tardis.dev | Close price |
-| `volume` | FLOAT64 | tardis.dev | Volume (base asset) |
-| `quote_volume` | FLOAT64 | Binance | Quote asset volume |
-| `trade_count` | INT64 | Binance | Number of trades |
-| `taker_buy_volume` | FLOAT64 | Binance | Taker buy base volume |
-| `taker_buy_quote_volume` | FLOAT64 | Binance | Taker buy quote volume |
-| `source` | UTF8 | Metadata | `"archive"`, `"api_filled"`, or `"ws_stream"` |
-| `trade_type` | UTF8 | Metadata | `"spot"`, `"um"`, `"cm"` |
-| `symbol` | UTF8 | Metadata | Trading pair (e.g. `"BTCUSDT"`) |
-| `interval` | UTF8 | Metadata | Kline interval (e.g. `"1h"`, `"1m"`) |
-| `data_type` | UTF8 | Metadata | Always `"klines"` |
-| `ingested_at` | INT64 (ms) | Metadata | When this record was ingested |
+| Silver Column | Bronze Source | Type | Description |
+|--------------|---------------|------|-------------|
+| `ts_event` | `open_time` | INT64 ms | Event timestamp (DBN) |
+| `ts_recv` | Auto | INT64 ms | Receive timestamp (DBN) |
+| `open` | CSV column | FLOAT64 | Open price |
+| `high` | CSV column | FLOAT64 | High price |
+| `low` | CSV column | FLOAT64 | Low price |
+| `close` | CSV column | FLOAT64 | Close price |
+| `volume` | CSV column | FLOAT64 | Base volume |
+| `quote_volume` | CSV column | FLOAT64 | Quote volume |
+| `trade_count` | `count` | INT64 | Number of trades |
+| `taker_buy_volume` | CSV column | FLOAT64 | Maker buy volume |
+| `taker_buy_quote_volume` | CSV column | FLOAT64 | Maker buy quote volume |
+| `source` | Auto | UTF8 | `"archive"`, `"api_filled"`, `"ws_stream"` |
+| `trade_type` | Auto | UTF8 | `"spot"`, `"um"`, `"cm"` |
+| `symbol` | Auto | UTF8 | e.g. `"BTCUSDT"` |
+| `interval` | Auto | UTF8 | e.g. `"1h"` |
+| `data_type` | Auto | UTF8 | `"klines"` |
+| `ingested_at` | Auto | INT64 ms | Ingestion timestamp |
 
-### silver_trades (unified raw/aggregated trades)
+### Trades (unified raw/aggregated)
 
 Unifies trades, aggTrades from all trade types.
 
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
-| `ts_event` | INT64 (ms) | DBN | Trade timestamp, epoch ms |
+| `ts_event` | INT64 ms | DBN | Trade timestamp |
+| `ts_recv` | INT64 ms | DBN | Receive timestamp |
 | `price` | FLOAT64 | tardis.dev | Trade price |
-| `size` | FLOAT64 | tardis.dev | Trade size (base asset) |
-| `side` | UTF8 | tardis.dev | `"buy"`, `"sell"`, or `null` (aggTrades use is_buyer_maker) |
+| `size` | FLOAT64 | tardis.dev | Trade size |
+| `side` | UTF8 | tardis.dev | `"buy"`, `"sell"`, or null |
 | `trade_id` | INT64 | Binance | Unique trade ID |
-| `agg_trade_id` | INT64 | Binance | Aggregated trade ID (aggTrades only) |
-| `is_buyer_maker` | INT8 | Binance | 1 if buyer is maker, 0 otherwise |
-| `source` | UTF8 | Metadata | Data source classification |
-| `trade_type` | UTF8 | Metadata | `"spot"`, `"um"`, `"cm"` |
-| `symbol` | UTF8 | Metadata | Trading pair |
-| `data_type` | UTF8 | Metadata | `"trades"` or `"aggTrades"` |
-| `ingested_at` | INT64 (ms) | Metadata | Ingestion timestamp |
+| `rtype` | UTF8 | Auto | Record type: `"trade"` or `"agg"` |
+| `agg_trade_id` | INT64 | Binance | Aggregated trade ID |
+| `is_buyer_maker` | INT8 | Binance | 1 if buyer is maker |
+| `source` | UTF8 | Meta | Data source |
+| `trade_type` | UTF8 | Meta | `"spot"`, `"um"`, `"cm"` |
+| `symbol` | UTF8 | Meta | Trading pair |
+| `data_type` | UTF8 | Meta | `"trades"` or `"aggTrades"` |
+| `ingested_at` | INT64 ms | Meta | Ingestion timestamp |
 
-### silver_funding_rate
+### Funding Rate
 
 Perpetual futures funding rates (um/cm only).
 
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
-| `ts_event` | INT64 (ms) | DBN | Funding time, epoch ms |
-| `funding_rate` | FLOAT64 | tardis.dev | Funding rate (e.g. 0.0001 = 0.01%) |
-| `mark_price` | FLOAT64 | Binance | Mark price at funding time |
-| `source` | UTF8 | Metadata | Data source |
-| `trade_type` | UTF8 | Metadata | `"um"`, `"cm"` |
-| `symbol` | UTF8 | Metadata | Trading pair |
-| `data_type` | UTF8 | Metadata | Always `"fundingRate"` |
-| `ingested_at` | INT64 (ms) | Metadata | Ingestion timestamp |
+| `ts_event` | INT64 ms | DBN | Funding time |
+| `ts_recv` | INT64 ms | DBN | Receive timestamp |
+| `funding_rate` | FLOAT64 | tardis.dev | Rate (0.0001 = 0.01%) |
+| `mark_price` | FLOAT64 | Binance | Mark price |
+| `source` | UTF8 | Meta | Data source |
+| `trade_type` | UTF8 | Meta | `"um"`, `"cm"` |
+| `symbol` | UTF8 | Meta | Trading pair |
+| `data_type` | UTF8 | Meta | `"fundingRate"` |
+| `ingested_at` | INT64 ms | Meta | Ingestion timestamp |
 
 ## Bronze → Silver Mapping
 
@@ -201,11 +206,99 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
             └── cm_klines.parquet
 ```
 
+## Iceberg Catalog Design
+
+### Namespace
+- **Namespace**: `binance` (Hadoop catalog: `{warehouse}/iceberg/binance/`)
+
+### Tables
+| Table | Partition By | Sort Order | Compress |
+|-------|-------------|------------|----------|
+| `klines` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `klines_1h` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `klines_1d` | `months(ts_event)` | `symbol, ts_event` | zstd |
+| `trades` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `aggTrades` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `fundingRate` | `days(ts_event)` | `symbol, ts_event` | zstd |
+| `venues` | Unpartitioned | — | zstd |
+| `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
+
+### Table Properties
+```json
+{
+    "write.format.default": "parquet",
+    "write.parquet.compression-codec": "zstd",
+    "write.parquet.compression-level": "9",
+    "commit.retry.num-retries": "3",
+    "history.expire.max-snapshot-age-ms": "2592000000"
+}
+```
+
+### Implementation
+```python
+from binance_datatool.workflow.catalog import IcebergCatalog
+
+catalog = IcebergCatalog(warehouse_path)
+catalog.create_namespace()  # Creates binance/iceberg/binance/
+catalog.register_parquet(df, "klines", trade_type="spot")
+# → iceberg/binance/klines/date=2026-05-08/klines_spot.parquet
+```
+
+## DuckDB Catalog Design
+
+### Tables
+| Table | Source | Description |
+|-------|--------|-------------|
+| `spot_klines` | `lake/spot/klines/*.parquet` | Spot klines |
+| `um_klines` | `lake/um/klines/*.parquet` | UM klines |
+| `cm_klines` | `lake/cm/klines/*.parquet` | CM klines |
+| `um_fundingRate` | `lake/um/fundingRate/*.parquet` | UM funding rate |
+| `cm_fundingRate` | `lake/cm/fundingRate/*.parquet` | CM funding rate |
+
+### Analytics Views
+```sql
+-- Daily OHLCV aggregation
+CREATE OR REPLACE VIEW daily_ohlcv AS
+SELECT CAST(ts_event / 86400000 AS DATE) AS trade_date,
+       symbol, trade_type,
+       FIRST(open) AS open, MAX(high) AS high,
+       MIN(low) AS low, LAST(close) AS close,
+       SUM(volume) AS volume
+FROM spot_klines WHERE interval = '1h'
+GROUP BY trade_date, symbol, trade_type;
+
+-- Latest data per symbol
+CREATE OR REPLACE VIEW latest_klines AS
+SELECT DISTINCT ON (symbol, trade_type, interval)
+       symbol, trade_type, interval, ts_event, close, volume, ingested_at
+FROM spot_klines
+ORDER BY symbol, trade_type, interval, ts_event DESC;
+
+-- Stale symbol detection
+CREATE OR REPLACE VIEW stale_symbols AS
+SELECT symbol, trade_type,
+       MAX(ts_event) AS latest_ts,
+       CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
+       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
+FROM spot_klines GROUP BY symbol, trade_type
+HAVING days_stale > 3;
+```
+
+### Implementation
+```python
+from binance_datatool.workflow.catalog import DuckDBCatalog
+
+catalog = DuckDBCatalog("/path/to/db.duckdb")
+con = catalog.connect()
+catalog.register_table(con, parquet_paths, "spot", "klines")
+catalog.create_views(con)
+```
+
 ## Gap-Fill and Health Check on Silver
 
 ### Gap Detection (Silver-aware)
 - Scan Silver layer for missing dates per `(trade_type, data_type, symbol, interval)`
-- Query Parquet for date range coverage
+- Query Iceberg/DuckDB catalog for date range coverage
 - Fetch missing data from REST API → normalize → append to Silver
 
 ### Health Check (Silver-aware)

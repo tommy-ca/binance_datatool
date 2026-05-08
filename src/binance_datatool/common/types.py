@@ -88,9 +88,14 @@ class SilverKline:
     """Normalized silver-layer kline record.
 
     Unifies spot/um/cm klines from all sources (archive, API, WS).
+    Follows Databento DBN conventions with ts_event/ts_recv.
+
+    DBN: https://databento.com/docs/schemas/dbn
+    tardis.dev: https://docs.tardis.dev/api/data-structures
     """
 
     ts_event: int
+    ts_recv: int
     open: float
     high: float
     low: float
@@ -113,13 +118,19 @@ class SilverTrade:
     """Normalized silver-layer trade record.
 
     Unifies trades/aggTrades from all trade types.
+    Follows DBN action/side and tardis.dev price/size conventions.
+
+    DBN: https://databento.com/docs/schemas/dbn-trades
+    tardis.dev: https://docs.tardis.dev/api/data-structures#trade
     """
 
     ts_event: int
+    ts_recv: int
     price: float
     size: float
     side: str | None
     trade_id: int
+    rtype: str = "trade"
     agg_trade_id: int | None = None
     is_buyer_maker: int | None = None
     source: str = ""
@@ -131,9 +142,14 @@ class SilverTrade:
 
 @dataclass(slots=True)
 class SilverFundingRate:
-    """Normalized silver-layer funding rate record."""
+    """Normalized silver-layer funding rate record.
+
+    Follows tardis.dev funding rate structure while keeping
+    Databento DBN ts_event/ts_recv convention.
+    """
 
     ts_event: int
+    ts_recv: int
     funding_rate: float
     mark_price: float
     source: str = ""

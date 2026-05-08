@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from loguru import logger
 
+from binance_datatool.workflow.catalog import (
+    DuckDBCatalog,
+    IcebergCatalog,
+    duckdb_table_name,
+    iceberg_table_name,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -44,6 +51,7 @@ _BRONZE_TO_SILVER_KLINE = {
 }
 
 _SILVER_META_COLS = [
+    "ts_recv",
     "source",
     "trade_type",
     "symbol",
@@ -54,6 +62,7 @@ _SILVER_META_COLS = [
 
 _FULL_SILVER_KLINE_SCHEMA = {
     "ts_event": pl.Int64,
+    "ts_recv": pl.Int64,
     "open": pl.Float64,
     "high": pl.Float64,
     "low": pl.Float64,
@@ -167,6 +176,7 @@ def _add_silver_metadata(
 ) -> pl.DataFrame:
     """Add Silver metadata columns."""
     now_ms = int(time.time() * 1000)
+    df = df.with_columns(pl.lit(now_ms).alias("ts_recv"))
     return df.with_columns(
         pl.lit(source).alias("source"),
         pl.lit(trade_type).alias("trade_type"),
@@ -323,45 +333,21 @@ class SinkWorkflow:
         trade_type: str,
         data_type: str,
     ) -> int:
-        """Write Silver DataFrame to partitioned Parquet."""
-        # Iceberg-style path: {catalog}/{namespace}/{table}/date=N/{file}.parquet
-        base = self._catalog_path / trade_type / data_type
-        base.mkdir(parents=True, exist_ok=True)
-
-        # Extract date from ts_event for partitioning
-        ts_col = "ts_event" if "ts_event" in df.columns else None
-        if ts_col:
-            df = df.with_columns(
-                pl.from_epoch(pl.col(ts_col) // 1000).dt.strftime("%Y-%m-%d").alias("date")
-            )
-        else:
-            df = df.with_columns(pl.lit("unknown").alias("date"))
-
-        file_count = 0
-        for date_val, group in df.group_by("date", maintain_order=True):
-            out_path = base / f"date={date_val[0]}" / f"{trade_type}_{data_type}.parquet"
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            group.drop(["date"]).write_parquet(out_path)
-            file_count += 1
-
-        logger.info("Silver: wrote {} parquet files to {}", file_count, base)
-        return file_count
+        """Write Silver DataFrame to partitioned Parquet via Iceberg catalog."""
+        table_name = iceberg_table_name(data_type)
+        iceberg = IcebergCatalog(self._catalog_path)
+        iceberg.create_namespace()
+        iceberg.register_parquet(df, table_name, trade_type)
+        return len(df)
 
     def _load_duckdb(self, df: pl.DataFrame, trade_type: str, data_type: str) -> None:
-        """Load Silver DataFrame into DuckDB."""
+        """Load Silver DataFrame into DuckDB via catalog."""
+        catalog = DuckDBCatalog(self._duckdb_path)
+        con = catalog.connect()
         try:
-            import duckdb
-        except ImportError:
-            logger.warning("DuckDB not available; skipping load")
-            return
-
-        table_name = f"{trade_type}_{data_type}".replace("-", "_")
-        db_path = str(self._duckdb_path) if self._duckdb_path else ":memory:"
-
-        con = duckdb.connect(db_path)
-        try:
+            table_name = duckdb_table_name(trade_type, data_type)
             con.execute(f"CREATE OR REPLACE TABLE {table_name} AS SELECT * FROM df")
             row_count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-            logger.info("Silver: loaded {} rows into DuckDB table {}", row_count, table_name)
+            logger.info("DuckDB: loaded {} rows into table {}", row_count, table_name)
         finally:
             con.close()
