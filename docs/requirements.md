@@ -673,12 +673,15 @@ class ArchiveListFilesWorkflow:
 - ✅ Emit logs for all pipeline operations
 - ⏳ Add Prometheus metrics (optional, not prioritized)
 
-### Phase 5: Multi-Source (In Progress)
-- ✅ Implement `BinanceAdapter` (complete)
-- 🔄 Implement `CoinbaseAdapter` (skeleton only, 9 tests)
-- ⏳ Implement `KrakenAdapter`
-- ⏳ Add integration tests for each
+### Phase 5: Multi-Source CEX (In Progress)
+- ✅ Implement `BinanceAdapter` (complete, Binance S3 archive)
+- ✅ Implement CCXT exchange clients (Binance Spot/UM/CM)
+- 🔄 Implement `OKXAdapter` via CCXT (`ccxt.okx`)
+- 🔄 Implement `BybitAdapter` via CCXT (`ccxt.bybit`)
+- ⏳ Add integration tests for each CEX
 - ⏳ Document configuration per source
+
+**Note**: Coinbase removed from scope. Focus on Tier-1 CEXs (Binance, OKX, Bybit) through CCXT unified API.
 
 ### Phase 6: Exchange Clients (Complete)
 - ✅ Implement market-type-specific Binance clients (Spot/UM/CM)

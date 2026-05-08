@@ -72,15 +72,17 @@ This specification formalizes the binance-datatool project into a **generalized,
 5. Merge into Delta Lake (MERGE INTO operation)
 6. Alert on validation failures
 
-#### UC-3: Multi-Exchange Unified Interface
+#### UC-3: Multi-CEX Unified Interface (via CCXT)
 **Actor**: Data Platform Owner  
-**Goal**: Single interface for Binance, Coinbase, Kraken  
+**Goal**: Single interface for Binance, OKX, Bybit via CCXT  
 **Steps**:
-1. Configure adapters (source_registry.get("coinbase"))
-2. List symbols from each (unified API)
-3. Download from each (adapter-specific protocols)
+1. Configure adapters (source_registry.get("okx") / ccxt.okx)
+2. List symbols from each (CCXT unified API)
+3. Download from each (CCXT fetch_ohlcv)
 4. Normalize to common schema (transformer layer)
 5. Store in lakehouse (unified partition scheme)
+
+**Note**: Coinbase removed. Focus on Tier-1 CEXs with CCXT support.
 
 #### UC-4: Agent-Driven Workflow
 **Actor**: AI Agent / Subagent  
@@ -356,9 +358,8 @@ class ListSymbolsResult:
 ┌──────────────────▼───────────────────────────────────┐
 │ Source Adapter Layer (multi-source abstraction)    │
 │ • DataSourceAdapter protocol (5 methods)           │
-│ • BinanceAdapter: S3 XML parsing                   │
-│ • CoinbaseAdapter: REST API                        │
-│ • KrakenAdapter: REST API                          │
+│ • BinanceAdapter: S3 XML parsing (archive)         │
+│ • CCXTExchangeClient: Unified API (Binance/OKX/Bybit) │
 │ • SourceRegistry: adapter discovery/instantiation  │
 └──────────────────┬───────────────────────────────────┘
                    │
@@ -388,7 +389,7 @@ class ListSymbolsResult:
 class DataSourceAdapter(Protocol):
     """Unified interface for data sources."""
     
-    source: str  # "binance", "coinbase", "kraken", etc.
+    source: str  # "binance", "okx", "bybit", etc. (via CCXT)
     
     async def list_symbols(
         self,
@@ -635,7 +636,7 @@ class PipelineWorkflow:
 #### Phase 2: Adapter Pattern (🔄 IN PROGRESS)
 - [ ] LineageTracker implementation
 - [ ] BinanceAdapter (wrap ArchiveClient)
-- [ ] CoinbaseAdapter (REST API)
+- [ ] CCXTExchangeClient (OKX, Bybit via unified API)
 - [ ] CLI integration with --source flag
 - [ ] Tests for all adapters
 
@@ -685,7 +686,7 @@ class PipelineWorkflow:
 
 | Principle | Application | Example |
 |-----------|-------------|---------|
-| **SOLID** | One class, one job | BinanceAdapter handles Binance only; not Coinbase |
+| **SOLID** | One class, one job | BinanceAdapter handles Binance only; CCXT handles multi-CEX |
 | **KISS** | Simplest solution | Adapter protocol: 5 methods, not 20 |
 | **DRY** | Reuse logic | Base class for common retry/logging patterns |
 | **YAGNI** | No speculative code | Don't add features "just in case" |
@@ -891,28 +892,42 @@ steps:
 
 ## Part 9: Extension Points & Future Roadmap
 
-### 9.1 Adding a New Source (Coinbase)
+### 9.1 Adding a New CEX via CCXT (OKX Example)
 
-**Step 1**: Create adapter
+**Step 1**: CCXT supports 100+ exchanges with unified API
 
 ```python
-# src/binance_datatool/adapter/coinbase.py
+# CCXT handles OKX, Bybit, Binance, etc. with same interface
 
-class CoinbaseAdapter(DataSourceAdapter):
-    source = "coinbase"
-    
-    async def list_symbols(self, market_type, partition, data_type, **kwargs):
-        # Call Coinbase REST API /products
-        async with aiohttp.ClientSession() as session:
-            url = "https://api.exchange.coinbase.com/products"
-            async with session.get(url) as resp:
-                products = await resp.json()
-                return [p["id"] for p in products if p["quote_currency"] == "USD"]
-    
-    async def list_files(self, symbol, market_type, partition, data_type, **kwargs):
-        # Coinbase doesn't have historical files; use GCS
-        # Return synthetic FileMetadata for each date partition
-        ...
+import ccxt
+
+# OKX
+okx = ccxt.okx({"enableRateLimit": True})
+symbols = okx.fetch_markets()  # All OKX markets
+
+# Bybit
+bybit = ccxt.bybit({"enableRateLimit": True})
+klines = await bybit.fetch_ohlcv("BTC/USDT", "1h", limit=100)
+```
+
+**Step 2**: Use CCXTExchangeClient (already implemented)
+
+```python
+from binance_datatool.exchange import CCXTExchangeClient
+
+# OKX
+okx_client = CCXTExchangeClient(trade_type="spot")  # Uses ccxt.okx
+klines = await okx_client.fetch_ohlcv("BTC/USDT", "1h")
+
+# Bybit
+bybit_client = CCXTExchangeClient(trade_type="spot")  # Uses ccxt.bybit
+```
+
+**Step 3**: Use via CLI (future --source flag)
+
+```bash
+binance-datatool --source okx list-symbols spot
+binance-datatool --source bybit download spot BTCUSDT --interval 1d
 ```
 
 **Step 2**: Register adapter
@@ -1036,7 +1051,7 @@ async def test_binance_adapter_list_symbols(fake_archive_client):
 
 This specification formalizes binance-datatool into a **generalized, production-ready data pipeline framework** supporting:
 
-- ✅ Multiple sources (Binance, Coinbase, Kraken, etc. via adapters)
+- ✅ Multiple sources (Binance, OKX, Bybit via CCXT unified API)
 - ✅ Contract-driven validation (schema + business rules)
 - ✅ Lineage tracking (provenance & compliance)
 - ✅ Modern data stacks (Delta, Iceberg, etc.)

@@ -63,9 +63,8 @@ class DataSourceAdapter(Protocol):
         """
 
 
-__all__ = ["DataSourceAdapter", "FileMetadata", "BinanceAdapter", "CoinbaseAdapter"]
+__all__ = ["DataSourceAdapter", "FileMetadata", "BinanceAdapter"]
 
 # Import adapters to register them with SourceRegistry
 from binance_datatool.adapter.binance import BinanceAdapter  # noqa: F401
-from binance_datatool.adapter.coinbase import CoinbaseAdapter  # noqa: F401
 from binance_datatool.adapter.registry import *  # noqa: F401,F403
