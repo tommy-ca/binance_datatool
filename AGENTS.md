@@ -142,7 +142,7 @@ binance-datatool sink spot --type klines --interval 1h --target all --duckdb /pa
 Archive (local ZIPs + filled CSVs)
   ↓ Polars read + normalize
 Normalized DataFrames (standardized schema per data type)
-  ↓ write_parquet (partitioned by trade_type/data_type/date)
+  ↓ write_parquet (partitioned by exchange/data-type/symbol/interval/date)
 Parquet files (columnar, queryable)
   ↓ DuckLake catalog (read_parquet view — zero copy)
 DuckDB (local SQL analytics)
@@ -156,6 +156,7 @@ Iceberg (multi-engine lakehouse)
 - **GapFillWorkflow**: Auto-detect gaps via `_scan_existing_dates()` → `_fetch_data()` → `_save_filled()`
 - **HealthCheckWorkflow**: Scans local archive for completeness (missing dates), freshness (staleness), integrity (checksums)
 - **Lineage**: Every data operation records `LineageEvent` via `LineageTracker` (exportable to JSON)
+- **DuckLake catalog**: Uses official DuckLake v1.0 format (`ATTACH 'ducklake:metadata.ducklake'`). Lake views scan Parquet in-place via `read_parquet()` — zero copy, no data duplication.
 
 ## Silver Layer (Transform/Normalize)
 
@@ -166,6 +167,7 @@ Databento DBN and tardis.dev conventions.
 | Silver Column | Bronze Source | Type | Description |
 |--------------|---------------|------|-------------|
 | `ts_event` | `open_time` | INT64 ms | Event timestamp (DBN convention) |
+| `ts_recv` | Auto | INT64 ms | Receive timestamp (DBN convention) |
 | `open` | CSV column | FLOAT64 | Open price |
 | `high` | CSV column | FLOAT64 | High price |
 | `low` | CSV column | FLOAT64 | Low price |
@@ -182,15 +184,26 @@ Databento DBN and tardis.dev conventions.
 | `data_type` | Auto | UTF8 | `"klines"` |
 | `ingested_at` | Auto | INT64 ms | Ingestion timestamp |
 
-### Iceberg Catalog Path
+### DuckLake Catalog Path (self-describing)
 ```
-{catalog}/{trade_type}/{data_type}/date={YYYY-MM-DD}/{file}.parquet
+data/exchange=binance-spot/data-type=klines/symbol=BTCUSDT/interval=1h/date=2026-05-08/data.parquet
 ```
+
+Partition levels (all Hive-style):
+| Level | Example | Purpose |
+|-------|---------|---------|
+| `exchange` | `binance-spot`, `binance-perps-um`, `binance-perps-cm` | Venue + market type |
+| `data-type` | `klines`, `aggTrades`, `fundingRate` | Dataset type |
+| `symbol` | `BTCUSDT` | Trading pair |
+| `interval` | `1h`, `1m` (klines only) | Bar size |
+| `date` | `2026-05-08` | Temporal partition |
+
+The file is always `data.parquet` — no redundancy with path components.
 
 ### Metadata Tables
 ```
-{catalog}/venues.parquet     — Venue metadata (spot, um, cm)
-{catalog}/symbols.parquet    — Symbol metadata (all symbols per trade type)
+{lake}/metadata/venues.parquet     — Venue metadata (3 venues)
+{lake}/metadata/symbols.parquet    — Symbol metadata (all symbols per trade type)
 ```
 
 ### Silver Spec
