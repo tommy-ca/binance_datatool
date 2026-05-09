@@ -32,14 +32,17 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import polars as pl
 from loguru import logger
 
+if TYPE_CHECKING:
+    import polars as pl
 
-class LineageEventType(str, Enum):
+
+class LineageEventType(StrEnum):
     """Types of lineage events."""
 
     DISCOVERED = "discovered"  # Symbol/file discovered
