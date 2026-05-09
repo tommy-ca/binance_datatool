@@ -705,10 +705,14 @@ def sink_command(
         typer.echo("Error: At least one SYMBOL argument required.", err=True)
         raise typer.Exit(code=2)
 
+    from binance_datatool.lineage import LineageTracker
+
+    tracker = LineageTracker()
     workflow = SinkWorkflow(
         archive_home=archive_home,
         catalog_path=Path(catalog_path) if catalog_path else None,
         duckdb_path=Path(duckdb_path) if duckdb_path else None,
+        tracker=tracker,
     )
 
     stats = workflow.transform(
