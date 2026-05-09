@@ -26,9 +26,11 @@ from binance_datatool.workflow import (
     ArchiveListSymbolsWorkflow,
     ArchiveVerifyWorkflow,
     GapFillWorkflow,
+    HealthCheckWorkflow,
     MetadataWorkflow,
     SinkWorkflow,
 )
+from binance_datatool.workflow.health_check import check_ducklake_anomalies
 
 _DEFAULT_ARCHIVE_HOME = Path.home() / ".binance-datatool" / "archive"
 
@@ -305,3 +307,68 @@ def refresh_metadata_flow(
     syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
     wf.save_symbols(syms)
     return len(syms)
+
+
+@flow(name="Health Check", log_prints=True)
+def health_flow(
+    trade_type: str = "spot",
+    symbol: str = "BTCUSDT",
+    data_type: str = "klines",
+    interval: str = "1h",
+    archive_home: Path | None = None,
+    catalog_path: Path | None = None,
+) -> dict:
+    """Run health check and anomaly detection. Wraps HealthCheckWorkflow."""
+    home = archive_home or _DEFAULT_ARCHIVE_HOME
+    catalog = catalog_path or home.parent / "lake"
+    db_file = catalog / "catalog.duckdb"
+
+    from binance_datatool.common import DataFrequency, DataType
+    from binance_datatool.common import TradeType as _TT
+
+    file_health = HealthCheckWorkflow(
+        trade_type=_TT(trade_type),
+        data_freq=DataFrequency.daily,
+        data_type=DataType(data_type),
+        symbols=[symbol],
+        archive_home=home,
+        interval=interval,
+    )
+    report = file_health.run()
+
+    # DuckLake anomaly detection
+    import duckdb
+
+    con = duckdb.connect(str(db_file))
+    try:
+        con.execute("LOAD ducklake")
+        con.execute(
+            f"ATTACH 'ducklake:{catalog}/metadata.ducklake' AS dl "
+            f"(DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
+        )
+        con.execute("USE dl")
+        anomalies = check_ducklake_anomalies(con, data_type.replace("-", "_"), symbol)
+    finally:
+        con.close()
+
+    result = {
+        "healthy": report.healthy_symbols == report.total_symbols,
+        "missing_dates": report.total_missing_dates,
+        "anomalies_clean": anomalies.is_clean,
+        "null_prices": anomalies.null_prices,
+    }
+    print(f"Health: {result}")
+    return result
+
+
+# ── Deployment Entry Points ─────────────────────────────────────
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        # `python -m binance_datatool.workflow.prefect_flows serve`
+        historical_pipeline.serve(name="daily-backfill", cron="0 6 * * *")
+        refresh_metadata_flow.serve(name="hourly-metadata", cron="0 * * * *")
+    else:
+        historical_pipeline()
