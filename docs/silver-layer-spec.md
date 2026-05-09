@@ -10,11 +10,19 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 - **Normalized across trade types**: Spot, UM, CM share a unified schema per data type
 - **Normalized across sources**: Archive ZIP, API-filled, and WS-filled data use the same schema
-- **Industry-standard field names**: Follows Databento DBN (`ts_event`, `price`, `size`),
-  tardis.dev (timestamp-based), and Binance archive naming conventions
-- **Self-describing**: Metadata columns (`source`, `trade_type`, `data_type`, `symbol`,
-  `interval`, `ingested_at`) make each row fully contextual without external catalog lookups
-- **Type-safe**: All numeric fields are numeric (Float64), timestamps are Int64 epoch ms
+- **Primary: tardis.dev conventions** ([tardis.dev CSV schemas](https://docs.tardis.dev/downloadable-csv-files/data-types))
+  - `exchange` + `symbol` as row-level identifiers
+  - `price`, `side`, `funding_rate`, `mark_price` field naming
+  - Epoch-based timestamps (ms vs tardis.dev μs — 1000x factor)
+- **Selective DBN conventions** ([Databento DBN](https://databento.com/docs/schemas/dbn))
+  - `ts_event` / `ts_recv` naming for event/receive timestamps
+  - `rtype` for record type classification
+  - `size` for trade amount
+- **Binance source alignment**: Archive CSV headers drive column naming where both conventions
+  lack a clear standard (klines-specific fields: `quote_volume`, `trade_count`)
+- **Self-describing**: Metadata columns (`source`, `exchange`, `trade_type`, `data_type`,
+  `symbol`, `interval`, `ingested_at`) make each row fully contextual without external catalog
+- **Type-safe**: All numeric fields are FLOAT64/INT64, timestamps are INT64 epoch ms
 
 ## Iceberg Catalog Table Naming
 
