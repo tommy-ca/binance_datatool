@@ -47,7 +47,7 @@ def download_archive(
     trade_type: str,
     symbol: str,
     data_type: str = "klines",
-    interval: str = "1h",
+    interval: str | None = "1h",
     archive_home: Path | None = None,
 ) -> int:
     """Download archive data via ArchiveDownloadWorkflow."""
@@ -168,10 +168,11 @@ def historical_pipeline(
     for symbol in symbols or ["BTCUSDT"]:
         print(f"Processing {symbol} ({trade_type}/{data_type}/{interval})")
         tt = TradeType(trade_type)
-        download_archive(trade_type, symbol, data_type, interval, home)
-        verify_archive(trade_type, symbol, data_type, interval, home)
-        gaps = fill_gaps(tt, symbol, data_type, interval, lookback_days, home)
-        rows = sink_silver(tt, symbol, data_type, interval, home, catalog)
+        iv = interval if data_type == "klines" else None
+        download_archive(trade_type, symbol, data_type, iv, home)
+        verify_archive(trade_type, symbol, data_type, iv, home)
+        gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
+        rows = sink_silver(tt, symbol, data_type, iv, home, catalog)
         results[symbol] = {"gaps_filled": len(gaps), "rows_sunk": rows}
         print(f"  {symbol}: {len(gaps)} gaps, {rows} rows")
 
