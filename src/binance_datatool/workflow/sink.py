@@ -409,35 +409,27 @@ class SinkWorkflow:
     def _load_duckdb(
         self, df: pl.DataFrame, trade_type: str, data_type: str, interval: str | None = None
     ) -> None:
-        """Register Parquet files in native DuckLake v1.0 tables.
+        """Register DuckDB views that scan Silver Parquet in-place (zero-copy).
 
-        Uses the official DuckLake format with:
-        1. Native DuckLake table creation (CREATE TABLE + SET PARTITIONED BY)
-        2. ducklake_add_data_files() for registering externally-written Parquet
-        3. DuckLake catalog provides ACID, snapshots, time-travel
+        The Parquet files written by _write_parquet() ARE the canonical store.
+        DuckDB read_parquet() views provide SQL access without duplicating data.
         """
         catalog = DuckLakeCatalog(
             lake_path=self._catalog_path,
             db_path=self._duckdb_path,
         )
-        parquet_files = catalog.find_parquet_files(trade_type, data_type, interval)
-        if not parquet_files:
-            logger.info("No parquet files found for {}/{}", trade_type, data_type)
-            return
-
-        table_name = data_type.replace("-", "_")
+        view_name = data_type.replace("-", "_")
 
         con = catalog.connect()
         try:
-            catalog.ensure_table(con, table_name)
-            ingested = catalog.ingest_parquet(con, table_name, parquet_files)
-            catalog.create_analytics_views(con)
-            count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+            catalog.register_parquet(con, view_name, trade_type, data_type, interval)
+            count = con.execute(f"SELECT COUNT(*) FROM {view_name}").fetchone()[0]
             logger.info(
-                "DuckLake v1.0: ingested {} files, {} rows in native table {}",
-                ingested,
+                "DuckLake: {} rows via view {} (zero-copy from lake Parquet)",
                 count,
-                table_name,
+                view_name,
             )
+        except Exception:
+            logger.info("DuckLake: view {} has no data yet (run sink first)", view_name)
         finally:
             con.close()
