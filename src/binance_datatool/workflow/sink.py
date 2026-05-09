@@ -11,18 +11,21 @@ import csv
 import time
 import zipfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 from loguru import logger
 
+from binance_datatool.lineage import LineageEvent, LineageEventType
 from binance_datatool.workflow.catalog import DuckLakeCatalog
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from binance_datatool.common import DataType, TradeType
+    from binance_datatool.lineage import LineageTracker
 
 _DEFAULT_CATALOG_PATH = "data/lake"
 
@@ -303,10 +306,12 @@ class SinkWorkflow:
         archive_home: Path,
         catalog_path: Path | None = None,
         duckdb_path: Path | None = None,
+        tracker: LineageTracker | None = None,
     ) -> None:
         self._archive_home = Path(archive_home)
         self._catalog_path = catalog_path or Path(_DEFAULT_CATALOG_PATH)
         self._duckdb_path = duckdb_path
+        self._tracker = tracker
 
     def transform(
         self,
@@ -363,6 +368,33 @@ class SinkWorkflow:
         )
 
         stats.symbols = len(seen_symbols)
+
+        # Record lineage for each symbol
+        if self._tracker:
+            now = datetime.now()
+            for symbol in seen_symbols:
+                self._tracker.record(
+                    LineageEvent(
+                        source=f"binance_{trade_type_str}",
+                        symbol=symbol,
+                        event_type=LineageEventType.SUNK,
+                        timestamp=now,
+                        date=None,
+                        message=f"Sunk {data_type_str} data to DuckLake ({len(combined)} total rows)",
+                        metadata={
+                            "data_type": data_type_str,
+                            "trade_type": trade_type_str,
+                            "interval": interval or "",
+                            "row_count": len(combined),
+                            "symbols": list(seen_symbols),
+                        },
+                    )
+                )
+            self._tracker.save_ducklake(
+                str(self._duckdb_path) if self._duckdb_path else ":memory:",
+                str(self._catalog_path) if self._catalog_path else None,
+            )
+
         return stats
 
     def _write_ducklake(

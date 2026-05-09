@@ -256,7 +256,9 @@ class DuckLakeCatalog:
             )
             con.execute(f"USE {self._catalog_name}")
         except Exception:
-            con.execute(f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{self._data_path}')")
+            con.execute(
+                f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{self._data_path}')"
+            )
             con.execute(f"USE {self._catalog_name}")
         return con
 

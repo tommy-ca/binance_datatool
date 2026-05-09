@@ -270,7 +270,12 @@ def check_ducklake_anomalies(
         report.null_prices += nulls
 
     # Zero volume check
-    if "volume" in [c[0] for c in con.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'").fetchall()]:
+    if "volume" in [
+        c[0]
+        for c in con.execute(
+            f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+        ).fetchall()
+    ]:
         zeros = con.execute(
             f"SELECT COUNT(*) FROM {table_name} WHERE symbol = '{symbol}' AND (volume IS NULL OR volume = 0)"
         ).fetchone()[0]

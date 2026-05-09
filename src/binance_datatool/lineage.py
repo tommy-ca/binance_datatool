@@ -33,6 +33,10 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
+
+import polars as pl
+from loguru import logger
 
 
 class LineageEventType(str, Enum):
@@ -51,6 +55,11 @@ class LineageEventType(str, Enum):
     REJECTED = "rejected"  # Data rejected
     FILLED = "filled"  # Gap filled via REST API
     HEALTH_CHECKED = "health_checked"  # Health check ran
+    SUNK = "sunk"  # Data sinked to DuckLake native table
+    STREAMED = "streamed"  # Data received via WebSocket stream
+    ANOMALY_DETECTED = "anomaly_detected"  # Anomaly found in health check
+    EXPORTED = "exported"  # Data exported for downstream use
+    BACKTESTED = "backtested"  # Data used in backtesting
 
 
 @dataclass(frozen=True)
@@ -273,6 +282,88 @@ class LineageTracker:
             writer.writerow(row)
 
         return output.getvalue()
+
+    def to_dataframe(self) -> pl.DataFrame:
+        """Export lineage events as a Polars DataFrame.
+
+        Returns:
+            DataFrame with columns: source, symbol, date, event_type,
+            timestamp, message, plus metadata columns.
+        """
+        import polars as pl
+
+        rows = []
+        for event in self._events:
+            row = {
+                "source": event.source,
+                "symbol": event.symbol,
+                "date": event.date or "",
+                "event_type": event.event_type.value,
+                "timestamp": event.timestamp.isoformat(),
+                "message": event.message,
+                "metadata": json.dumps(event.metadata),
+            }
+            rows.append(row)
+        return pl.DataFrame(rows) if rows else pl.DataFrame()
+
+    def save_ducklake(self, duckdb_path: str, catalog_path: str | None = None) -> int:
+        """Persist lineage events to a DuckLake native table.
+
+        Creates/updates a ``lineage`` table in DuckLake so downstream
+        tools (backtesting, replay, live trading) can query data provenance.
+
+        Args:
+            duckdb_path: Path to DuckDB database file.
+            catalog_path: Path to DuckLake catalog (default: auto-derived).
+
+        Returns:
+            Number of events persisted.
+        """
+        if not self._events:
+            return 0
+        import duckdb
+
+        lake = Path(catalog_path) if catalog_path else Path(duckdb_path).parent / "lake"
+        meta = lake / "metadata.ducklake"
+
+        con = duckdb.connect(duckdb_path)
+        try:
+            con.execute("LOAD ducklake")
+            con.execute(
+                f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute("USE dl")
+
+            # Create lineage table if not exists
+            con.execute(
+                "CREATE TABLE IF NOT EXISTS lineage ("
+                "source VARCHAR, symbol VARCHAR, date VARCHAR, "
+                "event_type VARCHAR, timestamp VARCHAR, message VARCHAR, "
+                "metadata VARCHAR, ingested_at BIGINT"
+                ")"
+            )
+
+            now_ms = int(datetime.now().timestamp() * 1000)
+            for event in self._events:
+                con.execute(
+                    "INSERT INTO lineage VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        event.source,
+                        event.symbol,
+                        event.date or "",
+                        event.event_type.value,
+                        event.timestamp.isoformat(),
+                        event.message,
+                        json.dumps(event.metadata),
+                        now_ms,
+                    ],
+                )
+
+            count = con.execute("SELECT COUNT(*) FROM lineage").fetchone()[0]
+            logger.info("Lineage: saved {} events to DuckLake table", count)
+        finally:
+            con.close()
+        return len(self._events)
 
     def stats(self) -> dict:
         """Return summary statistics about recorded events.
