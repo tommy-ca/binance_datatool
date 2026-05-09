@@ -160,10 +160,14 @@ def historical_pipeline(
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Full historical data pipeline composed from workflow classes."""
+    """Full historical data pipeline: metadata → download → verify → gap-fill → sink."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     results: dict[str, Any] = {}
+
+    # Step 0: Refresh metadata first — venues + symbols available for downstream
+    metadata_refresh_flow(trade_type=trade_type, catalog_path=catalog)
+    print(f"  Metadata refreshed for {trade_type}")
 
     for symbol in symbols or ["BTCUSDT"]:
         print(f"Processing {symbol} ({trade_type}/{data_type}/{interval})")
@@ -180,7 +184,7 @@ def historical_pipeline(
 
 
 @flow(name="Metadata Refresh", log_prints=True)
-def metadata_refresh(
+def metadata_refresh_flow(
     trade_type: str = "spot",
     catalog_path: Path | None = None,
     from_api: bool = False,
