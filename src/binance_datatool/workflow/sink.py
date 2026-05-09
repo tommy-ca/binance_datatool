@@ -163,10 +163,14 @@ def _rename_to_silver(df: pl.DataFrame, mapping: dict[str, str]) -> pl.DataFrame
 
 
 def _exchange_for(trade_type: str) -> str:
-    """Map trade_type to exchange name (tardis.dev convention)."""
-    if trade_type == "spot":
-        return "binance"
-    return "binance"
+    """Map trade_type to exchange name (tardis.dev convention).
+
+    https://docs.tardis.dev/downloadable-csv-files/data-types
+    tardis.dev exchange IDs: binance, binance-futures, binance-delivery
+    """
+    return {"spot": "binance", "um": "binance-futures", "cm": "binance-delivery"}.get(
+        trade_type, "binance"
+    )
 
 
 def _add_silver_metadata(
@@ -223,9 +227,15 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
 
 
 def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
-    """Transform Bronze fundingRate CSV to Silver schema."""
+    """Transform Bronze fundingRate CSV to Silver schema.
+
+    Maps Binance archive fundingRate CSV to our Silver schema.
+    Binance archive CSV: symbol, funding_time, funding_rate, mark_price
+    tardis.dev derivative_ticker: timestamp, funding_timestamp, funding_rate, mark_price, ...
+    """
     rename_map = {"funding_time": "ts_event"}
     df = _rename_to_silver(df, rename_map)
+    # Map funding_time as both ts_event (for sorting) and funding_timestamp
     keep = [c for c in ["ts_event", "funding_rate", "mark_price"] if c in df.columns]
     df = df.select(keep)
     df = _cast_columns(
@@ -236,6 +246,10 @@ def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFram
             "mark_price": pl.Float64,
         },
     )
+    # tardis.dev: funding_timestamp is the next funding event time
+    # Binance archive: funding_time is the funding event timestamp
+    if "ts_event" in df.columns:
+        df = df.with_columns(pl.col("ts_event").alias("funding_timestamp"))
     return df
 
 
