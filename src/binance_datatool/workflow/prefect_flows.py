@@ -230,3 +230,89 @@ def bulk_backfill(
             interval=interval,
             lookback_days=lookback_days,
         )
+
+
+# ── Standalone Flows (callable from CLI) ────────────────────────
+
+
+@flow(name="Download", log_prints=True)
+def download_flow(
+    trade_type: str,
+    symbols: list[str],
+    data_type: str = "klines",
+    interval: str | None = None,
+    archive_home: Path | None = None,
+) -> int:
+    """Download archive data. Wraps ArchiveDownloadWorkflow with Prefect."""
+    total = 0
+    for sym in symbols:
+        total += download_archive(trade_type, sym, data_type, interval, archive_home)
+    return total
+
+
+@flow(name="Verify", log_prints=True)
+def verify_flow(
+    trade_type: str,
+    symbols: list[str],
+    data_type: str = "klines",
+    interval: str | None = None,
+    archive_home: Path | None = None,
+) -> int:
+    """Verify checksums. Wraps ArchiveVerifyWorkflow with Prefect."""
+    total = 0
+    for sym in symbols:
+        total += verify_archive(trade_type, sym, data_type, interval, archive_home)
+    return total
+
+
+@flow(name="Gap Fill", log_prints=True)
+def gap_fill_flow(
+    trade_type: str,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str | None = None,
+    lookback_days: int = 30,
+    archive_home: Path | None = None,
+) -> int:
+    """Auto-detect and fill gaps. Wraps GapFillWorkflow with Prefect."""
+    tt = TradeType(trade_type)
+    gaps = fill_gaps(tt, symbol, data_type, interval, lookback_days, archive_home)
+    return len(gaps)
+
+
+@flow(name="Sink", log_prints=True)
+def sink_flow(
+    trade_type: str,
+    symbols: list[str],
+    data_type: str = "klines",
+    interval: str | None = None,
+    archive_home: Path | None = None,
+    catalog_path: Path | None = None,
+) -> int:
+    """Sink to DuckLake. Wraps SinkWorkflow with Prefect."""
+    tt = TradeType(trade_type)
+    home = archive_home or _DEFAULT_ARCHIVE_HOME
+    catalog = catalog_path or home.parent / "lake"
+    total = 0
+    for sym in symbols:
+        total += sink_silver(tt, sym, data_type, interval, home, catalog)
+    return total
+
+
+@flow(name="Refresh Metadata", log_prints=True)
+def refresh_metadata_flow(
+    trade_type: str = "spot",
+    catalog_path: Path | None = None,
+    from_api: bool = False,
+) -> int:
+    """Refresh venue/symbol metadata. Wraps MetadataWorkflow with Prefect."""
+    home = _DEFAULT_ARCHIVE_HOME
+    catalog = catalog_path or home.parent / "lake"
+    client = ArchiveClient()
+    wf = MetadataWorkflow(
+        archive_client=client, catalog_path=catalog, source_label="api" if from_api else "archive"
+    )
+    wf.save_venues(wf.refresh_venues())
+    syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
+    wf.save_symbols(syms)
+    return len(syms)

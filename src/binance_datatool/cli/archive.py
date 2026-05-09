@@ -27,13 +27,15 @@ from binance_datatool.workflow import (
     ArchiveVerifyWorkflow,
     DiffResult,
     DownloadResult,
-    GapFillWorkflow,
     HealthCheckWorkflow,
-    MetadataWorkflow,
-    SinkWorkflow,
     SymbolListingError,
     VerifyDiffResult,
     VerifyResult,
+)
+from binance_datatool.workflow.prefect_flows import (
+    gap_fill_flow,
+    refresh_metadata_flow,
+    sink_flow,
 )
 
 if TYPE_CHECKING:
@@ -558,38 +560,18 @@ def gap_fill_command(
         typer.echo("Error: --interval is not applicable for non-kline data types", err=True)
         raise typer.Exit(code=2)
 
-    client = _exchange_client_for_trade_type(trade_type)
-    from binance_datatool.lineage import LineageTracker
-
-    tracker = LineageTracker()
-    workflow = GapFillWorkflow(
-        exchange_client=client,
-        archive_home=archive_home,
-        symbols=[symbol],
+    n_gaps = gap_fill_flow(
+        trade_type=trade_type.value,
+        symbol=symbol,
         data_type=data_type.value,
         interval=interval,
-        tracker=tracker,
         lookback_days=lookback,
+        archive_home=archive_home,
     )
 
-    detect = auto_detect or (start_time is None and end_time is None)
-    result = asyncio.run(
-        workflow.run(
-            start_time=start_time,
-            end_time=end_time,
-            detect_gaps=detect,
-        )
-    )
-
-    if auto_detect or detect:
-        typer.echo(f"Gaps detected: {len(result.gaps_detected)}", err=True)
-    typer.echo(f"Filled: {result.files_filled} files, Failed: {result.files_failed}", err=True)
-    for p in result.filled:
-        typer.echo(str(p.relative_to(archive_home)))
-    if result.failed:
-        for sym, err in result.failed:
-            typer.echo(f"Failed {sym}: {err}", err=True)
-        raise typer.Exit(code=2)
+    typer.echo(f"Gaps detected: {n_gaps}", err=True)
+    if n_gaps == 0:
+        return
 
 
 @app.command("health")
@@ -705,34 +687,16 @@ def sink_command(
         typer.echo("Error: At least one SYMBOL argument required.", err=True)
         raise typer.Exit(code=2)
 
-    from binance_datatool.lineage import LineageTracker
-
-    tracker = LineageTracker()
-    workflow = SinkWorkflow(
+    total_rows = sink_flow(
+        trade_type=trade_type.value,
+        symbols=resolved_symbols,
+        data_type=data_type.value,
+        interval=interval,
         archive_home=archive_home,
         catalog_path=Path(catalog_path) if catalog_path else None,
-        duckdb_path=Path(duckdb_path) if duckdb_path else None,
-        tracker=tracker,
     )
 
-    stats = workflow.transform(
-        trade_type=trade_type,
-        data_type=data_type,
-        symbols=resolved_symbols,
-        interval=interval,
-        target=target,  # type: ignore
-    )
-
-    typer.echo(
-        f"Transformed {stats.symbols} symbols, "
-        f"{stats.row_count} rows into "
-        f"{stats.parquet_files} parquet files",
-        err=True,
-    )
-    if stats.errors:
-        for err in stats.errors:
-            typer.echo(f"Error: {err}", err=True)
-        raise typer.Exit(code=2)
+    typer.echo(f"Transformed {len(resolved_symbols)} symbols, {total_rows} rows", err=True)
 
 
 @app.command("refresh-metadata")
@@ -768,34 +732,16 @@ def refresh_metadata_command(
     Lists symbols from the Binance archive (or REST API), saves as Parquet,
     and optionally registers in a DuckLake catalog as native tables.
     """
-    import asyncio
-
-    from binance_datatool.archive.client import ArchiveClient
 
     archive_home = resolve_archive_home(archive_home_path)
     catalog = Path(catalog_path) if catalog_path else archive_home.parent / "lake"
-    source_label = "api" if from_api else "archive"
 
-    client = ArchiveClient()
-    workflow = MetadataWorkflow(
-        archive_client=client,
+    n_syms = refresh_metadata_flow(
+        trade_type=trade_type.value,
         catalog_path=catalog,
-        source_label=source_label,
+        from_api=from_api,
     )
-
-    # Save venues (local var must not collide with SQL table name 'venues')
-    venue_rows = workflow.refresh_venues()
-    venue_path = workflow.save_venues(venue_rows)
-    typer.echo(f"Venues -> {venue_path}", err=True)
-
-    # Save symbols
-    if from_api:
-        symbol_rows = asyncio.run(workflow.refresh_symbols_from_api(trade_type))
-    else:
-        symbol_rows = asyncio.run(workflow.refresh_symbols(trade_type, data_freq, data_type))
-    sym_path = workflow.save_symbols(symbol_rows)
-    typer.echo(f"Symbols -> {sym_path}", err=True)
-    typer.echo(f"Saved {len(symbol_rows)} symbols for {trade_type.value}", err=True)
+    typer.echo(f"Saved {n_syms} symbols for {trade_type.value}", err=True)
 
     # Optionally register metadata in DuckLake as native tables
     if duckdb_path:
