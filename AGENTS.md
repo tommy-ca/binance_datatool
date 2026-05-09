@@ -134,8 +134,8 @@ HealthCheckWorkflow
 SinkWorkflow (binance-datatool sink)
   ├── Polars: read ZIP CSVs + filled CSVs
   ├── normalize to Silver schemas (ts_event, ts_recv)
-  ├── write partitioned Parquet (self-describing paths)
-  └── DuckLake v1.0 native tables (ACID, snapshots)
+  └── DuckLake v1.0 native tables (ACID, snapshots, partitioning)
+        DuckDB manages Parquet storage, file layout, partition tracking
 ```
 
 ## CLI Commands Reference

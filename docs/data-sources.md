@@ -36,11 +36,11 @@ Layer 3: WS Stream ────────────────────�
                               │  read all Bronze sources           │
                               │  normalize to Silver schemas       │
                               │  add metadata (exchange, ts_recv)  │
-                              ▼                                   │
-                    Silver Layer (Parquet) ────────────────────────┤
-                              │                                    │
+                              │  INSERT INTO DuckLake native table │
                               ▼                                    │
-                    DuckLake v1.0 (native tables, ACID) ──────────┘
+                    DuckLake v1.0 (native tables, ACID,            │
+                    partitioning, snapshots)                       │
+                    DuckDB manages Parquet files internally        │
 ```
 
 ## Field-to-Source Matrix
