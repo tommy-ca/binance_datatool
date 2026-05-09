@@ -7,11 +7,16 @@ Each `uv run binance-datatool gap-fill ...` or `sink ...` starts a temporary
 Prefect server, runs the flow, then stops it. This adds ~3s overhead per
 command and prevents flow run history from being persisted.
 
-**Fix**: Start a persistent Prefect server:
+**Fix**: Use `prefect flow serve` for long-running flow service:
 ```bash
-prefect server start  # background service
+# Serve the historical pipeline directly (no server/worker needed)
+uv run prefect flow serve src/binance_datatool/workflow/prefect_flows.py:historical_pipeline
+
+# In another terminal, trigger runs
+uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
 ```
-Then flow runs log to the persistent server instead of ephemeral.
+The `prefect flow serve` command runs flows without requiring a separate
+server + worker infrastructure. It's ideal for local/CI development.
 
 ### I2: Flows Block on Sync CLI
 CLI commands call `@flow` functions synchronously. Prefect 3.x flows

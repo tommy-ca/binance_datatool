@@ -104,6 +104,30 @@ The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `
   `[open_time, open, high, low, close, volume, close_time, quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]`
 - WS kline stream returns dict with structure `{"k": {"t": ..., "o": ..., ...}}`
 
+## Running Workflows with Prefect
+
+```bash
+# Serve a flow directly (no server/worker needed)
+uv run prefect flow serve src/binance_datatool/workflow/prefect_flows.py:historical_pipeline
+
+# In another terminal, trigger a run
+uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
+
+# Or run flows directly via Python
+uv run python3 -c "
+from binance_datatool.workflow.prefect_flows import historical_pipeline
+result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'])
+print(result)
+"
+```
+
+Available flows:
+- `historical_pipeline` — full download → verify → gap-fill → sink
+- `refresh_metadata_flow` — venue/symbol metadata refresh
+- `bulk_backfill` — multi-symbol parallel processing
+- `health_flow` — health check + anomaly detection
+- `sink_flow`, `gap_fill_flow`, `download_flow`, `verify_flow` — individual steps
+
 ## Data Sources
 
 The pipeline ingests from three source layers. See `docs/data-sources.md` for
