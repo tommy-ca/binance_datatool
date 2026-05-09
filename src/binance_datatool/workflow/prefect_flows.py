@@ -43,15 +43,27 @@ def _cli(*args: str) -> list[str]:
 
 @task(retries=2, retry_delay_seconds=10)
 def download_archive(
-    trade_type: str, symbol: str, data_type: str = "klines", interval: str = "1h",
+    trade_type: str,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str = "1h",
     archive_home: Path | None = None,
 ) -> Path:
     """Download archive data and materialize the ARCHIVE_DATA asset."""
     import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli("download", trade_type, "--type", data_type, "--freq", "daily",
-               symbol, "--archive-home", str(home))
+    cmd = _cli(
+        "download",
+        trade_type,
+        "--type",
+        data_type,
+        "--freq",
+        "daily",
+        symbol,
+        "--archive-home",
+        str(home),
+    )
     if interval and data_type in ("klines",):
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
@@ -61,15 +73,27 @@ def download_archive(
 
 @task(retries=1, retry_delay_seconds=5)
 def verify_archive(
-    trade_type: str, symbol: str, data_type: str = "klines", interval: str = "1h",
+    trade_type: str,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str = "1h",
     archive_home: Path | None = None,
 ) -> Path:
     """Verify checksums and materialize the VERIFIED_DATA asset."""
     import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli("verify", trade_type, "--type", data_type, "--freq", "daily",
-               symbol, "--archive-home", str(home))
+    cmd = _cli(
+        "verify",
+        trade_type,
+        "--type",
+        data_type,
+        "--freq",
+        "daily",
+        symbol,
+        "--archive-home",
+        str(home),
+    )
     if interval:
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
@@ -79,22 +103,39 @@ def verify_archive(
 
 @task(retries=1, retry_delay_seconds=5)
 def fill_gaps(
-    trade_type: TradeType, symbol: str, data_type: str = "klines",
-    interval: str = "1h", lookback_days: int = 30,
+    trade_type: TradeType,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str = "1h",
+    lookback_days: int = 30,
     archive_home: Path | None = None,
 ) -> list[tuple[str, int, int]]:
     """Detect and fill gaps, materialize FILLED_DATA asset."""
     import asyncio
 
-    from binance_datatool.exchange import BinanceSpotRestClient
+    from binance_datatool.exchange import (
+        BinanceCmRestClient,
+        BinanceSpotRestClient,
+        BinanceUmRestClient,
+    )
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    client = BinanceSpotRestClient()
+    client_map = {
+        "spot": BinanceSpotRestClient,
+        "um": BinanceUmRestClient,
+        "cm": BinanceCmRestClient,
+    }
+    Client = client_map.get(trade_type.value, BinanceSpotRestClient)
+    client = Client()
     tracker = LineageTracker()
     workflow = GapFillWorkflow(
-        exchange_client=client, archive_home=home,
-        symbols=[symbol], data_type=data_type, interval=interval,
-        tracker=tracker, lookback_days=lookback_days,
+        exchange_client=client,
+        archive_home=home,
+        symbols=[symbol],
+        data_type=data_type,
+        interval=interval,
+        tracker=tracker,
+        lookback_days=lookback_days,
     )
     result = asyncio.run(workflow.run(detect_gaps=True))
     materialize(FILLED_DATA)
@@ -103,8 +144,11 @@ def fill_gaps(
 
 @task(retries=1, retry_delay_seconds=5)
 def sink_silver(
-    trade_type: TradeType, symbol: str, data_type: str = "klines",
-    interval: str = "1h", archive_home: Path | None = None,
+    trade_type: TradeType,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str = "1h",
+    archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> int:
     """Sink to DuckLake, materialize SILVER_DATA and LINEAGE_EVENTS."""
@@ -113,8 +157,9 @@ def sink_silver(
     duckdb = catalog / "catalog.duckdb"
 
     tracker = LineageTracker()
-    workflow = SinkWorkflow(archive_home=home, catalog_path=catalog,
-                            duckdb_path=duckdb, tracker=tracker)
+    workflow = SinkWorkflow(
+        archive_home=home, catalog_path=catalog, duckdb_path=duckdb, tracker=tracker
+    )
     stats = workflow.transform(
         trade_type=trade_type,
         data_type=data_type,
@@ -128,15 +173,18 @@ def sink_silver(
 
 @task(retries=1, retry_delay_seconds=5)
 def refresh_catalog(
-    trade_type: str, catalog_path: Path, archive_home: Path | None = None,
+    trade_type: str,
+    catalog_path: Path,
+    archive_home: Path | None = None,
     from_api: bool = False,
 ) -> None:
     """Refresh metadata, materialize VENUE_METADATA and SYMBOL_METADATA."""
     import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli("refresh-metadata", trade_type, "--catalog", str(catalog_path),
-               "--archive-home", str(home))
+    cmd = _cli(
+        "refresh-metadata", trade_type, "--catalog", str(catalog_path), "--archive-home", str(home)
+    )
     if from_api:
         cmd.append("--from-api")
     subprocess.run(cmd, check=True)
@@ -171,10 +219,8 @@ def historical_pipeline(
 
         download_archive(trade_type, symbol, data_type, interval, home)
         verify_archive(trade_type, symbol, data_type, interval, home)
-        gaps = fill_gaps(TradeType(trade_type), symbol, data_type, interval,
-                         lookback_days, home)
-        rows = sink_silver(TradeType(trade_type), symbol, data_type, interval,
-                           home, catalog)
+        gaps = fill_gaps(TradeType(trade_type), symbol, data_type, interval, lookback_days, home)
+        rows = sink_silver(TradeType(trade_type), symbol, data_type, interval, home, catalog)
 
         results[symbol] = {
             "gaps_filled": len(gaps),
@@ -198,8 +244,11 @@ def metadata_refresh(
     print(f"Metadata refreshed for {trade_type} → {catalog}")
 
 
-@flow(name="Bulk Historical Backfill", log_prints=True,
-      task_runner=ThreadPoolTaskRunner(max_workers=4))
+@flow(
+    name="Bulk Historical Backfill",
+    log_prints=True,
+    task_runner=ThreadPoolTaskRunner(max_workers=4),
+)
 def bulk_backfill(
     trade_type: str = "spot",
     symbols: list[str] | None = None,
@@ -216,15 +265,21 @@ def bulk_backfill(
 
         client = ArchiveClient()
         workflow = ArchiveListSymbolsWorkflow(
-            client=client, trade_type=TradeType(trade_type),
-            data_freq=DataFrequency.daily, data_type=DataType(data_type),
+            client=client,
+            trade_type=TradeType(trade_type),
+            data_freq=DataFrequency.daily,
+            data_type=DataType(data_type),
         )
         import asyncio
+
         result = asyncio.run(workflow.run())
         symbols = [s.symbol for s in result.matched[:10]]
 
     for symbol in symbols:
         historical_pipeline(
-            trade_type=trade_type, symbols=[symbol], data_type=data_type,
-            interval=interval, lookback_days=lookback_days,
+            trade_type=trade_type,
+            symbols=[symbol],
+            data_type=data_type,
+            interval=interval,
+            lookback_days=lookback_days,
         )
