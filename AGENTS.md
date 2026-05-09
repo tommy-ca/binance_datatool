@@ -104,6 +104,17 @@ The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `
   `[open_time, open, high, low, close, volume, close_time, quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]`
 - WS kline stream returns dict with structure `{"k": {"t": ..., "o": ..., ...}}`
 
+## Data Sources
+
+The pipeline ingests from three source layers. See `docs/data-sources.md` for
+the complete field-to-source mapping matrix.
+
+| Layer | Source | Latency | CLI |
+|-------|--------|---------|-----|
+| **Archive** | data.binance.vision (S3) | ~1-2 days | `download`, `verify` |
+| **REST API** | api.binance.com via SDK | real-time | `gap-fill`, `refresh-metadata` |
+| **WS Stream** | stream.binance.com via SDK | real-time continuous | `stream` (Phase 8) |
+
 ## Data Pipeline Architecture
 
 ```
