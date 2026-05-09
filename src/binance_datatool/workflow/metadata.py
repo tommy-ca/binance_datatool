@@ -165,29 +165,25 @@ class MetadataWorkflow:
         return result
 
     def _save_ducklake(self, df: pl.DataFrame, table_name: str) -> None:
-        """Save DataFrame as a DuckLake native table (DuckDB-managed)."""
+        """Save DataFrame as a DuckLake native table via DuckLakeCatalog."""
         if not self._duckdb_path:
             return
-        import duckdb
-
-        lake = self._catalog_path
-        meta = lake / "metadata.ducklake"
         db_path = Path(str(self._duckdb_path))
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        from binance_datatool.workflow.catalog import DuckLakeCatalog
+
+        catalog = DuckLakeCatalog(lake_path=self._catalog_path, db_path=db_path)
+        con = catalog.connect()
         try:
-            con = duckdb.connect(str(db_path))
-            con.execute("LOAD ducklake")
-            con.execute(
-                f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
-            )
-            con.execute("USE dl")
             con.execute(f"DROP TABLE IF EXISTS {table_name}")
-            con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+            catalog.ensure_table(con, table_name)
+            con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
             cnt = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
             logger.info("DuckLake: saved {} rows to {}", cnt, table_name)
-            con.close()
         except Exception as e:
             logger.warning("DuckLake: failed to save {}: {}", table_name, e)
+        finally:
+            con.close()
 
     def save_venues(self, venues: list[VenueMetadata]) -> None:
         """Save venue metadata as DuckLake-native table."""
