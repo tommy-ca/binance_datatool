@@ -10,15 +10,21 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 - **Normalized across trade types**: Spot, UM, CM share a unified schema per data type
 - **Normalized across sources**: Archive ZIP, API-filled, and WS-filled data use the same schema
-- **Source priority** (highest to lowest):
-  1. **Binance Archive** (data.binance.vision) — primary source for field naming and types
-  2. **Binance REST/WS API** — secondary source for gaps not in archive (recent data, richer metadata)
-  3. **tardis.dev** conventions — for field naming where archive/REST lack a clear standard
-  4. **Databento DBN** — for `ts_event`/`ts_recv` naming and `rtype`
-- **Archive CSV headers determine default naming** where they exist:
-  - klines: `open`, `high`, `low`, `close`, `volume`, `quote_volume`, `count`, `taker_buy_*`
-  - aggTrades: `price`, `quantity`, `transact_time`, `is_buyer_maker`
-  - fundingRate: `funding_time`, `funding_rate`, `mark_price`
+- **Data source vs schema model**: These are separate concerns:
+  - **Source**: Binance Archive (primary) + Binance REST/WS API (secondary, for gaps)
+  - **Target schema**: Modeled after tardis.dev + Databento DBN conventions
+- **Source-to-target mapping**: Archive CSV fields are renamed/normalized to target conventions:
+  - `open_time` → `ts_event` (DBN)
+  - `count` → `trade_count` (DBN)
+  - `quantity` → `size` (DBN)
+  - `agg_trade_id` → `trade_id` (tardis.dev)
+  - `is_buyer_maker` → `side` (tardis.dev)
+  - `funding_time` → `ts_event` (DBN)
+  - Metadata columns (`exchange`, `rtype`, `ts_recv`) added where archive lacks them
+- **Convention sources**:
+  - **tardis.dev**: `exchange` + `symbol` as row-level identifiers, `price`/`side`/`funding_rate`/`mark_price` naming
+  - **Databento DBN**: `ts_event`/`ts_recv` for event/receive timestamps, `rtype` for record type, `size` for trade amount
+  - **Binance-specific fields preserved**: `quote_volume`, `taker_buy_*` (no tardis.dev/DBN equivalent)
 - **Self-describing**: Metadata columns (`source`, `exchange`, `trade_type`, `data_type`,
   `symbol`, `interval`, `ingested_at`) make each row fully contextual without external catalog
 - **Type-safe**: All numeric fields are FLOAT64/INT64, timestamps are INT64 epoch ms
