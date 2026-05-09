@@ -225,6 +225,20 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
 The `ts_event` column is BIGINT epoch ms (not TIMESTAMP). A `ts_date DATE`
 column is populated at DuckLake ingest time via `CAST(epoch_ms(ts_event) AS DATE)`,
 enabling DuckLake's native DATE partition transforms for efficient date pruning.
+
+## Type Mapping: DuckDB/DuckLake ↔ Parquet
+
+All DuckDB column types map cleanly to Parquet physical types:
+
+| DuckDB | Parquet Physical | Arrow/Iceberg Logical | Used In |
+|--------|-----------------|----------------------|---------|
+| `BIGINT` | `int64` | `long` | `ts_event`, `ts_recv`, `trade_count`, `ingested_at` |
+| `DOUBLE` | `double` | `double` | `open`, `high`, `low`, `close`, `volume`, `quote_volume`, `taker_buy_*` |
+| `VARCHAR` | `large_string` (UTF8) | `string` | `source`, `exchange`, `trade_type`, `symbol`, `interval`, `data_type` |
+| `DATE` | `date32` | `date` | `ts_date` (computed at DuckLake ingest, not in Parquet Silver files) |
+| `BOOLEAN` | `bool` | `boolean` | `is_leverage`, `is_stable_pair` (symbols table only) |
+
+No type conversion needed — DuckDB reads Parquet directly with zero-copy type matching.
 | `venues` | Unpartitioned | — | zstd |
 | `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
 
