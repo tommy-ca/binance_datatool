@@ -24,18 +24,30 @@ class MetadataWorkflow:
     EXCHANGE = "binance"
     VENUES = [
         VenueMetadata(
-            venue="binance_spot", trade_type="spot", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "trades"],
+            venue="binance_spot",
+            trade_type="spot",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "trades"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_um", trade_type="um", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_um",
+            trade_type="um",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_cm", trade_type="cm", exchange="binance",
-            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_cm",
+            trade_type="cm",
+            exchange="binance",
+            source="archive",
+            symbol_count=0,
+            data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
     ]
@@ -152,41 +164,33 @@ class MetadataWorkflow:
             )
         return result
 
-    def _save_parquet(self, df: pl.DataFrame, filename: str) -> Path:
-        """Write a DataFrame to standalone Parquet."""
-        out = self._catalog_path / filename
-        out.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(out)
-        return out
-
-    def _register_ducklake(self, df: pl.DataFrame, table_name: str, **extra_cols) -> None:
-        """Register a DataFrame as a DuckLake native table."""
+    def _save_ducklake(self, df: pl.DataFrame, table_name: str) -> None:
+        """Save DataFrame as a DuckLake native table (DuckDB-managed)."""
         if not self._duckdb_path:
             return
+        import duckdb
+
+        lake = self._catalog_path
+        meta = lake / "metadata.ducklake"
+        db_path = Path(str(self._duckdb_path))
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            import duckdb
-
-            lake = self._catalog_path
-            meta = lake / "metadata.ducklake"
-            con = duckdb.connect(str(self._duckdb_path))
-            try:
-                con.execute("LOAD ducklake")
-                con.execute(
-                    f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
-                )
-                con.execute("USE dl")
-                con.execute(
-                    f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM df"
-                )
-                cnt = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
-                logger.info("DuckLake: {} rows in {}", cnt, table_name)
-            finally:
-                con.close()
+            con = duckdb.connect(str(db_path))
+            con.execute("LOAD ducklake")
+            con.execute(
+                f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute("USE dl")
+            con.execute(f"DROP TABLE IF EXISTS {table_name}")
+            con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+            cnt = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+            logger.info("DuckLake: saved {} rows to {}", cnt, table_name)
+            con.close()
         except Exception as e:
-            logger.warning("DuckLake: failed to register {}: {}", table_name, e)
+            logger.warning("DuckLake: failed to save {}: {}", table_name, e)
 
-    def save_venues(self, venues: list[VenueMetadata]) -> Path:
-        """Save venue metadata to Parquet and DuckLake."""
+    def save_venues(self, venues: list[VenueMetadata]) -> None:
+        """Save venue metadata as DuckLake-native table."""
         rows = [
             {
                 "venue": v.venue,
@@ -200,13 +204,11 @@ class MetadataWorkflow:
             for v in venues
         ]
         df = pl.DataFrame(rows)
-        out = self._save_parquet(df, "venues.parquet")
-        self._register_ducklake(df, "venues")
-        logger.info("Saved {} venues", len(venues))
-        return out
+        self._save_ducklake(df, "venues")
+        logger.info("Saved {} venues to DuckLake", len(venues))
 
-    def save_symbols(self, symbols: list[SymbolMetadata]) -> Path:
-        """Save symbol metadata to Parquet and DuckLake."""
+    def save_symbols(self, symbols: list[SymbolMetadata]) -> None:
+        """Save symbol metadata as DuckLake-native table."""
         rows = [
             {
                 "symbol": s.symbol,
@@ -224,7 +226,5 @@ class MetadataWorkflow:
             for s in symbols
         ]
         df = pl.DataFrame(rows)
-        out = self._save_parquet(df, "symbols.parquet")
-        self._register_ducklake(df, "symbols")
-        logger.info("Saved {} symbols", len(symbols))
-        return out
+        self._save_ducklake(df, "symbols")
+        logger.info("Saved {} symbols to DuckLake", len(symbols))

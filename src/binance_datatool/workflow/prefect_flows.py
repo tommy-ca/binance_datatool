@@ -166,7 +166,7 @@ def historical_pipeline(
     results: dict[str, Any] = {}
 
     # Step 0: Refresh metadata first — venues + symbols available for downstream
-    metadata_refresh_flow(trade_type=trade_type, catalog_path=catalog)
+    refresh_metadata_flow(trade_type=trade_type, catalog_path=catalog)
     print(f"  Metadata refreshed for {trade_type}")
 
     for symbol in symbols or ["BTCUSDT"]:
@@ -181,25 +181,6 @@ def historical_pipeline(
         print(f"  {symbol}: {len(gaps)} gaps, {rows} rows")
 
     return results
-
-
-@flow(name="Metadata Refresh", log_prints=True)
-def metadata_refresh_flow(
-    trade_type: str = "spot",
-    catalog_path: Path | None = None,
-    from_api: bool = False,
-) -> None:
-    """Refresh venue and symbol metadata via MetadataWorkflow."""
-    home = _DEFAULT_ARCHIVE_HOME
-    catalog = catalog_path or home.parent / "lake"
-    client = ArchiveClient()
-    wf = MetadataWorkflow(
-        archive_client=client, catalog_path=catalog, source_label="api" if from_api else "archive"
-    )
-    wf.save_venues(wf.refresh_venues())
-    symbols = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
-    wf.save_symbols(symbols)
-    print(f"Metadata: {len(symbols)} symbols saved to {catalog}")
 
 
 @flow(
@@ -314,9 +295,12 @@ def refresh_metadata_flow(
     home = _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     client = ArchiveClient()
-    wf = MetadataWorkflow(archive_client=client, catalog_path=catalog,
-                          source_label="api" if from_api else "archive",
-                          duckdb_path=Path(duckdb_path) if duckdb_path else catalog / "catalog.duckdb")
+    wf = MetadataWorkflow(
+        archive_client=client,
+        catalog_path=catalog,
+        source_label="api" if from_api else "archive",
+        duckdb_path=Path(duckdb_path) if duckdb_path else catalog / "catalog.duckdb",
+    )
     wf.save_venues(wf.refresh_venues())
     syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
     wf.save_symbols(syms)
