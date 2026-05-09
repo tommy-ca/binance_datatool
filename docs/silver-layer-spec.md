@@ -83,6 +83,7 @@ Follows DBN (`ts_event`, `ts_recv`) and tardis.dev (price/size volume) conventio
 | `taker_buy_volume` | CSV column | FLOAT64 | Maker buy volume |
 | `taker_buy_quote_volume` | CSV column | FLOAT64 | Maker buy quote volume |
 | `source` | Auto | UTF8 | `"archive"`, `"api_filled"`, `"ws_stream"` |
+| `exchange` | Auto | UTF8 | `"binance"` (tardis.dev convention) |
 | `trade_type` | Auto | UTF8 | `"spot"`, `"um"`, `"cm"` |
 | `symbol` | Auto | UTF8 | e.g. `"BTCUSDT"` |
 | `interval` | Auto | UTF8 | e.g. `"1h"` |
@@ -269,9 +270,9 @@ No data is copied into DuckDB — views scan the lake directly.
 ### DuckLake Native Tables (unified across trade types)
 | Table | Columns | Partition | Description |
 |-------|---------|-----------|-------------|
-| `klines` | 18 | `trade_type, symbol, interval, ts_date` | Unified OHLCV across spot/um/cm |
-| `aggTrades` | 15 | `trade_type, symbol, ts_date` | Unified aggregated trades |
-| `fundingRate` | 10 | `trade_type, symbol, ts_date` | Unified funding rates (um/cm) |
+| `klines` | 19 | `trade_type, symbol, interval, ts_date` | Unified OHLCV across spot/um/cm |
+| `aggTrades` | 16 | `trade_type, symbol, ts_date` | Unified aggregated trades |
+| `fundingRate` | 11 | `trade_type, symbol, ts_date` | Unified funding rates (um/cm) |
 | `venues` | 7 | none | Venue metadata |
 | `symbols` | 11 | `trade_type` | Symbol metadata |
 

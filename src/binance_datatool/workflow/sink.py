@@ -68,6 +68,7 @@ _FULL_SILVER_KLINE_SCHEMA = {
     "taker_buy_volume": pl.Float64,
     "taker_buy_quote_volume": pl.Float64,
     "source": pl.Utf8,
+    "exchange": pl.Utf8,
     "trade_type": pl.Utf8,
     "symbol": pl.Utf8,
     "interval": pl.Utf8,
@@ -161,6 +162,13 @@ def _rename_to_silver(df: pl.DataFrame, mapping: dict[str, str]) -> pl.DataFrame
     return df
 
 
+def _exchange_for(trade_type: str) -> str:
+    """Map trade_type to exchange name (tardis.dev convention)."""
+    if trade_type == "spot":
+        return "binance"
+    return "binance"
+
+
 def _add_silver_metadata(
     df: pl.DataFrame,
     trade_type: str,
@@ -171,9 +179,11 @@ def _add_silver_metadata(
 ) -> pl.DataFrame:
     """Add Silver metadata columns."""
     now_ms = int(time.time() * 1000)
+    exchange = _exchange_for(trade_type)
     df = df.with_columns(pl.lit(now_ms).alias("ts_recv"))
     return df.with_columns(
         pl.lit(source).alias("source"),
+        pl.lit(exchange).alias("exchange"),
         pl.lit(trade_type).alias("trade_type"),
         pl.lit(symbol).alias("symbol"),
         pl.lit(interval or "").alias("interval"),
