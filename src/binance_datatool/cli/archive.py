@@ -740,22 +740,6 @@ def refresh_metadata_command(
         trade_type=trade_type.value,
         catalog_path=catalog,
         from_api=from_api,
+        duckdb_path=duckdb_path or str(catalog / "catalog.duckdb"),
     )
     typer.echo(f"Saved {n_syms} symbols for {trade_type.value}", err=True)
-
-    # Optionally register metadata in DuckLake as native tables
-    if duckdb_path:
-        from binance_datatool.workflow.catalog import DuckLakeCatalog
-
-        dl_catalog = DuckLakeCatalog(lake_path=catalog, db_path=duckdb_path)
-        dl_con = dl_catalog.connect()
-        try:
-            dl_catalog.register_metadata(dl_con, catalog)
-            v_count = dl_con.execute("SELECT COUNT(*) FROM venues").fetchone()[0]
-            s_count = dl_con.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
-            typer.echo(
-                f"DuckLake: registered {v_count} venues + {s_count} symbols as native tables",
-                err=True,
-            )
-        finally:
-            dl_con.close()

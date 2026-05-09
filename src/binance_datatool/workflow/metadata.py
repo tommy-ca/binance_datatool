@@ -24,30 +24,18 @@ class MetadataWorkflow:
     EXCHANGE = "binance"
     VENUES = [
         VenueMetadata(
-            venue="binance_spot",
-            trade_type="spot",
-            exchange="binance",
-            source="archive",
-            symbol_count=0,
-            data_types=["klines", "aggTrades", "trades"],
+            venue="binance_spot", trade_type="spot", exchange="binance",
+            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "trades"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_um",
-            trade_type="um",
-            exchange="binance",
-            source="archive",
-            symbol_count=0,
-            data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_um", trade_type="um", exchange="binance",
+            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
         VenueMetadata(
-            venue="binance_cm",
-            trade_type="cm",
-            exchange="binance",
-            source="archive",
-            symbol_count=0,
-            data_types=["klines", "aggTrades", "fundingRate"],
+            venue="binance_cm", trade_type="cm", exchange="binance",
+            source="archive", symbol_count=0, data_types=["klines", "aggTrades", "fundingRate"],
             fetched_at=0,
         ),
     ]
@@ -57,10 +45,12 @@ class MetadataWorkflow:
         archive_client: ArchiveClient,
         catalog_path: Path,
         source_label: str = "archive",
+        duckdb_path: Path | None = None,
     ) -> None:
         self._archive_client = archive_client
         self._catalog_path = Path(catalog_path)
         self._source = source_label
+        self._duckdb_path = duckdb_path
 
     def refresh_venues(self) -> list[VenueMetadata]:
         """List all venues available in the archive."""
@@ -162,8 +152,41 @@ class MetadataWorkflow:
             )
         return result
 
+    def _save_parquet(self, df: pl.DataFrame, filename: str) -> Path:
+        """Write a DataFrame to standalone Parquet."""
+        out = self._catalog_path / filename
+        out.parent.mkdir(parents=True, exist_ok=True)
+        df.write_parquet(out)
+        return out
+
+    def _register_ducklake(self, df: pl.DataFrame, table_name: str, **extra_cols) -> None:
+        """Register a DataFrame as a DuckLake native table."""
+        if not self._duckdb_path:
+            return
+        try:
+            import duckdb
+
+            lake = self._catalog_path
+            meta = lake / "metadata.ducklake"
+            con = duckdb.connect(str(self._duckdb_path))
+            try:
+                con.execute("LOAD ducklake")
+                con.execute(
+                    f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
+                )
+                con.execute("USE dl")
+                con.execute(
+                    f"CREATE TABLE IF NOT EXISTS {table_name} AS SELECT * FROM df"
+                )
+                cnt = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+                logger.info("DuckLake: {} rows in {}", cnt, table_name)
+            finally:
+                con.close()
+        except Exception as e:
+            logger.warning("DuckLake: failed to register {}: {}", table_name, e)
+
     def save_venues(self, venues: list[VenueMetadata]) -> Path:
-        """Save venue metadata to Parquet."""
+        """Save venue metadata to Parquet and DuckLake."""
         rows = [
             {
                 "venue": v.venue,
@@ -177,14 +200,13 @@ class MetadataWorkflow:
             for v in venues
         ]
         df = pl.DataFrame(rows)
-        out = self._catalog_path / "venues.parquet"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(out)
-        logger.info("Saved {} venues to {}", len(venues), out)
+        out = self._save_parquet(df, "venues.parquet")
+        self._register_ducklake(df, "venues")
+        logger.info("Saved {} venues", len(venues))
         return out
 
     def save_symbols(self, symbols: list[SymbolMetadata]) -> Path:
-        """Save symbol metadata to Parquet."""
+        """Save symbol metadata to Parquet and DuckLake."""
         rows = [
             {
                 "symbol": s.symbol,
@@ -202,8 +224,7 @@ class MetadataWorkflow:
             for s in symbols
         ]
         df = pl.DataFrame(rows)
-        out = self._catalog_path / "symbols.parquet"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(out)
-        logger.info("Saved {} symbols to {}", len(symbols), out)
+        out = self._save_parquet(df, "symbols.parquet")
+        self._register_ducklake(df, "symbols")
+        logger.info("Saved {} symbols", len(symbols))
         return out

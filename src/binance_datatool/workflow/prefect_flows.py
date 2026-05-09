@@ -308,14 +308,15 @@ def refresh_metadata_flow(
     trade_type: str = "spot",
     catalog_path: Path | None = None,
     from_api: bool = False,
+    duckdb_path: str | None = None,
 ) -> int:
     """Refresh venue/symbol metadata. Wraps MetadataWorkflow with Prefect."""
     home = _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     client = ArchiveClient()
-    wf = MetadataWorkflow(
-        archive_client=client, catalog_path=catalog, source_label="api" if from_api else "archive"
-    )
+    wf = MetadataWorkflow(archive_client=client, catalog_path=catalog,
+                          source_label="api" if from_api else "archive",
+                          duckdb_path=Path(duckdb_path) if duckdb_path else catalog / "catalog.duckdb")
     wf.save_venues(wf.refresh_venues())
     syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
     wf.save_symbols(syms)
