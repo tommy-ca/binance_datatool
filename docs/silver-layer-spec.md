@@ -10,16 +10,15 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
 
 - **Normalized across trade types**: Spot, UM, CM share a unified schema per data type
 - **Normalized across sources**: Archive ZIP, API-filled, and WS-filled data use the same schema
-- **Primary: tardis.dev conventions** ([tardis.dev CSV schemas](https://docs.tardis.dev/downloadable-csv-files/data-types))
-  - `exchange` + `symbol` as row-level identifiers
-  - `price`, `side`, `funding_rate`, `mark_price` field naming
-  - Epoch-based timestamps (ms vs tardis.dev μs — 1000x factor)
-- **Selective DBN conventions** ([Databento DBN](https://databento.com/docs/schemas/dbn))
-  - `ts_event` / `ts_recv` naming for event/receive timestamps
-  - `rtype` for record type classification
-  - `size` for trade amount
-- **Binance source alignment**: Archive CSV headers drive column naming where both conventions
-  lack a clear standard (klines-specific fields: `quote_volume`, `trade_count`)
+- **Source priority** (highest to lowest):
+  1. **Binance Archive** (data.binance.vision) — primary source for field naming and types
+  2. **Binance REST/WS API** — secondary source for gaps not in archive (recent data, richer metadata)
+  3. **tardis.dev** conventions — for field naming where archive/REST lack a clear standard
+  4. **Databento DBN** — for `ts_event`/`ts_recv` naming and `rtype`
+- **Archive CSV headers determine default naming** where they exist:
+  - klines: `open`, `high`, `low`, `close`, `volume`, `quote_volume`, `count`, `taker_buy_*`
+  - aggTrades: `price`, `quantity`, `transact_time`, `is_buyer_maker`
+  - fundingRate: `funding_time`, `funding_rate`, `mark_price`
 - **Self-describing**: Metadata columns (`source`, `exchange`, `trade_type`, `data_type`,
   `symbol`, `interval`, `ingested_at`) make each row fully contextual without external catalog
 - **Type-safe**: All numeric fields are FLOAT64/INT64, timestamps are INT64 epoch ms
