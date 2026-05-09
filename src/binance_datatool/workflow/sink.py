@@ -357,79 +357,34 @@ class SinkWorkflow:
 
         combined = pl.concat(all_dfs, how="diagonal")
 
-        if target in ("parquet", "all"):
-            stats.parquet_files = self._write_parquet(
-                combined, trade_type_str, data_type_str, interval
-            )
-
-        if target in ("duckdb", "all") and self._duckdb_path:
-            self._load_duckdb(combined, trade_type_str, data_type_str, interval)
+        # DuckLake native ingestion — handles partitioning and file management
+        stats.parquet_files = self._write_ducklake(
+            combined, trade_type_str, data_type_str, interval
+        )
 
         stats.symbols = len(seen_symbols)
         return stats
 
-    def _write_parquet(
+    def _write_ducklake(
         self,
         df: pl.DataFrame,
         trade_type: str,
         data_type: str,
         interval: str | None = None,
     ) -> int:
-        """Write Silver DataFrame to DuckLake data path with Hive partitioning.
+        """Write Silver DataFrame to DuckLake native table.
 
-        Catalog layout (self-describing, no redundancy):
-          data/exchange={E}/data-type={DT}/symbol={S}/interval={I}/date={D}/data.parquet  (klines)
-          data/exchange={E}/data-type={DT}/symbol={S}/date={D}/data.parquet               (non-klines)
-
-        Exchange naming: binance-spot, binance-perps-um, binance-perps-cm
+        DuckLake manages Parquet storage, partitioning, and ACID tracking.
+        No manual Hive paths — DuckDB handles file placement.
         """
-        exchange = {"spot": "binance-spot", "um": "binance-perps-um", "cm": "binance-perps-cm"}.get(
-            trade_type, trade_type
-        )
-        base = self._catalog_path / "data" / f"exchange={exchange}" / f"data-type={data_type}"
-        df = df.with_columns(pl.col("symbol").alias("_sym"))
-        df = df.with_columns(
-            pl.from_epoch(pl.col("ts_event") // 1000).dt.strftime("%Y-%m-%d").alias("_dt")
-        )
-
-        written = 0
-        for (sym, dt), group in df.group_by(["_sym", "_dt"], maintain_order=True):
-            parts = [base / f"symbol={sym}" / f"date={dt}"]
-            if interval:
-                parts = [base / f"symbol={sym}" / f"interval={interval}" / f"date={dt}"]
-            out_dir = parts[0]
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out = out_dir / "data.parquet"
-            group.drop(["_sym", "_dt"]).write_parquet(out)
-            written += 1
-
-        logger.info("Wrote {} parquet files", written)
-        return written
-
-    def _load_duckdb(
-        self, df: pl.DataFrame, trade_type: str, data_type: str, interval: str | None = None
-    ) -> None:
-        """Register DuckDB views that scan Silver Parquet in-place (zero-copy).
-
-        The Parquet files written by _write_parquet() ARE the canonical store.
-        DuckDB read_parquet() views provide SQL access without duplicating data.
-        """
+        table_name = data_type.replace("-", "_")
         catalog = DuckLakeCatalog(
             lake_path=self._catalog_path,
             db_path=self._duckdb_path,
         )
-        view_name = data_type.replace("-", "_")
-
         con = catalog.connect()
         try:
-            catalog.register_parquet(con, view_name, trade_type, data_type, interval)
-            count = con.execute(f"SELECT COUNT(*) FROM {view_name}").fetchone()[0]
-            logger.info(
-                "DuckLake: {} rows via view {} (zero-copy from lake Parquet)",
-                count,
-                view_name,
-            )
-        except Exception:
-            logger.info("DuckLake: view {} has no data yet (run sink first)", view_name)
+            written = catalog.ingest_dataframe(con, table_name, df)
         finally:
             con.close()
+        return written

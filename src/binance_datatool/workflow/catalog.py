@@ -247,6 +247,8 @@ class DuckLakeCatalog:
         con.execute("LOAD iceberg")
 
         metadata_path = self._lake_path / "metadata.ducklake"
+        self._lake_path.mkdir(parents=True, exist_ok=True)
+        self._data_path.mkdir(parents=True, exist_ok=True)
         try:
             con.execute(
                 f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} "
@@ -254,9 +256,7 @@ class DuckLakeCatalog:
             )
             con.execute(f"USE {self._catalog_name}")
         except Exception:
-            con.execute(
-                f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{self._data_path}')"
-            )
+            con.execute(f"ATTACH 'ducklake:{metadata_path}' AS {self._catalog_name} (DATA_PATH '{self._data_path}')")
             con.execute(f"USE {self._catalog_name}")
         return con
 
@@ -277,44 +277,29 @@ class DuckLakeCatalog:
             con.execute(f"ALTER TABLE {table_name} SET PARTITIONED BY ({parts})")
         logger.info("DuckLake: created native table {} with partitions ({})", table_name, parts)
 
-    def register_parquet(
+    def ingest_dataframe(
         self,
         con: Any,
-        view_name: str,
-        trade_type: str,
-        data_type: str,
-        interval: str | None = None,
+        table_name: str,
+        df: pl.DataFrame,
     ) -> int:
-        """Register Silver Parquet files as a DuckDB view (zero-copy).
+        """Ingest a Polars DataFrame into a DuckLake native table.
 
-        The self-describing Parquet paths (written by sink.py) ARE the canonical
-        data store. This creates `read_parquet()` views that scan them in-place —
-        no data is copied into DuckDB.
-
-        Catalog path scanned:
-          data/exchange={E}/data-type={DT}/symbol=*/[interval={I}/]date=*/data.parquet
+        DuckLake handles partitioning, file management, and ACID tracking
+        through its metadata catalog. No manual Hive paths needed.
         """
-        exchange_map = {"spot": "binance-spot", "um": "binance-perps-um", "cm": "binance-perps-cm"}
-        exchange = exchange_map.get(trade_type, trade_type)
-        base = self._data_path / f"exchange={exchange}" / f"data-type={data_type}" / "symbol=*"
-
-        if interval and (data_type == "klines" or "kline" in data_type):
-            pattern = str(base / f"interval={interval}" / "date=*" / "data.parquet")
-        else:
-            pattern = str(base / "date=*" / "data.parquet")
-
+        self.ensure_table(con, table_name)
+        ingested = 0
         try:
             con.execute(
-                f"CREATE OR REPLACE VIEW {view_name} AS "
-                f"SELECT *, CAST(epoch_ms(ts_event) AS DATE) AS ts_date "
-                f"FROM read_parquet('{pattern}', union_by_name=true, hive_partitioning=false)"
+                f"INSERT INTO {table_name} SELECT *, CAST(epoch_ms(ts_event) AS DATE) AS ts_date "
+                f"FROM df"
             )
-            registered = 1
-            logger.info("DuckLake: registered view {} -> {}", view_name, pattern)
+            ingested = len(df)
         except Exception as e:
-            logger.warning("DuckLake: failed to register view {}: {}", view_name, e)
-            registered = 0
-        return registered
+            logger.warning("DuckLake: failed to ingest DataFrame: {}", e)
+        logger.info("DuckLake: ingested {} rows into native table {}", ingested, table_name)
+        return ingested
 
     def register_metadata(self, con: Any, lake_path: Path) -> None:
         """Register metadata Parquet files as DuckLake native tables.
