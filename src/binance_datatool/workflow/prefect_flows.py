@@ -25,6 +25,11 @@ _DEFAULT_ARCHIVE_HOME = Path.home() / ".binance-datatool" / "archive"
 # ── Individual Tasks ─────────────────────────────────────────────
 
 
+def _cli(*args: str) -> list[str]:
+    """Build a uv-native CLI command."""
+    return ["uv", "run", "binance-datatool", *args]
+
+
 @task(retries=2, retry_delay_seconds=10)
 def download_symbol(
     trade_type: str,
@@ -35,15 +40,19 @@ def download_symbol(
 ) -> None:
     """Download archive data for a single symbol."""
     import subprocess
-    import sys
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = [
-        sys.executable, "-m", "binance_datatool.cli", "download",
-        trade_type, "--type", data_type, "--freq", "daily",
+    cmd = _cli(
+        "download",
+        trade_type,
+        "--type",
+        data_type,
+        "--freq",
+        "daily",
         symbol,
-        "--archive-home", str(home),
-    ]
+        "--archive-home",
+        str(home),
+    )
     if interval and data_type in ("klines",):
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
@@ -59,15 +68,19 @@ def verify_symbol(
 ) -> None:
     """Verify checksums for a single symbol."""
     import subprocess
-    import sys
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = [
-        sys.executable, "-m", "binance_datatool.cli", "verify",
-        trade_type, "--type", data_type, "--freq", "daily",
+    cmd = _cli(
+        "verify",
+        trade_type,
+        "--type",
+        data_type,
+        "--freq",
+        "daily",
         symbol,
-        "--archive-home", str(home),
-    ]
+        "--archive-home",
+        str(home),
+    )
     if interval:
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
@@ -82,15 +95,11 @@ def refresh_metadata(
 ) -> None:
     """Refresh venue and symbol metadata."""
     import subprocess
-    import sys
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = [
-        sys.executable, "-m", "binance_datatool.cli", "refresh-metadata",
-        trade_type,
-        "--catalog", str(catalog_path),
-        "--archive-home", str(home),
-    ]
+    cmd = _cli(
+        "refresh-metadata", trade_type, "--catalog", str(catalog_path), "--archive-home", str(home)
+    )
     if from_api:
         cmd.append("--from-api")
     subprocess.run(cmd, check=True)
@@ -231,9 +240,7 @@ def historical_pipeline(
         print(f"Processing {symbol} ({trade_type}/{data_type}/{interval})")
 
         # 1. Download
-        download_symbol(
-            trade_type, symbol, data_type, interval, home
-        )
+        download_symbol(trade_type, symbol, data_type, interval, home)
         print(f"  Downloaded archive data for {symbol}")
 
         # 2. Verify
@@ -242,15 +249,23 @@ def historical_pipeline(
 
         # 3. Gap fill
         gaps = detect_and_fill_gaps(
-            TradeType(trade_type), symbol, data_type, interval,
-            lookback_days, home,
+            TradeType(trade_type),
+            symbol,
+            data_type,
+            interval,
+            lookback_days,
+            home,
         )
         print(f"  Filled {len(gaps)} gaps for {symbol}")
 
         # 4. Sink
         rows = sink_to_ducklake(
-            TradeType(trade_type), symbol, data_type, interval,
-            home, catalog,
+            TradeType(trade_type),
+            symbol,
+            data_type,
+            interval,
+            home,
+            catalog,
         )
         print(f"  Sunk {rows} rows to DuckLake for {symbol}")
 
@@ -316,6 +331,7 @@ def bulk_backfill(
             data_type=_DT(data_type),
         )
         import asyncio
+
         result = asyncio.run(workflow.run())
         symbols = [s.symbol for s in result.matched[:10]]  # limit to 10
 
