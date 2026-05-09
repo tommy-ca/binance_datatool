@@ -239,7 +239,7 @@ class GapFillWorkflow:
         self,
         trade_type: TradeType,
     ) -> list[tuple[str, int, int]]:
-        """Detect date gaps for each symbol.
+        """Detect date gaps for each symbol from local archive files.
 
         Returns list of (symbol, start_ms, end_ms).
         """
@@ -253,6 +253,43 @@ class GapFillWorkflow:
             for start_ms, end_ms in symbol_gaps:
                 gaps.append((symbol, start_ms, end_ms))
                 logger.info("Gap detected for {}: {} -> {}", symbol, start_ms, end_ms)
+        return gaps
+
+    def detect_gaps_from_ducklake(
+        self,
+        duckdb_path: str | None = None,
+    ) -> list[tuple[str, int, int]]:
+        """Detect date gaps from DuckLake native tables (post-sink).
+
+        Queries DuckLake klines table for existing ts_event ranges and
+        finds gaps vs expected lookback window.
+        """
+        import duckdb
+
+        gaps: list[tuple[str, int, int]] = []
+        try:
+            con = duckdb.connect(duckdb_path or ":memory:")
+            con.execute("LOAD ducklake")
+            lake_path = self._archive_home.parent / "lake"
+            meta = lake_path / "metadata.ducklake"
+            con.execute(
+                f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake_path}/data', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute("USE dl")
+
+            table = self._data_type.replace("-", "_")
+            for symbol in self._symbols:
+                dates = con.execute(
+                    f"SELECT DISTINCT ts_date FROM {table} WHERE symbol = '{symbol}' ORDER BY ts_date"
+                ).fetchall()
+                existing = {str(d[0]) for d in dates}
+                symbol_gaps = _detect_date_gaps(existing, None, self._lookback_days)
+                for start_ms, end_ms in symbol_gaps:
+                    gaps.append((symbol, start_ms, end_ms))
+                    logger.info("DuckLake gap for {}: {} -> {}", symbol, start_ms, end_ms)
+            con.close()
+        except Exception as e:
+            logger.warning("DuckLake gap detection unavailable: {}", e)
         return gaps
 
     async def run(

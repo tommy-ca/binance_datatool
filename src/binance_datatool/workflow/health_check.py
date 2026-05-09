@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -216,5 +216,97 @@ def _check_file_hash(file_path: Path, checksum_path: Path) -> bool:
             for chunk in iter(lambda: f.read(65536), b""):
                 h.update(chunk)
         return h.hexdigest() == expected
+    except Exception:
+        return False
+
+
+@dataclass
+class AnomalyReport:
+    """Anomalies detected in DuckLake data."""
+
+    symbol: str
+    null_prices: int = 0
+    zero_volumes: int = 0
+    duplicate_timestamps: int = 0
+    date_gaps: list[str] = field(default_factory=list)
+    outlier_rows: int = 0
+
+    @property
+    def is_clean(self) -> bool:
+        return (
+            self.null_prices == 0
+            and self.zero_volumes == 0
+            and self.duplicate_timestamps == 0
+            and len(self.date_gaps) == 0
+        )
+
+
+def check_ducklake_anomalies(
+    con: Any,
+    table_name: str,
+    symbol: str,
+    interval: str | None = None,
+    outlier_std: float = 3.0,
+) -> AnomalyReport:
+    """Query DuckLake native table for data quality anomalies.
+
+    Checks for:
+    - NULL or zero prices (open/high/low/close)
+    - Zero volumes
+    - Duplicate ts_event values
+    - Missing dates within range
+    - Price outliers (values beyond mean +/- N standard deviations)
+    """
+    report = AnomalyReport(symbol=symbol)
+
+    if not _table_exists(con, table_name):
+        return report
+
+    # Null/zero price check
+    for col in ("open", "high", "low", "close"):
+        nulls = con.execute(
+            f"SELECT COUNT(*) FROM {table_name} WHERE symbol = '{symbol}' AND ({col} IS NULL OR {col} = 0)"
+        ).fetchone()[0]
+        report.null_prices += nulls
+
+    # Zero volume check
+    if "volume" in [c[0] for c in con.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'").fetchall()]:
+        zeros = con.execute(
+            f"SELECT COUNT(*) FROM {table_name} WHERE symbol = '{symbol}' AND (volume IS NULL OR volume = 0)"
+        ).fetchone()[0]
+        report.zero_volumes = zeros
+
+    # Duplicate timestamps
+    dups = con.execute(
+        f"SELECT COUNT(*) FROM (SELECT ts_event FROM {table_name} WHERE symbol = '{symbol}' GROUP BY ts_event HAVING COUNT(*) > 1)"
+    ).fetchone()[0]
+    report.duplicate_timestamps = dups
+
+    # Date gaps
+    dates = con.execute(
+        f"SELECT DISTINCT ts_date FROM {table_name} WHERE symbol = '{symbol}' ORDER BY ts_date"
+    ).fetchall()
+    if len(dates) > 1:
+        date_strs = [str(d[0]) for d in dates]
+        expected = _date_range(date_strs[0], date_strs[-1])
+        report.date_gaps = [d for d in expected if d not in date_strs]
+
+    # Price outliers (Z-score > threshold)
+    try:
+        outliers = con.execute(
+            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {table_name} WHERE symbol = '{symbol}') WHERE ABS(z) > {outlier_std}"
+        ).fetchone()[0]
+        report.outlier_rows = outliers
+    except Exception:
+        pass
+
+    return report
+
+
+def _table_exists(con: Any, table_name: str) -> bool:
+    """Check if a DuckDB/DuckLake table exists."""
+    try:
+        con.execute(f"SELECT 1 FROM {table_name} LIMIT 1")
+        return True
     except Exception:
         return False
