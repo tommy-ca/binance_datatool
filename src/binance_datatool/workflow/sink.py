@@ -207,7 +207,15 @@ def _bronze_kline_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
 
 
 def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
-    """Transform Bronze aggTrades CSV to Silver trades schema."""
+    """Transform Bronze aggTrades CSV to Silver trades schema.
+
+    Binance aggTrades archive CSV fields:
+      agg_trade_id, price, quantity, first_trade_id,
+      last_trade_id, transact_time, is_buyer_maker
+
+    tardis.dev normalized trades: side = liquidity taker.
+    Binance is_buyer_maker: 1=buyer is maker → seller is taker → side="sell"
+    """
     rename_map = {
         "agg_trade_id": "trade_id",
         "price": "price",
@@ -219,11 +227,22 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
         c for c in ["ts_event", "price", "size", "trade_id", "is_buyer_maker"] if c in df.columns
     ]
     df = df.select(keep)
-    return df.with_columns(
-        pl.lit(None, pl.Utf8).alias("side"),
-        pl.lit(None, pl.Int64).alias("agg_trade_id"),
-        pl.lit("agg").alias("rtype"),
+    # Derive tardis.dev side from Binance is_buyer_maker
+    # Archive CSV has is_buyer_maker as string "1"/"0"; cast to int first
+    # is_buyer_maker=1 → buyer is maker → seller is taker → side="sell"
+    # is_buyer_maker=0 → seller is maker → buyer is taker → side="buy"
+    df = df.with_columns(pl.col("is_buyer_maker").cast(pl.Int64, strict=False))
+    df = df.with_columns(
+        pl.when(pl.col("is_buyer_maker") == 1)
+        .then(pl.lit("sell"))
+        .when(pl.col("is_buyer_maker") == 0)
+        .then(pl.lit("buy"))
+        .otherwise(pl.lit(None, pl.Utf8))
+        .alias("side"),
     )
+    # preserve original agg_trade_id (archive has it; renamed to trade_id above)
+    df = df.with_columns(pl.col("trade_id").alias("agg_trade_id"))
+    return df.with_columns(pl.lit("agg").alias("rtype"))
 
 
 def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
