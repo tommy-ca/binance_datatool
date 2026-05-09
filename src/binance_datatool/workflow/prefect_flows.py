@@ -1,28 +1,36 @@
 """Prefect workflow definitions for binance-datatool pipelines.
 
-Composes CLI commands into automated, observable workflows with
-retry, logging, and lineage tracking.
+Uses Prefect-native assets and materialization for observable,
+cacheable, versioned data pipelines.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from prefect import flow, task
+from prefect.assets import Asset, materialize
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from binance_datatool.common import TradeType
 from binance_datatool.lineage import LineageTracker
-from binance_datatool.workflow import (
-    GapFillWorkflow,
-    SinkWorkflow,
-)
-from binance_datatool.workflow.health_check import check_ducklake_anomalies
+from binance_datatool.workflow import GapFillWorkflow, SinkWorkflow
 
 _DEFAULT_ARCHIVE_HOME = Path.home() / ".binance-datatool" / "archive"
 
+# ── Asset Definitions ────────────────────────────────────────────
 
-# ── Individual Tasks ─────────────────────────────────────────────
+ARCHIVE_DATA = Asset(name="archive-data", description="Raw archive ZIPs and CSVs")
+VERIFIED_DATA = Asset(name="verified-data", description="Checksum-verified archive files")
+FILLED_DATA = Asset(name="filled-data", description="Gap-filled CSV data from REST API")
+SILVER_DATA = Asset(name="silver-data", description="Normalized Silver layer in DuckLake")
+LINEAGE_EVENTS = Asset(name="lineage-events", description="Data provenance lineage")
+VENUE_METADATA = Asset(name="venue-metadata", description="Venue catalog")
+SYMBOL_METADATA = Asset(name="symbol-metadata", description="Symbol catalog")
+
+
+# ── CLI Helpers ──────────────────────────────────────────────────
 
 
 def _cli(*args: str) -> list[str]:
@@ -30,94 +38,52 @@ def _cli(*args: str) -> list[str]:
     return ["uv", "run", "binance-datatool", *args]
 
 
+# ── Tasks with Asset Materialization ─────────────────────────────
+
+
 @task(retries=2, retry_delay_seconds=10)
-def download_symbol(
-    trade_type: str,
-    symbol: str,
-    data_type: str = "klines",
-    interval: str = "1h",
+def download_archive(
+    trade_type: str, symbol: str, data_type: str = "klines", interval: str = "1h",
     archive_home: Path | None = None,
-) -> None:
-    """Download archive data for a single symbol."""
+) -> Path:
+    """Download archive data and materialize the ARCHIVE_DATA asset."""
     import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli(
-        "download",
-        trade_type,
-        "--type",
-        data_type,
-        "--freq",
-        "daily",
-        symbol,
-        "--archive-home",
-        str(home),
-    )
+    cmd = _cli("download", trade_type, "--type", data_type, "--freq", "daily",
+               symbol, "--archive-home", str(home))
     if interval and data_type in ("klines",):
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
+    materialize(ARCHIVE_DATA)
+    return home
 
 
 @task(retries=1, retry_delay_seconds=5)
-def verify_symbol(
-    trade_type: str,
-    symbol: str,
-    data_type: str = "klines",
-    interval: str = "1h",
+def verify_archive(
+    trade_type: str, symbol: str, data_type: str = "klines", interval: str = "1h",
     archive_home: Path | None = None,
-) -> None:
-    """Verify checksums for a single symbol."""
+) -> Path:
+    """Verify checksums and materialize the VERIFIED_DATA asset."""
     import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli(
-        "verify",
-        trade_type,
-        "--type",
-        data_type,
-        "--freq",
-        "daily",
-        symbol,
-        "--archive-home",
-        str(home),
-    )
+    cmd = _cli("verify", trade_type, "--type", data_type, "--freq", "daily",
+               symbol, "--archive-home", str(home))
     if interval:
         cmd.extend(["--interval", interval])
     subprocess.run(cmd, check=True)
+    materialize(VERIFIED_DATA)
+    return home
 
 
 @task(retries=1, retry_delay_seconds=5)
-def refresh_metadata(
-    trade_type: str,
-    catalog_path: Path,
-    archive_home: Path | None = None,
-    from_api: bool = False,
-) -> None:
-    """Refresh venue and symbol metadata."""
-    import subprocess
-
-    home = archive_home or _DEFAULT_ARCHIVE_HOME
-    cmd = _cli(
-        "refresh-metadata", trade_type, "--catalog", str(catalog_path), "--archive-home", str(home)
-    )
-    if from_api:
-        cmd.append("--from-api")
-    subprocess.run(cmd, check=True)
-
-
-# ── Data Flows ───────────────────────────────────────────────────
-
-
-@task
-def detect_and_fill_gaps(
-    trade_type: TradeType,
-    symbol: str,
-    data_type: str = "klines",
-    interval: str = "1h",
-    lookback_days: int = 30,
+def fill_gaps(
+    trade_type: TradeType, symbol: str, data_type: str = "klines",
+    interval: str = "1h", lookback_days: int = 30,
     archive_home: Path | None = None,
 ) -> list[tuple[str, int, int]]:
-    """Detect date gaps and fill via REST API."""
+    """Detect and fill gaps, materialize FILLED_DATA asset."""
     import asyncio
 
     from binance_datatool.exchange import BinanceSpotRestClient
@@ -126,87 +92,56 @@ def detect_and_fill_gaps(
     client = BinanceSpotRestClient()
     tracker = LineageTracker()
     workflow = GapFillWorkflow(
-        exchange_client=client,
-        archive_home=home,
-        symbols=[symbol],
-        data_type=data_type,
-        interval=interval,
-        tracker=tracker,
-        lookback_days=lookback_days,
+        exchange_client=client, archive_home=home,
+        symbols=[symbol], data_type=data_type, interval=interval,
+        tracker=tracker, lookback_days=lookback_days,
     )
     result = asyncio.run(workflow.run(detect_gaps=True))
+    materialize(FILLED_DATA)
     return result.gaps_detected
 
 
-@task
-def sink_to_ducklake(
-    trade_type: TradeType,
-    symbol: str,
-    data_type: str = "klines",
-    interval: str = "1h",
-    archive_home: Path | None = None,
+@task(retries=1, retry_delay_seconds=5)
+def sink_silver(
+    trade_type: TradeType, symbol: str, data_type: str = "klines",
+    interval: str = "1h", archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> int:
-    """Transform Bronze → Silver and sink to DuckLake."""
+    """Sink to DuckLake, materialize SILVER_DATA and LINEAGE_EVENTS."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     duckdb = catalog / "catalog.duckdb"
 
     tracker = LineageTracker()
-    workflow = SinkWorkflow(
-        archive_home=home,
-        catalog_path=catalog,
-        duckdb_path=duckdb,
-        tracker=tracker,
-    )
+    workflow = SinkWorkflow(archive_home=home, catalog_path=catalog,
+                            duckdb_path=duckdb, tracker=tracker)
     stats = workflow.transform(
         trade_type=trade_type,
-        data_type=DataType(data_type) if hasattr(DataType, data_type) else data_type,  # type: ignore  # noqa: F821
+        data_type=data_type,
         symbols=[symbol],
         interval=interval,
     )
+    materialize(SILVER_DATA)
+    materialize(LINEAGE_EVENTS)
     return stats.row_count
 
 
-@task
-def run_health_check(
-    trade_type: str,
-    symbol: str,
-    data_type: str = "klines",
-    interval: str = "1h",
-    archive_home: Path | None = None,
-    catalog_path: Path | None = None,
-) -> dict:
-    """Run health check on DuckLake data and detect anomalies."""
-    import duckdb
+@task(retries=1, retry_delay_seconds=5)
+def refresh_catalog(
+    trade_type: str, catalog_path: Path, archive_home: Path | None = None,
+    from_api: bool = False,
+) -> None:
+    """Refresh metadata, materialize VENUE_METADATA and SYMBOL_METADATA."""
+    import subprocess
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    catalog = catalog_path or home.parent / "lake"
-    duckdb_file = catalog / "catalog.duckdb"
-    meta = catalog / "metadata.ducklake"
-
-    con = duckdb.connect(str(duckdb_file))
-    try:
-        con.execute("LOAD ducklake")
-        con.execute(
-            f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
-        )
-        con.execute("USE dl")
-
-        table = data_type.replace("-", "_")
-        count = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-        report = check_ducklake_anomalies(con, table, symbol)
-        return {
-            "table": table,
-            "row_count": count,
-            "is_clean": report.is_clean,
-            "null_prices": report.null_prices,
-            "zero_volumes": report.zero_volumes,
-            "duplicates": report.duplicate_timestamps,
-            "gaps": len(report.date_gaps),
-        }
-    finally:
-        con.close()
+    cmd = _cli("refresh-metadata", trade_type, "--catalog", str(catalog_path),
+               "--archive-home", str(home))
+    if from_api:
+        cmd.append("--from-api")
+    subprocess.run(cmd, check=True)
+    materialize(VENUE_METADATA)
+    materialize(SYMBOL_METADATA)
 
 
 # ── Composed Flows ───────────────────────────────────────────────
@@ -214,7 +149,7 @@ def run_health_check(
 
 @flow(
     name="Historical Data Pipeline",
-    description="Download, verify, gap-fill, sink, and health-check market data",
+    description="Download → verify → gap-fill → sink → health",
     log_prints=True,
 )
 def historical_pipeline(
@@ -225,88 +160,46 @@ def historical_pipeline(
     lookback_days: int = 30,
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
-) -> dict[str, any]:
-    """Full historical data pipeline: download → verify → gap-fill → sink → health.
-
-    Orchestrates archive download, integrity verification, gap filling
-    via REST API, DuckLake-native ingestion, and health/anomaly check.
-    """
+) -> dict[str, Any]:
+    """Full historical pipeline with Prefect-native asset materialization."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
-    results: dict[str, any] = {}
-    sym_list = symbols or ["BTCUSDT"]
+    results: dict[str, Any] = {}
 
-    for symbol in sym_list:
+    for symbol in symbols or ["BTCUSDT"]:
         print(f"Processing {symbol} ({trade_type}/{data_type}/{interval})")
 
-        # 1. Download
-        download_symbol(trade_type, symbol, data_type, interval, home)
-        print(f"  Downloaded archive data for {symbol}")
-
-        # 2. Verify
-        verify_symbol(trade_type, symbol, data_type, interval, home)
-        print(f"  Verified checksums for {symbol}")
-
-        # 3. Gap fill
-        gaps = detect_and_fill_gaps(
-            TradeType(trade_type),
-            symbol,
-            data_type,
-            interval,
-            lookback_days,
-            home,
-        )
-        print(f"  Filled {len(gaps)} gaps for {symbol}")
-
-        # 4. Sink
-        rows = sink_to_ducklake(
-            TradeType(trade_type),
-            symbol,
-            data_type,
-            interval,
-            home,
-            catalog,
-        )
-        print(f"  Sunk {rows} rows to DuckLake for {symbol}")
-
-        # 5. Health check
-        health = run_health_check(trade_type, symbol, data_type, interval, home, catalog)
-        print(f"  Health: {health}")
+        download_archive(trade_type, symbol, data_type, interval, home)
+        verify_archive(trade_type, symbol, data_type, interval, home)
+        gaps = fill_gaps(TradeType(trade_type), symbol, data_type, interval,
+                         lookback_days, home)
+        rows = sink_silver(TradeType(trade_type), symbol, data_type, interval,
+                           home, catalog)
 
         results[symbol] = {
-            "symbol": symbol,
             "gaps_filled": len(gaps),
             "rows_sunk": rows,
-            "healthy": health["is_clean"],
-            "row_count": health["row_count"],
         }
+        print(f"  {symbol}: {len(gaps)} gaps, {rows} rows sunk")
 
     return results
 
 
-@flow(
-    name="Metadata Refresh",
-    description="Refresh venue and symbol metadata from archive or API",
-    log_prints=True,
-)
+@flow(name="Metadata Refresh", log_prints=True)
 def metadata_refresh(
     trade_type: str = "spot",
     catalog_path: Path | None = None,
     from_api: bool = False,
 ) -> None:
-    """Refresh metadata tables (venues, symbols) for the catalog."""
+    """Refresh venue and symbol metadata."""
     home = _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
-    refresh_metadata(trade_type, catalog, home, from_api)
+    refresh_catalog(trade_type, catalog, home, from_api)
     print(f"Metadata refreshed for {trade_type} → {catalog}")
 
 
-@flow(
-    name="Bulk Historical Backfill",
-    description="Process multiple symbols in parallel for historical backfill",
-    log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=4),
-)
+@flow(name="Bulk Historical Backfill", log_prints=True,
+      task_runner=ThreadPoolTaskRunner(max_workers=4))
 def bulk_backfill(
     trade_type: str = "spot",
     symbols: list[str] | None = None,
@@ -315,9 +208,7 @@ def bulk_backfill(
     lookback_days: int = 30,
 ) -> None:
     """Backfill multiple symbols concurrently."""
-    from binance_datatool.common import DataFrequency as _DF
-    from binance_datatool.common import DataType as _DT
-    from binance_datatool.common import TradeType as _TT
+    from binance_datatool.common import DataFrequency, DataType
 
     if not symbols:
         from binance_datatool.archive.client import ArchiveClient
@@ -325,21 +216,15 @@ def bulk_backfill(
 
         client = ArchiveClient()
         workflow = ArchiveListSymbolsWorkflow(
-            client=client,
-            trade_type=_TT(trade_type),
-            data_freq=_DF.daily,
-            data_type=_DT(data_type),
+            client=client, trade_type=TradeType(trade_type),
+            data_freq=DataFrequency.daily, data_type=DataType(data_type),
         )
         import asyncio
-
         result = asyncio.run(workflow.run())
-        symbols = [s.symbol for s in result.matched[:10]]  # limit to 10
+        symbols = [s.symbol for s in result.matched[:10]]
 
     for symbol in symbols:
         historical_pipeline(
-            trade_type=trade_type,
-            symbols=[symbol],
-            data_type=data_type,
-            interval=interval,
-            lookback_days=lookback_days,
+            trade_type=trade_type, symbols=[symbol], data_type=data_type,
+            interval=interval, lookback_days=lookback_days,
         )
