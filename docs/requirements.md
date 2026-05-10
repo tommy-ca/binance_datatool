@@ -694,7 +694,7 @@ class ArchiveListFilesWorkflow:
 - ✅ Implement `SourceRegistry`
 - ✅ Wrap existing `ArchiveClient` as `BinanceAdapter`
 - ✅ Add unit tests for adapter protocol (35 tests)
-- 🔄 Update CLI to use registry (--source flag) — low priority, CLI works via workflow classes directly
+- ❌ Update CLI to use registry (--source flag) — not implemented, CLI works via workflow classes directly
 
 ### Phase 3: Data Contracts & Validation (Complete)
 - ✅ Implement `DataContract` class
@@ -707,13 +707,13 @@ class ArchiveListFilesWorkflow:
 - ✅ Emit logs for all pipeline operations
 - 🔄 Add Prometheus metrics (optional, not prioritized)
 
-### Phase 5: Multi-Source CEX (In Progress)
+### Phase 5: Multi-Source CEX (Partial — Binance only)
 - ✅ Implement `BinanceAdapter` (complete, Binance S3 archive)
 - ✅ Implement CCXT exchange clients (Binance Spot/UM/CM)
-- 🔄 Implement `OKXAdapter` via CCXT (`ccxt.okx`)
-- 🔄 Implement `BybitAdapter` via CCXT (`ccxt.bybit`)
-- ⏳ Add integration tests for each CEX
-- ⏳ Document configuration per source
+- ❌ `OKXAdapter` via CCXT — not implemented
+- ❌ `BybitAdapter` via CCXT — not implemented
+- ❌ Integration tests for other CEXs — not implemented
+- ❌ Configuration per source — not implemented
 
 **Note**: Coinbase removed from scope. Focus on Tier-1 CEXs (Binance, OKX, Bybit) through CCXT unified API.
 
@@ -810,7 +810,7 @@ Anomaly detection (null prices, duplicate timestamps, date gaps, outliers)
 2. ✅ Schema normalization per data type
 3. ✅ Parquet writer (partitioned by trade_type/data_type/date)
 4. ✅ DuckDB sink (CREATE OR REPLACE TABLE)
-5. ⏳ Iceberg catalog integration (pyiceberg, planned)
+5. ❌ Iceberg catalog integration (pyiceberg) — see `docs/proposals/iceberg.md`
 
 **Done**: `SinkWorkflow` in `workflow/sink.py`, `binance-datatool sink` CLI command.
 **Silver schema design**: Follows Databento DBN (`ts_event`, `ts_recv`), tardis.dev
@@ -818,7 +818,7 @@ Anomaly detection (null prices, duplicate timestamps, date gaps, outliers)
 **DuckLake catalog**: Uses official DuckLake v1.0 format (`ATTACH 'ducklake:metadata.ducklake'`)
   with zero-copy `read_parquet()` views. Self-describing paths:
   `data/exchange=binance-spot/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet`.
-**Iceberg**: File-system catalog available for pyiceberg integration.
+**Iceberg**: See `docs/proposals/iceberg.md` for deferred design.
 
 ---
 

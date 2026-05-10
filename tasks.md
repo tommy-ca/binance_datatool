@@ -87,41 +87,41 @@ Status: `⏳` pending, `🔄` in progress, `✅` done, `❌` cancelled
 
 ### FR-1: CLI reference docs missing 4 commands
 - **Type**: D
-- **Files**: `docs/reference/cli/README.md`, `docs/reference/cli/archive.md`
-- **Issue**: Only document 4 of 8 CLI commands (missing gap-fill, health, sink, refresh-metadata)
-- **Fix**: Add CLI reference pages for each missing command
+- **Status**: ✅ Done
+- **Files**: `docs/reference/cli/README.md`
+- **Fix**: Added gap-fill, health, sink, refresh-metadata to app structure tree and reference table
 
 ### FR-2: docs/requirements.md Phase 5 OKX/Bybit aspirational
 - **Type**: D
-- **Files**: `docs/requirements.md` lines 712-714
-- **Issue**: Claims OKXAdapter and BybitAdapter as "in progress" but neither exists
-- **Fix**: Mark as ❌ or move to proposals
+- **Status**: ✅ Done
+- **Files**: `docs/requirements.md`
+- **Fix**: Changed to ❌ with note "not implemented"
 
 ### FR-3: docs/requirements.md Phase 2 `--source` flag stale
 - **Type**: D
+- **Status**: ✅ Done
 - **Files**: `docs/requirements.md` line 697
-- **Issue**: Marked as 🔄 but abandoned — no `--source` flag in CLI
-- **Fix**: Mark as ❌
+- **Fix**: Changed to ❌ with explanation
 
 ### FR-4: docs/data-sources.md WS stream commands referenced
 - **Type**: D
-- **Files**: `docs/data-sources.md` lines 134-135
-- **Issue**: Comments show `binance-datatool stream ...` but stream command doesn't exist
-- **Fix**: Remove or move to proposals
+- **Status**: ✅ Done
+- **Files**: `docs/data-sources.md`
+- **Fix**: Replaced with "Phase 8 — planned, not implemented"
 
 ### FR-5: Iceberg catalog aspirational content in silver-layer-spec.md
 - **Type**: D
-- **Files**: `docs/silver-layer-spec.md` lines 226-267
-- **Issue**: Extensive Iceberg catalog design for pyiceberg which is not in dependencies
-- **Fix**: Move to `docs/proposals/iceberg.md`
+- **Status**: ✅ Done
+- **Files**: `docs/silver-layer-spec.md`, `docs/requirements.md`
+- **Fix**: Moved to `docs/proposals/iceberg.md`, replaced with brief note
 
 ---
 
 ### NFR-1: ts_event/ts_recv/ingested_at type docs wrong (ms → μs)
 - **Type**: D
+- **Status**: ✅ Done
 - **Files**: `AGENTS.md`, `docs/silver-layer-spec.md`, `docs/data-sources.md`
-- **Issue**: Documented as `INT64 ms` but actual code stores epoch μs
-- **Fix**: Update all three docs to say `INT64 μs`
+- **Fix**: s/INT64 ms/INT64 μs/g across all three files. Added missing `exchange` column to AGENTS.md schema table
 
 ### NFR-2: sink.py `_scan_bronze_files` ignores lookback_days
 - **Type**: NFR

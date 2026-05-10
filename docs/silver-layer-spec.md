@@ -27,7 +27,7 @@ for analytics, gap detection, health checks, and downstream ML pipelines.
   - **Binance-specific fields preserved**: `quote_volume`, `taker_buy_*` (no tardis.dev/DBN equivalent)
 - **Self-describing**: Metadata columns (`source`, `exchange`, `trade_type`, `data_type`,
   `symbol`, `interval`, `ingested_at`) make each row fully contextual without external catalog
-- **Type-safe**: All numeric fields are FLOAT64/INT64, timestamps are INT64 epoch ms
+- **Type-safe**: All numeric fields are FLOAT64/INT64, timestamps are INT64 epoch μs
 
 ## Iceberg Catalog Table Naming
 
@@ -84,8 +84,8 @@ Follows DBN (`ts_event`, `ts_recv`) and tardis.dev (price/size volume) conventio
 
 | Silver Column | Bronze Source | Type | Description |
 |--------------|---------------|------|-------------|
-| `ts_event` | `open_time` | INT64 ms | Event timestamp (DBN) |
-| `ts_recv` | Auto | INT64 ms | Receive timestamp (DBN) |
+| `ts_event` | `open_time` | INT64 μs | Event timestamp (DBN) |
+| `ts_recv` | Auto | INT64 μs | Receive timestamp (DBN) |
 | `open` | CSV column | FLOAT64 | Open price |
 | `high` | CSV column | FLOAT64 | High price |
 | `low` | CSV column | FLOAT64 | Low price |
@@ -101,7 +101,7 @@ Follows DBN (`ts_event`, `ts_recv`) and tardis.dev (price/size volume) conventio
 | `symbol` | Auto | UTF8 | e.g. `"BTCUSDT"` |
 | `interval` | Auto | UTF8 | e.g. `"1h"` |
 | `data_type` | Auto | UTF8 | `"klines"` |
-| `ingested_at` | Auto | INT64 ms | Ingestion timestamp |
+| `ingested_at` | Auto | INT64 μs | Ingestion timestamp |
 
 ### Trades (unified raw/aggregated)
 
@@ -109,8 +109,8 @@ Unifies trades, aggTrades from all trade types.
 
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
-| `ts_event` | INT64 ms | DBN | Trade timestamp |
-| `ts_recv` | INT64 ms | DBN | Receive timestamp |
+| `ts_event` | INT64 μs | DBN | Trade timestamp |
+| `ts_recv` | INT64 μs | DBN | Receive timestamp |
 | `price` | FLOAT64 | tardis.dev | Trade price |
 | `size` | FLOAT64 | tardis.dev | Trade size |
 | `side` | UTF8 | tardis.dev | `"buy"`, `"sell"`, or null |
@@ -122,7 +122,7 @@ Unifies trades, aggTrades from all trade types.
 | `trade_type` | UTF8 | Meta | `"spot"`, `"um"`, `"cm"` |
 | `symbol` | UTF8 | Meta | Trading pair |
 | `data_type` | UTF8 | Meta | `"trades"` or `"aggTrades"` |
-| `ingested_at` | INT64 ms | Meta | Ingestion timestamp |
+| `ingested_at` | INT64 μs | Meta | Ingestion timestamp |
 
 ### Funding Rate
 
@@ -130,15 +130,15 @@ Perpetual futures funding rates (um/cm only).
 
 | Column | Type | Source | Description |
 |--------|------|--------|-------------|
-| `ts_event` | INT64 ms | DBN | Funding time |
-| `ts_recv` | INT64 ms | DBN | Receive timestamp |
+| `ts_event` | INT64 μs | DBN | Funding time |
+| `ts_recv` | INT64 μs | DBN | Receive timestamp |
 | `funding_rate` | FLOAT64 | tardis.dev | Rate (0.0001 = 0.01%) |
 | `mark_price` | FLOAT64 | Binance | Mark price |
 | `source` | UTF8 | Meta | Data source |
 | `trade_type` | UTF8 | Meta | `"um"`, `"cm"` |
 | `symbol` | UTF8 | Meta | Trading pair |
 | `data_type` | UTF8 | Meta | `"fundingRate"` |
-| `ingested_at` | INT64 ms | Meta | Ingestion timestamp |
+| `ingested_at` | INT64 μs | Meta | Ingestion timestamp |
 
 ## Bronze → Silver Mapping
 
@@ -223,48 +223,12 @@ binance-datatool refresh-metadata um --from-api --catalog /path/to/lake
                     └── ducklake-*.parquet       # Managed by DuckDB
 ```
 
-## Iceberg Catalog Design
+## Iceberg Catalog (Proposal)
 
-### Namespace
-- **Namespace**: `binance` (Hadoop catalog: `{warehouse}/iceberg/binance/`)
-
-### Tables
-| Table | Partition By | Sort Order | Compress |
-|-------|-------------|------------|----------|
-| `klines` | `symbol, interval` | `symbol, interval, ts_event` | zstd |
-| `aggTrades` | `symbol` | `symbol, ts_event` | zstd |
-| `fundingRate` | `symbol` | `symbol, ts_event` | zstd |
-
-The `ts_event` column is BIGINT epoch ms (not TIMESTAMP). A `ts_date DATE`
-column is populated at DuckLake ingest time via `CAST(epoch_ms(ts_event) AS DATE)`,
-enabling DuckLake's native DATE partition transforms for efficient date pruning.
-
-## Type Mapping: DuckDB/DuckLake ↔ Parquet
-
-All DuckDB column types map cleanly to Parquet physical types:
-
-| DuckDB | Parquet Physical | Arrow/Iceberg Logical | Used In |
-|--------|-----------------|----------------------|---------|
-| `BIGINT` | `int64` | `long` | `ts_event`, `ts_recv`, `trade_count`, `ingested_at` |
-| `DOUBLE` | `double` | `double` | `open`, `high`, `low`, `close`, `volume`, `quote_volume`, `taker_buy_*` |
-| `VARCHAR` | `large_string` (UTF8) | `string` | `source`, `exchange`, `trade_type`, `symbol`, `interval`, `data_type` |
-| `DATE` | `date32` | `date` | `ts_date` (computed at DuckLake ingest, not in Parquet Silver files) |
-| `BOOLEAN` | `bool` | `boolean` | `is_leverage`, `is_stable_pair` (symbols table only) |
-
-No type conversion needed — DuckDB reads Parquet directly with zero-copy type matching.
-| `venues` | Unpartitioned | — | zstd |
-| `symbols` | Unpartitioned | `trade_type, symbol` | zstd |
-
-### Table Properties
-```json
-{
-    "write.format.default": "parquet",
-    "write.parquet.compression-codec": "zstd",
-    "write.parquet.compression-level": "9",
-    "commit.retry.num-retries": "3",
-    "history.expire.max-snapshot-age-ms": "2592000000"
-}
-```
+Iceberg catalog design has been moved to `docs/proposals/iceberg.md`.
+The DuckLake native tables are the primary storage layer; Iceberg integration
+is deferred until multi-engine access or catalog-driven schema evolution
+is required.
 
 ### Implementation
 ```python

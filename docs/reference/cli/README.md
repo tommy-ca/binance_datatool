@@ -7,10 +7,14 @@ console script via `pyproject.toml`.
 
 ```
 binance-datatool [-v | -vv] [--archive-home PATH]   # Root Typer app with shared options
-├── list-symbols                     # Command
-├── list-files                       # Command
-├── download                         # Command
-└── verify                           # Command
+├── list-symbols                     # List symbols from remote archive
+├── list-files                       # List archive files for symbols
+├── download                         # Download archive files (aria2)
+├── verify                           # Verify SHA256 checksums
+├── gap-fill                         # Detect and fill gaps via REST API
+├── health                           # Check data completeness and quality
+├── sink                             # Transform Bronze→Silver→DuckDB
+└── refresh-metadata                 # Refresh venue/symbol metadata tables
 ```
 
 ## Root Callback
@@ -32,7 +36,7 @@ so sub-command stdout remains safe to pipe.
 
 | Command Set | Description | Reference |
 |-------------|-------------|-----------|
-| Root data commands | S3 archive listing, download, and verify commands | [command reference](archive.md) |
+| Root data commands | S3 archive listing, download, verify, gap-fill, health, sink, and metadata commands | [command reference](archive.md) |
 
 ---
 

@@ -417,11 +417,12 @@ Databento DBN and tardis.dev conventions.
 | `taker_buy_volume` | CSV column | FLOAT64 | Maker buy volume |
 | `taker_buy_quote_volume` | CSV column | FLOAT64 | Maker buy quote volume |
 | `source` | Auto | UTF8 | `"archive"`, `"api_filled"`, `"ws_stream"` |
+| `exchange` | Auto | UTF8 | `"binance"`, `"binance-futures"`, `"binance-delivery"` |
 | `trade_type` | Auto | UTF8 | `"spot"`, `"um"`, `"cm"` |
 | `symbol` | Auto | UTF8 | e.g. `"BTCUSDT"` |
 | `interval` | Auto | UTF8 | e.g. `"1h"` |
 | `data_type` | Auto | UTF8 | `"klines"` |
-| `ingested_at` | Auto | INT64 ms | Ingestion timestamp |
+| `ingested_at` | Auto | INT64 μs | Ingestion timestamp |
 
 ### DuckLake Catalog Path (self-describing)
 ```

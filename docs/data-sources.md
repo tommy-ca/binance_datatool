@@ -130,9 +130,8 @@ binance-datatool verify spot --type klines --interval 1h BTCUSDT
 binance-datatool gap-fill spot --auto-detect --symbol BTCUSDT --type klines --interval 1h
 binance-datatool refresh-metadata spot --from-api --catalog /path/to/lake
 
-# Layer 3: WS Streaming (Phase 8)
-# binance-datatool stream funding-rate --symbol BTCUSDT
-# binance-datatool stream klines --symbol BTCUSDT --interval 1m
+# Layer 3: WS Streaming (Phase 8 — planned, not implemented)
+# See docs/proposals/ for the streaming relay design
 
 # All Layers: Sink
 binance-datatool sink spot --type klines --interval 1h --target parquet --catalog /path/to/lake BTCUSDT
