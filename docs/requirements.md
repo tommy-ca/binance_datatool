@@ -694,18 +694,18 @@ class ArchiveListFilesWorkflow:
 - ✅ Implement `SourceRegistry`
 - ✅ Wrap existing `ArchiveClient` as `BinanceAdapter`
 - ✅ Add unit tests for adapter protocol (35 tests)
-- ⏳ Update CLI to use registry (--source flag not yet integrated)
+- 🔄 Update CLI to use registry (--source flag) — low priority, CLI works via workflow classes directly
 
 ### Phase 3: Data Contracts & Validation (Complete)
 - ✅ Implement `DataContract` class
 - ✅ Add schema validation to `VerifyTask`
 - ✅ Create data contract fixtures for tests (24 tests)
 
-### Phase 4: Lineage & Observability (Partial)
+### Phase 4: Lineage & Observability (Complete)
 - ✅ Implement `LineageTracker`
 - ❌ Implement `MetricsCollector` (removed from scope)
 - ✅ Emit logs for all pipeline operations
-- ⏳ Add Prometheus metrics (optional, not prioritized)
+- 🔄 Add Prometheus metrics (optional, not prioritized)
 
 ### Phase 5: Multi-Source CEX (In Progress)
 - ✅ Implement `BinanceAdapter` (complete, Binance S3 archive)
@@ -742,10 +742,24 @@ class ArchiveListFilesWorkflow:
   - CLI: `binance-datatool health` command
   - Checks completeness (missing dates), freshness (staleness), and integrity (checksums)
   - Per-symbol health report with summary
+  - DuckLake anomaly detection (null prices, duplicate timestamps, date gaps, Z-score outliers)
+  - Per-rtype filtering for shared aggTrades/trades table
 - ✅ **Enhanced LineageEventType**: Added `FILLED` (gap fill) and `HEALTH_CHECKED` events
-- ⏳ Implement `ExchangeRegistry` and `create_client()` factory
-- ⏳ Wire up new clients to CLI commands (Phase 6c)
-- ⏳ Transform/normalize/sink pipeline to DuckDB/Iceberg (Phase 7)
+- 🔄 Implement `ExchangeRegistry` and `create_client()` factory (low priority)
+- ✅ Wire up CLI commands to workflow classes directly (no subprocess wrappers)
+- ✅ **Sink workflow** (`workflow/sink.py`) — Bronze→Silver→DuckLake via Polars transforms
+  - CLI: `binance-datatool sink` command
+  - Supports klines, aggTrades, trades, fundingRate transforms
+  - Zero-copy DuckDB INSERT (all type casting in Polars)
+  - DuckLake native tables with partitioning
+  - DLQ routing for failed records
+- ✅ **Prefect workflow orchestration** (`workflow/prefect_flows.py`)
+  - 12+ flows and tasks with ThreadPoolTaskRunner parallelism
+  - health_flow integrated as final pipeline step
+  - Per-symbol error isolation via `raise_on_failure=False`
+  - DuckDB concurrency guard (`ducklake-writer`)
+  - metadata guard for venue/symbol writes
+  - Cron deployments via `prefect.serve()`
 
 ### Phase 7: Transform, Normalize, and Sink (Complete)
 
@@ -755,15 +769,15 @@ across data types and trade types, and sink to DuckDB (local) and/or Apache Iceb
 **Rationale**: Raw archive ZIPs are opaque. For analytics, ML feature engineering, and
 DataOps pipelines, we need columnar data with consistent schemas.
 
-**Proposed architecture**:
+**Implemented architecture**:
 ```
 Archive (local ZIPs + filled CSVs)
-  ↓ Polars (read + transform)
-Normalized DataFrames (standardized schema)
-  ↓ Partition by (trade_type, data_type, date)
-Parquet files (columnar)
-  ↓ Load
-DuckDB (local analytics) ─ OR ─ Iceberg (catalog-driven lakehouse)
+  ↓ Polars (read + transform via sink.py)
+Silver DataFrames (normalized schema: ts_event, ts_recv, rtype, side, ...)
+  ↓ Polars → DuckDB (zero-copy, all type casting done in Polars)
+DuckLake v1.0 native tables (partitioned by trade_type, symbol, interval, ts_date)
+  ↓ Health checks
+Anomaly detection (null prices, duplicate timestamps, date gaps, outliers)
 ```
 
 **Key design decisions**:
@@ -822,4 +836,4 @@ All future work should reference this document and follow the TDD + audit checkl
 **Document Version**: 1.0
 **Last Updated**: 2026-05-07
 **Maintainer**: Team
-**Status**: Active (Phase 2 in progress)
+**Status**: Complete. SDK migration → pipeline hardening → E2E validation done.

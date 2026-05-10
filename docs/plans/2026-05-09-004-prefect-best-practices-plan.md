@@ -66,3 +66,6 @@ Health monitoring should be part of the scheduled pipeline.
 | I2 | 30 min | Low | Add `serve()` entry to prefect_flows.py |
 | I3 | 15 min | Low | Add .serve() schedule |
 | I4 | 30 min | Low | Add health_flow() wrapper |
+
+---
+**Status**: Complete — implementation merged to main on 2026-05-10.

@@ -58,3 +58,6 @@ The Prefect pipeline (`historical_pipeline`, `bulk_backfill`) was built incremen
 ## Dependencies / Assumptions
 - Python 3.11 — `asyncio.run()` from threads is safe; Python 3.14 upgrade will require changes
 - Prefect 3.7+ — `serve_multiple()` confirmed available; `concurrency` context managers stable
+
+---
+**Status**: Complete — implementation merged to main on 2026-05-10.

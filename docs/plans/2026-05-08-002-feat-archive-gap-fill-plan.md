@@ -137,3 +137,6 @@ BTCUSDT-1m-2026-05-08.csv  →  open_time,open,high,low,close,volume,close_time,
 - Add gap-filling section to requirements
 - Add data flow diagram
 - Update AGENTS.md with gap-fill command
+
+---
+**Status**: Complete — implementation merged to main on 2026-05-10.

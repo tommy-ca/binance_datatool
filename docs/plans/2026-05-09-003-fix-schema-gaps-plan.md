@@ -77,3 +77,6 @@ checks they match `TABLE_DEFS` column types.
 1. Fix I1 and I2 immediately (this session)
 2. Add I4 as a TODO in the test file
 3. Defer I3 to Phase 8
+
+---
+**Status**: Complete — implementation merged to main on 2026-05-10.

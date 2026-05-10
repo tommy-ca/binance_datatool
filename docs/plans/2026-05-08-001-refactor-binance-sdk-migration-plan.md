@@ -432,3 +432,6 @@ async generator yields KlineData ← asyncio.Queue
 - **Origin document**: [docs/brainstorms/2026-05-08-binance-sdk-migration-requirements.md](path)
 - SDK packages: https://github.com/binance/binance-connector-python
 - SDK migration guide: https://github.com/binance/binance-connector-python/blob/master/MIGRATION.md
+
+---
+**Status**: Complete — implementation merged to main on 2026-05-10.
