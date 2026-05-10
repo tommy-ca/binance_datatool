@@ -316,8 +316,8 @@ Databento DBN and tardis.dev conventions.
 ### Silver Schema (klines)
 | Silver Column | Bronze Source | Type | Description |
 |--------------|---------------|------|-------------|
-| `ts_event` | `open_time` | INT64 ms | Event timestamp (DBN convention) |
-| `ts_recv` | Auto | INT64 ms | Receive timestamp (DBN convention) |
+| `ts_event` | `open_time` | INT64 μs | Event timestamp (DBN convention, epoch microseconds) |
+| `ts_recv` | Auto | INT64 μs | Receive timestamp (DBN convention, epoch microseconds) |
 | `open` | CSV column | FLOAT64 | Open price |
 | `high` | CSV column | FLOAT64 | High price |
 | `low` | CSV column | FLOAT64 | Low price |

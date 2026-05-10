@@ -29,6 +29,45 @@ if TYPE_CHECKING:
 
 _DEFAULT_CATALOG_PATH = "data/lake"
 
+# Bronze kline columns as they appear in Binance archive CSV files (no header row)
+_BRONZE_KLINE_COLS = [
+    "open_time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "close_time",
+    "quote_volume",
+    "count",
+    "taker_buy_volume",
+    "taker_buy_quote_volume",
+    "ignore",
+]
+
+_BRONZE_AGGT_COLS = [
+    "agg_trade_id",
+    "price",
+    "quantity",
+    "first_trade_id",
+    "last_trade_id",
+    "transact_time",
+    "is_buyer_maker",
+]
+
+_BRONZE_FUNDING_COLS = [
+    "symbol",
+    "funding_time",
+    "funding_rate",
+    "mark_price",
+]
+
+_BRONZE_COLS_BY_TYPE = {
+    "klines": _BRONZE_KLINE_COLS,
+    "aggTrades": _BRONZE_AGGT_COLS,
+    "fundingRate": _BRONZE_FUNDING_COLS,
+}
+
 # Silver klines columns (normalized, Databento DBN + tardis.dev naming)
 _SILVER_KLINE_COLS = [
     "ts_event",
@@ -119,8 +158,13 @@ def _parse_csv_line(line: str) -> list[str]:
     return next(csv.reader([line]))
 
 
-def _read_zip_csv(path: Path) -> pl.DataFrame:
-    """Read CSV from a Binance archive ZIP file."""
+def _read_zip_csv(path: Path, bronze_cols: list[str] | None = None) -> pl.DataFrame:
+    """Read CSV from a Binance archive ZIP file.
+
+    Binance archive CSVs have no header row — the first line is data.
+    Uses the provided ``bronze_cols`` schema, or falls back to the first
+    data line for backward compatibility.
+    """
     with zipfile.ZipFile(path) as z:
         csv_files = [n for n in z.namelist() if n.endswith(".csv")]
         if not csv_files:
@@ -128,11 +172,11 @@ def _read_zip_csv(path: Path) -> pl.DataFrame:
         with z.open(csv_files[0]) as f:
             content = f.read().decode("utf-8")
     lines = content.strip().split("\n")
-    if len(lines) < 2:
+    if len(lines) < 1:
         return pl.DataFrame()
-    header = _parse_csv_line(lines[0])
-    rows = [_parse_csv_line(line) for line in lines[1:]]
-    return pl.DataFrame(rows, schema=header, orient="row")
+    schema = bronze_cols or _parse_csv_line(lines[0])
+    rows = [_parse_csv_line(line) for line in lines]
+    return pl.DataFrame(rows, schema=schema, orient="row")
 
 
 def _read_filled_csv(path: Path) -> pl.DataFrame:
@@ -185,9 +229,9 @@ def _add_silver_metadata(
     source: str,
 ) -> pl.DataFrame:
     """Add Silver metadata columns."""
-    now_ms = int(time.time() * 1000)
+    now_us = int(time.time() * 1_000_000)
     exchange = _exchange_for(trade_type)
-    df = df.with_columns(pl.lit(now_ms).alias("ts_recv"))
+    df = df.with_columns(pl.lit(now_us).alias("ts_recv"))
     return df.with_columns(
         pl.lit(source).alias("source"),
         pl.lit(exchange).alias("exchange"),
@@ -195,13 +239,30 @@ def _add_silver_metadata(
         pl.lit(symbol).alias("symbol"),
         pl.lit(interval or "").alias("interval"),
         pl.lit(data_type).alias("data_type"),
-        pl.lit(now_ms).alias("ingested_at"),
+        pl.lit(now_us).alias("ingested_at"),
     )
+
+
+def _normalize_to_microseconds(df: pl.DataFrame) -> pl.DataFrame:
+    """Normalize ts_event to epoch microseconds.
+
+    Binance archive has ms (pre-2024, 13-digit) and μs (2024+, 16-digit).
+    Silver layer uses μs for forward compatibility.
+    """
+    if "ts_event" not in df.columns or len(df) == 0:
+        return df
+    max_ts = df.select(pl.max(pl.col("ts_event").cast(pl.Int64, strict=False))).item()
+    if max_ts is not None and max_ts < 1_000_000_000_000_000:
+        df = df.with_columns((pl.col("ts_event").cast(pl.Int64, strict=False) * 1000).alias("ts_event"))
+    elif max_ts is not None:
+        df = df.with_columns(pl.col("ts_event").cast(pl.Int64, strict=False).alias("ts_event"))
+    return df
 
 
 def _bronze_kline_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     """Transform Bronze klines CSV to Silver schema."""
     df = _rename_to_silver(df, _BRONZE_TO_SILVER_KLINE)
+    df = _normalize_to_microseconds(df)
     # Keep only Silver columns that exist in data
     keep = [c for c in _SILVER_KLINE_COLS if c in df.columns]
     df = df.select(keep)
@@ -226,6 +287,7 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
         "transact_time": "ts_event",
     }
     df = _rename_to_silver(df, rename_map)
+    df = _normalize_to_microseconds(df)
     keep = [
         c for c in ["ts_event", "price", "size", "trade_id", "is_buyer_maker"] if c in df.columns
     ]
@@ -257,6 +319,7 @@ def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFram
     """
     rename_map = {"funding_time": "ts_event"}
     df = _rename_to_silver(df, rename_map)
+    df = _normalize_to_microseconds(df)
     # Map funding_time as both ts_event (for sorting) and funding_timestamp
     keep = [c for c in ["ts_event", "funding_rate", "mark_price"] if c in df.columns]
     df = df.select(keep)
@@ -338,7 +401,7 @@ class SinkWorkflow:
         for path in files:
             try:
                 source = "api_filled" if "_filled" in str(path.parent) else "archive"
-                df = _read_zip_csv(path) if path.suffix == ".zip" else _read_filled_csv(path)
+                df = _read_zip_csv(path, bronze_cols=_BRONZE_COLS_BY_TYPE.get(data_type_str)) if path.suffix == ".zip" else _read_filled_csv(path)
                 if df.is_empty():
                     continue
 

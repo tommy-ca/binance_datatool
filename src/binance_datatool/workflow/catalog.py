@@ -165,26 +165,11 @@ _DUCKLAKE_ANALYTICS_VIEWS = """
 -- Analytics views on top of unified DuckLake tables.
 
 CREATE OR REPLACE VIEW daily_ohlcv AS
-SELECT CAST(epoch_ms(ts_event) AS DATE) AS trade_date,
-       symbol, trade_type,
-       FIRST(open) AS open, MAX(high) AS high,
-       MIN(low) AS low, LAST(close) AS close,
-       SUM(volume) AS volume, SUM(quote_volume) AS quote_volume,
-       COUNT(*) AS bar_count
-FROM klines WHERE interval = '1h'
-GROUP BY trade_date, symbol, trade_type;
+SELECT CAST(epoch_ms(ts_event / 1000) AS DATE) AS trade_date,
 
-CREATE OR REPLACE VIEW latest_klines AS
-SELECT DISTINCT ON (symbol, trade_type, interval)
-       symbol, trade_type, interval, ts_event, close, volume, ingested_at
-FROM klines
-ORDER BY symbol, trade_type, interval, ts_event DESC;
+       CAST(epoch_ms(MAX(ts_event / 1000)) AS DATE) AS latest_date,
 
-CREATE OR REPLACE VIEW stale_symbols AS
-SELECT symbol, trade_type,
-       MAX(ts_event) AS latest_ts,
-       CAST(epoch_ms(MAX(ts_event)) AS DATE) AS latest_date,
-       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event)) AS DATE), CURRENT_DATE) AS days_stale
+       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event / 1000)) AS DATE), CURRENT_DATE) AS days_stale
 FROM klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 """
@@ -300,7 +285,7 @@ class DuckLakeCatalog:
             if has_event:
                 con.execute(
                     f"INSERT INTO {table_name} SELECT {select_expr}, "
-                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT)) AS DATE) AS ts_date "
+                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT) / 1000) AS DATE) AS ts_date "
                     f"FROM df"
                 )
             else:

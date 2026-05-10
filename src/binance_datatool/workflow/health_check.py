@@ -300,13 +300,16 @@ def check_ducklake_anomalies(
 
     # Date gaps
     dates = con.execute(
-        f"SELECT DISTINCT ts_date FROM {tn} WHERE symbol = ? ORDER BY ts_date",
+        f"SELECT DISTINCT ts_date FROM {tn} WHERE symbol = ? AND ts_date IS NOT NULL ORDER BY ts_date",
         [symbol],
     ).fetchall()
     if len(dates) > 1:
         date_strs = [str(d[0]) for d in dates]
-        expected = _date_range(date_strs[0], date_strs[-1])
-        report.date_gaps = [d for d in expected if d not in date_strs]
+        try:
+            expected = _date_range(date_strs[0], date_strs[-1])
+            report.date_gaps = [d for d in expected if d not in date_strs]
+        except ValueError:
+            logger.warning("Date range computation failed for {}/{} — bad timestamps in data", tn, symbol)
 
     # Price outliers (Z-score > threshold)
     try:
