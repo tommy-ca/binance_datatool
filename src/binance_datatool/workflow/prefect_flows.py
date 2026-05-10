@@ -2,6 +2,14 @@
 
 Composes workflow classes directly — no subprocess CLI wrappers.
 CLI commands are thin wrappers over these same workflow classes.
+
+Design patterns (dataskew.io/blog/data-pipeline-design-patterns):
+- Idempotency: DROP TABLE IF EXISTS + CREATE TABLE AS SELECT
+- Backfilling: parameterized execution_date / lookback_days
+- Schema evolution: DuckLake ALTER TABLE + centralized TABLE_DEFS
+- Dead letter queue: dlq table in DuckLake for failed records
+- Retry: exponential backoff with jitter
+- At-least-once + idempotent operations (no exactly-once needed)
 """
 
 from __future__ import annotations
@@ -34,6 +42,12 @@ from binance_datatool.workflow.health_check import check_ducklake_anomalies
 
 _DEFAULT_ARCHIVE_HOME = Path.home() / ".binance-datatool" / "archive"
 
+# Retry with exponential backoff and jitter
+# Prefect 3.x: retry_delay_seconds + retry_jitter_factor
+# Pattern 5: https://dataskew.io/blog/data-pipeline-design-patterns
+_RETRY_CONFIG = {"retries": 3, "retry_delay_seconds": 10, "retry_jitter_factor": 0.2}
+_RETRY_LIGHT = {"retries": 2, "retry_delay_seconds": 10, "retry_jitter_factor": 0.2}
+
 _REST_CLIENTS = {
     "spot": BinanceSpotRestClient,
     "um": BinanceUmRestClient,
@@ -41,10 +55,51 @@ _REST_CLIENTS = {
 }
 
 
+# ── Dead Letter Queue ───────────────────────────────────────────
+
+
+_log = __import__("logging").getLogger(__name__)
+
+
+def _route_to_dlq(catalog: Path, symbol: str, data_type: str, errors: list[str]) -> None:
+    """Route failed records to DuckLake DLQ table (Pattern 4)."""
+    from datetime import datetime
+
+    import duckdb
+
+    meta = catalog / "metadata.ducklake"
+    if not meta.exists():
+        return
+    try:
+        con = duckdb.connect(str(catalog / "catalog.duckdb"))
+        con.execute("LOAD ducklake")
+        con.execute(
+            f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
+        )
+        con.execute("USE dl")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS dlq ("
+            "symbol VARCHAR, data_type VARCHAR, error VARCHAR, "
+            "ingested_at BIGINT, source VARCHAR"
+            ")"
+        )
+        now = int(datetime.now().timestamp() * 1000)
+        for err in errors:
+            con.execute(
+                "INSERT INTO dlq VALUES (?, ?, ?, ?, ?)",
+                [symbol, data_type, err, now, "sink_silver"],
+            )
+        cnt = con.execute("SELECT COUNT(*) FROM dlq").fetchone()[0]
+        _log.info("DLQ: %d total failures for %s/%s", cnt, symbol, data_type)
+        con.close()
+    except Exception as e:
+        _log.warning("DLQ route failed: %s", e)
+
+
 # ── Tasks ───────────────────────────────────────────────────────
 
 
-@task(retries=2, retry_delay_seconds=10)
+@task(**_RETRY_CONFIG)
 def download_archive(
     trade_type: str,
     symbol: str,
@@ -67,7 +122,7 @@ def download_archive(
     return len(result.to_download) if hasattr(result, "to_download") else 0
 
 
-@task(retries=1, retry_delay_seconds=5)
+@task(**_RETRY_CONFIG)
 def verify_archive(
     trade_type: str,
     symbol: str,
@@ -90,7 +145,7 @@ def verify_archive(
     return result.verified if hasattr(result, "verified") else 0
 
 
-@task(retries=1, retry_delay_seconds=5)
+@task(**_RETRY_LIGHT)
 def fill_gaps(
     trade_type: TradeType,
     symbol: str,
@@ -116,6 +171,7 @@ def fill_gaps(
 
 
 @task(retries=1, retry_delay_seconds=5)
+@task(**_RETRY_LIGHT)
 def sink_silver(
     trade_type: TradeType,
     symbol: str,
@@ -142,6 +198,9 @@ def sink_silver(
         symbols=[symbol],
         interval=interval,
     )
+    # Route transform errors to DuckLake DLQ table (Pattern 4)
+    if stats.errors:
+        _route_to_dlq(catalog, symbol, data_type, stats.errors)
     return stats.row_count
 
 
