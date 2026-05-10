@@ -124,24 +124,23 @@ CLI interface stable for consumers.
 See docs/specs-driven-development.md for the full requirements and
 spec-driven development flows.
 
-## Exchange Clients: Why Hand-Rolled vs Official SDK
+## Exchange Clients: Official Binance SDK
 
-The `exchange/` module uses hand-rolled `aiohttp`-based clients instead of the official
-Binance SDK (`binance-sdk-spot`, `binance-sdk-derivatives-trading-usds-futures`, etc.).
+The `exchange/` module uses **official Binance SDK packages** (`binance-sdk-spot`,
+`binance-sdk-derivatives-trading-usds-futures`, `binance-sdk-derivatives-trading-coin-futures`).
+These are required dependencies listed in `pyproject.toml`.
 
-**Research findings (2026-05-08):**
-- Official SDKs target **trading API** (orders, account management, Wallet, Mining)
-- Our use case is **bulk historical data from S3 archive** (`data.binance.vision`)
-- SDK does not cover archive access; it wraps `api.binance.com` REST endpoints
-- SDK adds `pydantic`, `requests` dependencies without benefit for our workflow
+**SDK usage by market:**
 
-**Decision: Keep hand-rolled clients.**
-- Simpler: direct `aiohttp` calls, no abstraction overhead
-- Follows YAGNI: we don't need trading features (order placement, account queries)
-- Archive access (`archive/` module) handles S3; exchange clients handle live API only
-- CCXT provides multi-exchange support (OKX, Bybit) without additional Binance SDK deps
+| Package | Market | REST Method | WS Method |
+|---------|--------|-------------|-----------|
+| `binance-sdk-spot` | Spot | `rest_api.klines()` | `connection.kline(symbol, interval)` |
+| `binance-sdk-derivatives-trading-usds-futures` | UM | `rest_api.kline_candlestick_data()` | `connection.kline_candlestick_streams()` |
+| `binance-sdk-derivatives-trading-coin-futures` | CM | `rest_api.kline_candlestick_data()` | `connection.kline_candlestick_streams()` |
 
-**If trading features are needed later:**
-- Add `binance-sdk-spot` as optional dependency for Spot trading
-- Add `binance-sdk-derivatives-*` for futures trading
-- Keep archive clients unchanged (different concern: S3 vs api.binance.com)
+**Design decisions:**
+- No auth: `ConfigurationRestAPI(api_key="", api_secret="")` for public market data only
+- SDK callback-based WS streams are wrapped via `asyncio.Queue` bridge
+- Archive client (`archive/` module) remains on `aiohttp` (S3 access is a different concern)
+- Backward-compat aliases: `BinanceRestClient = BinanceSpotRestClient`, `BinanceWsClient = BinanceSpotWsClient`
+- CCXT remains optional (`[exchange]` extra) for multi-exchange support

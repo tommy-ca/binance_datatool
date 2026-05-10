@@ -105,6 +105,10 @@ directly on the root app:
 | `list-files` | List archive files for given symbols |
 | `download` | Download new or updated archive files |
 | `verify` | Verify files against SHA256 checksums |
+| `gap-fill` | Detect and fill gaps via REST API |
+| `health` | Check data completeness, freshness, integrity |
+| `sink` | Transform Bronze→Silver→DuckDB |
+| `refresh-metadata` | Refresh venue/symbol metadata |
 
 > [!TIP]
 > Every command accepts symbols from **stdin** or as **positional args**,

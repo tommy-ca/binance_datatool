@@ -280,7 +280,8 @@ class GapFillWorkflow:
             table = self._data_type.replace("-", "_")
             for symbol in self._symbols:
                 dates = con.execute(
-                    f"SELECT DISTINCT ts_date FROM {table} WHERE symbol = '{symbol}' ORDER BY ts_date"
+                    f"SELECT DISTINCT ts_date FROM {table} WHERE symbol = ? ORDER BY ts_date",
+                    [symbol],
                 ).fetchall()
                 existing = {str(d[0]) for d in dates}
                 symbol_gaps = _detect_date_gaps(existing, None, self._lookback_days)

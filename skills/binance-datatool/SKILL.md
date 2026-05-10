@@ -38,13 +38,36 @@ All commands accept `-v` (INFO-level stderr) and `--archive-home PATH`.
 ### list-symbols
 `binance-datatool -v list-symbols (spot|um|cm) [--quote USDT] [--exclude-stables]`
 
+### list-files
 `binance-datatool -v list-files (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h]`
 
+### download
 `binance-datatool -v download (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h] [--dry-run]`
 
+### verify
 `binance-datatool -v verify (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h]`
 
 Verifies SHA256 checksums. Exit 0 = all pass, 2 = partial failure.
+
+### gap-fill
+`binance-datatool -v gap-fill (spot|um|cm) --symbol BTCUSDT --type klines --interval 1h [--auto-detect] [--lookback 30]`
+
+Fetches missing data from Binance REST API. Auto-detects gaps from archive.
+
+### health
+`binance-datatool -v health (spot|um|cm) [--type klines] [--interval 1h] SYMBOLS...`
+
+Checks data completeness, freshness, integrity. Detects anomalies (null prices, duplicates).
+
+### sink
+`binance-datatool -v sink (spot|um|cm) [--type klines] [--interval 1h] [--target parquet|duckdb|all] SYMBOLS...`
+
+Transforms Bronze archive ZIPs to Silver DuckDB tables via Polars.
+
+### refresh-metadata
+`binance-datatool -v refresh-metadata (spot|um|cm) [--from-api] [--catalog PATH]`
+
+Updates venue and symbol metadata tables from archive listing or REST API.
 
 ## Prefect Workflows
 
