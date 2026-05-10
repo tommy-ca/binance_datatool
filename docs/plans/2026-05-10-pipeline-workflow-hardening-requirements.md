@@ -40,9 +40,12 @@ The Prefect pipeline (`historical_pipeline`, `bulk_backfill`) was built incremen
 
 ## Key Decisions
 - Use `try/except ValueError` for DataType construction (Pythonic, no private API, matches dataskew best practices)
-- Use `serve_multiple()` for deployment registration (Prefect 3.x API, non-blocking)
-- Use `try/except` around each `future.result()` in `historical_pipeline` for per-symbol error isolation
-- Use context manager for DuckDB connections in `_route_to_dlq` (cleanest resource management)
+- Use `prefect.serve()` for deployment registration (Prefect 3.x native API, non-blocking)
+- Use `future.result(raise_on_failure=False)` + `future.state.is_completed()` for Prefect-native error isolation (instead of `try/except`)
+- Use `zip(sym_list, futures, strict=True)` to pair inputs with futures so the symbol is known even on failure
+- Remove nested `ThreadPoolTaskRunner` from `bulk_backfill` — subflow delegates to `historical_pipeline` which owns the parallelism
+- Use Prefect `concurrency` context manager for DuckDB write serialization (already correct per docs)
+- Use `asyncio.run()` inside sync tasks for async bridging (Prefect 3.x recommended pattern, since sync can't call native async tasks)
 
 ## Dependencies / Assumptions
 - Python 3.11 — `asyncio.run()` from threads is safe; Python 3.14 upgrade will require changes

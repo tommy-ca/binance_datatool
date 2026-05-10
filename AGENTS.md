@@ -161,25 +161,51 @@ historical_pipeline (ThreadPoolTaskRunner, max_workers=4)
         └── SOLUSDT → anomaly detection
 ```
 
-### Error Isolation
+### Prefect-Native Patterns
 
-A single symbol failure does not abort the pipeline. Each symbol in
-`sink_silver()` is wrapped in `try/except`, collecting partial results and
-recording the error message:
+**Error isolation** — Use `future.result(raise_on_failure=False)` and
+`future.state.is_completed()` instead of `try/except`. Pair futures with
+their inputs via `zip(sym_list, futures, strict=True)` so the symbol is
+known even when the task fails:
 
 ```python
-for future in prep_results:
-    try:
-        meta = future.result()
-        sym = meta["symbol"]
+for sym, future in zip(sym_list, prep_futures, strict=True):
+    meta = future.result(raise_on_failure=False)
+    if future.state.is_completed():
         rows = sink_silver(tt, sym, ...)
-        results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
-    except Exception as exc:
-        results[sym] = {"gaps_filled": 0, "rows_sunk": 0, "error": str(exc)}
-        print(f"  {sym}: FAILED — {exc}")
+        results[sym] = {"rows_sunk": rows, "gaps_filled": meta["gaps"]}
+    else:
+        results[sym] = {"rows_sunk": 0, "gaps_filled": 0, "error": str(meta)}
 ```
 
-Errored symbols are also skipped during the health check phase to avoid noise.
+**Concurrency guard for DuckDB** — Use Prefect's `concurrency` context
+manager with `occupy=1` to serialize writes. This works across task runs
+within the same process:
+
+```python
+from prefect.concurrency.sync import concurrency as _pcon
+
+with _pcon("ducklake-writer", occupy=1):
+    ...
+```
+
+**Async bridging** — Prefect 3.x does not support calling native async
+tasks from sync flows. Use `asyncio.run()` inside sync tasks to bridge:
+
+```python
+result = asyncio.run(wf.run())
+```
+
+**Deployments** — Use `prefect.serve()` with `flow.to_deployment()` to
+register multiple cron deployments in a single process:
+
+```python
+from prefect import serve
+serve(
+    historical_pipeline.to_deployment(name="daily-backfill", cron="0 6 * * *"),
+    refresh_metadata_flow.to_deployment(name="hourly-metadata", cron="0 * * * *"),
+)
+```
 
 ## Data Sources
 

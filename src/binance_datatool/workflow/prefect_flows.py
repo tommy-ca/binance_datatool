@@ -268,7 +268,7 @@ def historical_pipeline(
 
     # Step 1: Fan-out — prepare symbols in parallel (no DuckDB writes)
     sym_list = symbols or ["BTCUSDT"]
-    prep_results = prepare_symbol.map(
+    prep_futures = prepare_symbol.map(
         trade_type=[trade_type] * len(sym_list),
         symbol=sym_list,
         data_type=[data_type] * len(sym_list),
@@ -278,24 +278,25 @@ def historical_pipeline(
     )
 
     # Step 2: Sequential sink — DuckDB does not support concurrent writers.
-    # Each symbol is wrapped in try/except so one failure does not abort the batch.
+    # Prefect-native error isolation: zip symbols with futures so we always
+    # know which symbol failed, even when the task itself raises.
     tt = TradeType(trade_type)
     iv = interval if data_type == "klines" else None
     results: dict[str, Any] = {}
-    for future in prep_results:
-        sym = None
-        try:
-            meta = future.result()
-            sym = meta["symbol"]
+    for sym, future in zip(sym_list, prep_futures, strict=True):
+        meta = future.result(raise_on_failure=False)
+        if future.state.is_completed():
             rows = sink_silver(tt, sym, data_type, iv, lookback_days, home, catalog)
             results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
             print(f"  {sym}: {meta['gaps']} gaps, {rows} rows")
-        except Exception as exc:
-            sym = sym or "unknown"
-            results[sym] = {"gaps_filled": 0, "rows_sunk": 0, "error": str(exc)}
-            print(f"  {sym}: FAILED — {exc}")
+        else:
+            err = str(meta) if meta else "unknown error"
+            results[sym] = {"gaps_filled": 0, "rows_sunk": 0, "error": err}
+            print(f"  {sym}: FAILED — {err}")
 
-    # Step 3: Health check — verify DuckLake data quality for each symbol
+    # Step 3: Health check — verify DuckLake data quality for each symbol.
+    # Sequential subflow calls (DuckDB reads are fast; no bottleneck).
+    # Skips symbols that errored during prepare.
     print("  Running health checks...")
     for sym in sym_list:
         if sym not in results or results[sym].get("error"):
@@ -320,7 +321,6 @@ def historical_pipeline(
 @flow(
     name="Bulk Historical Backfill",
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=4),
 )
 def bulk_backfill(
     trade_type: str = "spot",
