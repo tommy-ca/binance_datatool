@@ -33,20 +33,25 @@
 - Keep the root package minimal. Export only version metadata from `binance_datatool.__init__`.
 
 ## Toolchain
-- Package and dependency management: `uv`
+- Package and dependency management: `uv` **only** — never `pip`, `uv pip`, or global `python3`
 - Build backend: `hatchling`
 - Linting and formatting: `ruff`
 - Testing: `pytest`
 - Git hooks: `pre-commit`
 - External downloader: `aria2`
 
-## Expected Commands
+## Expected Commands (uv-native)
+All commands use `uv run` — never `pip`, `uv pip`, or bare `python3`:
+
 - Environment setup: `uv sync`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
 - Tests: `uv run pytest`
 - Targeted tests: `uv run pytest tests/path_to_test.py`
-- CLI entrypoint target: `uv run binance-datatool --help`
+- CLI entrypoint: `uv run binance-datatool --help`
+- Python scripts: `uv run python3 script.py`
+- Type check: `uv run pytest tests/ --co` (collect tests) or `uvx ty check src`
+- Pre-commit: `pre-commit run --all-files`
 
 ## Code Standards
 - Use written English for code comments, docstrings, logs, CLI text, and developer-facing messages.
