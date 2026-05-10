@@ -269,8 +269,17 @@ def check_ducklake_anomalies(
     if not _table_exists(con, tn):
         return report
 
-    # Null/zero price check
+    # Null/zero price check (only for columns that exist in this table)
+    schema_cols = [
+        r[0]
+        for r in con.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?",
+            [tn],
+        ).fetchall()
+    ]
     for col in ("open", "high", "low", "close"):
+        if col not in schema_cols:
+            continue
         nulls = con.execute(
             f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND ({col} IS NULL OR {col} = 0)",
             [symbol],
@@ -278,13 +287,7 @@ def check_ducklake_anomalies(
         report.null_prices += nulls
 
     # Zero volume check
-    if "volume" in [
-        c[0]
-        for c in con.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = ?",
-            [tn],
-        ).fetchall()
-    ]:
+    if "volume" in schema_cols:
         zeros = con.execute(
             f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND (volume IS NULL OR volume = 0)",
             [symbol],

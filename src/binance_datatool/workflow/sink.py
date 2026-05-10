@@ -53,6 +53,7 @@ _BRONZE_AGGT_COLS = [
     "last_trade_id",
     "transact_time",
     "is_buyer_maker",
+    "is_best_match",
 ]
 
 _BRONZE_FUNDING_COLS = [
@@ -338,10 +339,17 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     ]
     df = df.select(keep)
     # Derive tardis.dev side from Binance is_buyer_maker
-    # Archive CSV has is_buyer_maker as string "1"/"0"; cast to int first
-    # is_buyer_maker=1 → buyer is maker → seller is taker → side="sell"
-    # is_buyer_maker=0 → seller is maker → buyer is taker → side="buy"
-    df = df.with_columns(pl.col("is_buyer_maker").cast(pl.Int64, strict=False))
+    # Archive CSV has "True"/"False" (str); filled CSV has "1"/"0" (str)
+    # is_buyer_maker=1/True → buyer is maker → seller is taker → side="sell"
+    # is_buyer_maker=0/False → seller is maker → buyer is taker → side="buy"
+    df = df.with_columns(
+        pl.when(pl.col("is_buyer_maker").cast(pl.Utf8).str.to_lowercase() == "true")
+        .then(pl.lit(1, pl.Int64))
+        .when(pl.col("is_buyer_maker").cast(pl.Utf8).str.to_lowercase() == "false")
+        .then(pl.lit(0, pl.Int64))
+        .otherwise(pl.col("is_buyer_maker").cast(pl.Int64, strict=False))
+        .alias("is_buyer_maker")
+    )
     df = df.with_columns(
         pl.when(pl.col("is_buyer_maker") == 1)
         .then(pl.lit("sell"))

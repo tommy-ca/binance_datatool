@@ -197,8 +197,8 @@ class DuckLakeCatalog:
     # Column order matches Silver Parquet output from sink.py
     TABLE_DEFS: dict[str, str] = {
         "klines": "ts_event BIGINT, ts_recv BIGINT, open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE, quote_volume DOUBLE, trade_count BIGINT, taker_buy_volume DOUBLE, taker_buy_quote_volume DOUBLE, source VARCHAR, exchange VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, exchange VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
-        "fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, funding_timestamp BIGINT, source VARCHAR, exchange VARCHAR, trade_type VARCHAR, symbol VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "aggTrades": "ts_event BIGINT, ts_recv BIGINT, price DOUBLE, size DOUBLE, side VARCHAR, trade_id BIGINT, is_buyer_maker BIGINT, agg_trade_id BIGINT, rtype VARCHAR, source VARCHAR, exchange VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
+        "fundingRate": "ts_event BIGINT, ts_recv BIGINT, funding_rate DOUBLE, mark_price DOUBLE, funding_timestamp BIGINT, source VARCHAR, exchange VARCHAR, trade_type VARCHAR, symbol VARCHAR, interval VARCHAR, data_type VARCHAR, ingested_at BIGINT, ts_date DATE",
         "venues": "venue VARCHAR, trade_type VARCHAR, exchange VARCHAR, source VARCHAR, symbol_count BIGINT, data_types VARCHAR, fetched_at BIGINT",
         "symbols": "symbol VARCHAR, trade_type VARCHAR, exchange VARCHAR, base_asset VARCHAR, quote_asset VARCHAR, contract_type VARCHAR, is_leverage BOOLEAN, is_stable_pair BOOLEAN, source VARCHAR, status VARCHAR, fetched_at BIGINT",
     }
@@ -274,10 +274,16 @@ class DuckLakeCatalog:
 
         All type casting and ts_date computation happens in the Polars
         transform stage (sink.py) — this is a zero-copy INSERT.
+        Reorders DataFrame columns to match TABLE_DEFS for positional INSERT.
         """
         self.ensure_table(con, table_name)
         ingested = 0
         try:
+            cols = self.TABLE_DEFS.get(table_name, "")
+            table_cols = [c.split()[0] for c in cols.split(",")]
+            # Filter df columns to those in TABLE_DEFS and reorder
+            ordered = [c for c in table_cols if c in df.columns]
+            df = df.select(ordered)
             con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
             ingested = len(df)
         except Exception as e:
