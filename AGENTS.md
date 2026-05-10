@@ -125,8 +125,8 @@ print(result)
 result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT'])
 print(result)
 
-# Bulk backfill with auto-discovered symbols (limits to 10 by default)
-result = bulk_backfill(trade_type='um')
+# Bulk backfill with auto-discovered symbols (max 10 by default, configurable)
+result = bulk_backfill(trade_type='um', max_symbols=5)
 print(result)
 "
 ```
@@ -187,6 +187,17 @@ from prefect.concurrency.sync import concurrency as _pcon
 
 with _pcon("ducklake-writer", occupy=1):
     ...
+```
+
+**Metadata concurrency guard** — `refresh_metadata_flow` also uses the
+`ducklake-writer` guard to prevent races with `sink_silver` when both
+run as separate deployments:
+
+```python
+with concurrency("ducklake-writer", occupy=1):
+    wf.save_venues(wf.refresh_venues())
+    syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
+    wf.save_symbols(syms)
 ```
 
 **Async bridging** — Prefect 3.x does not support calling native async

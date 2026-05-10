@@ -68,6 +68,7 @@ def _route_to_dlq(catalog: Path, symbol: str, data_type: str, errors: list[str])
 
     meta = catalog / "metadata.ducklake"
     if not meta.exists():
+        _log.warning("DLQ: metadata.ducklake not found at %s — errors dropped: %s", meta, errors)
         return
     con = None
     try:
@@ -328,10 +329,16 @@ def bulk_backfill(
     data_type: str = "klines",
     interval: str = "1h",
     lookback_days: int = 30,
+    max_symbols: int = 10,
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Backfill multiple symbols using historical_pipeline (parallel by design)."""
+    """Backfill multiple symbols using historical_pipeline (parallel by design).
+
+    Args:
+        max_symbols: Max auto-discovered symbols to backfill (default 10).
+                     Ignored when ``symbols`` is provided explicitly.
+    """
     if not symbols:
         client = ArchiveClient()
         wf = ArchiveListSymbolsWorkflow(
@@ -341,7 +348,8 @@ def bulk_backfill(
             data_type=DataType(data_type),
         )
         result = asyncio.run(wf.run())
-        symbols = [s.symbol for s in result.matched[:10]]
+        symbols = [s.symbol for s in result.matched[:max_symbols]]
+        print(f"  Auto-discovered {len(symbols)} symbols (max_symbols={max_symbols})")
 
     return historical_pipeline(
         trade_type=trade_type,
@@ -357,7 +365,11 @@ def bulk_backfill(
 # ── Standalone Flows (callable from CLI) ────────────────────────
 
 
-@flow(name="Download", log_prints=True)
+@flow(
+    name="Download",
+    log_prints=True,
+    task_runner=ThreadPoolTaskRunner(max_workers=4),
+)
 def download_flow(
     trade_type: str,
     symbols: list[str],
@@ -365,14 +377,22 @@ def download_flow(
     interval: str | None = None,
     archive_home: Path | None = None,
 ) -> int:
-    """Download archive data. Wraps ArchiveDownloadWorkflow with Prefect."""
-    total = 0
-    for sym in symbols:
-        total += download_archive(trade_type, sym, data_type, interval, archive_home)
-    return total
+    """Download archive data for multiple symbols in parallel."""
+    futures = download_archive.map(
+        trade_type=[trade_type] * len(symbols),
+        symbol=symbols,
+        data_type=[data_type] * len(symbols),
+        interval=[interval] * len(symbols),
+        archive_home=[archive_home] * len(symbols),
+    )
+    return sum(f.result() for f in futures)
 
 
-@flow(name="Verify", log_prints=True)
+@flow(
+    name="Verify",
+    log_prints=True,
+    task_runner=ThreadPoolTaskRunner(max_workers=4),
+)
 def verify_flow(
     trade_type: str,
     symbols: list[str],
@@ -380,11 +400,15 @@ def verify_flow(
     interval: str | None = None,
     archive_home: Path | None = None,
 ) -> int:
-    """Verify checksums. Wraps ArchiveVerifyWorkflow with Prefect."""
-    total = 0
-    for sym in symbols:
-        total += verify_archive(trade_type, sym, data_type, interval, archive_home)
-    return total
+    """Verify checksums for multiple symbols in parallel."""
+    futures = verify_archive.map(
+        trade_type=[trade_type] * len(symbols),
+        symbol=symbols,
+        data_type=[data_type] * len(symbols),
+        interval=[interval] * len(symbols),
+        archive_home=[archive_home] * len(symbols),
+    )
+    return sum(f.result() for f in futures)
 
 
 @flow(name="Gap Fill", log_prints=True)
@@ -428,20 +452,27 @@ def refresh_metadata_flow(
     from_api: bool = False,
     duckdb_path: str | None = None,
 ) -> int:
-    """Refresh venue/symbol metadata. Wraps MetadataWorkflow with Prefect."""
-    home = _DEFAULT_ARCHIVE_HOME
-    catalog = catalog_path or home.parent / "lake"
-    client = ArchiveClient()
-    wf = MetadataWorkflow(
-        archive_client=client,
-        catalog_path=catalog,
-        source_label="api" if from_api else "archive",
-        duckdb_path=Path(duckdb_path) if duckdb_path else catalog / "catalog.duckdb",
-    )
-    wf.save_venues(wf.refresh_venues())
-    syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
-    wf.save_symbols(syms)
-    return len(syms)
+    """Refresh venue/symbol metadata. Wraps MetadataWorkflow with Prefect.
+
+    Uses the ``ducklake-writer`` concurrency guard to avoid racing with
+    :func:`sink_silver` when both run as separate deployments.
+    """
+    from prefect.concurrency.sync import concurrency as _pcon
+
+    with _pcon("ducklake-writer", occupy=1):
+        home = _DEFAULT_ARCHIVE_HOME
+        catalog = catalog_path or home.parent / "lake"
+        client = ArchiveClient()
+        wf = MetadataWorkflow(
+            archive_client=client,
+            catalog_path=catalog,
+            source_label="api" if from_api else "archive",
+            duckdb_path=Path(duckdb_path) if duckdb_path else catalog / "catalog.duckdb",
+        )
+        wf.save_venues(wf.refresh_venues())
+        syms = asyncio.run(wf.refresh_symbols(TradeType(trade_type)))
+        wf.save_symbols(syms)
+        return len(syms)
 
 
 @flow(name="Health Check", log_prints=True)

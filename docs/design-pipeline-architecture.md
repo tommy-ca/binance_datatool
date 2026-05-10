@@ -168,3 +168,46 @@ failed task's return value.
 `bulk_backfill` does NOT declare a task runner — it delegates entirely to
 `historical_pipeline` which owns the `ThreadPoolTaskRunner`. This avoids
 non-deterministic nested runner behavior.
+
+## Metadata Concurrency Guard
+
+`refresh_metadata_flow` writes to `venues` and `symbols` tables in DuckLake.
+It uses the same `ducklake-writer` concurrency guard as `sink_silver` to
+prevent races when both run as separate deployments (daily backfill at 06:00
+and hourly metadata at 00:00).
+
+```python
+from prefect.concurrency.sync import concurrency
+
+with concurrency("ducklake-writer", occupy=1):
+    wf.save_venues(wf.refresh_venues())
+    ...
+    wf.save_symbols(syms)
+```
+
+## Task-to-Task Calls in Prefect
+
+In Prefect 3.x, calling a `@task` from within another `@task` creates a
+properly tracked sub-task run with its own `TaskRun` object, state machine
+(Pending → Running → Completed), and event emission. The sub-tasks do NOT
+execute as plain function calls — they go through the full task engine.
+
+However, sub-tasks called via `Task.__call__()` (not `.submit()`) run
+sequentially in the same thread. True parallelism requires `.map()` at the
+flow level, which submits each item to the `ThreadPoolExecutor`.
+
+## Asyncio Bridge
+
+Prefect 3.x tasks use `asyncio.run()` to bridge from sync tasks to async
+workflow classes like `ArchiveDownloadWorkflow` and `GapFillWorkflow`. This
+is safe on all Python 3.x versions including 3.14 — `asyncio.run()` explicitly
+creates a new event loop via `Runner` and does not depend on the main thread's
+event loop.
+
+## DLQ Pattern
+
+The Dead Letter Queue (`_route_to_dlq`) records sink failures to a DuckDB
+`dlq` table. It uses parameterized queries (`?` placeholders) for safety and
+proper `try/finally` for connection cleanup. If the DuckLake catalog has not
+been initialized (`metadata.ducklake` missing), errors are logged as a warning
+rather than silently dropped.

@@ -303,7 +303,11 @@ def check_ducklake_anomalies(
         ).fetchone()[0]
         report.outlier_rows = outliers
     except Exception:
-        pass
+        logger.warning(
+            "Outlier query failed for {}/{} — STDDEV may be 0 or schema mismatch",
+            table_name,
+            symbol,
+        )
 
     return report
 

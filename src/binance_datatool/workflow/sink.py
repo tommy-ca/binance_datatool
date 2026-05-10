@@ -292,8 +292,9 @@ def _bronze_to_silver(
 
 
 def _parse_symbol_from_path(path: Path, known_symbols: Sequence[str]) -> str | None:
+    name = path.name
     for sym in known_symbols:
-        if sym in path.name or sym in str(path):
+        if name.startswith(f"{sym}-"):
             return sym
     return None
 
