@@ -29,7 +29,7 @@ class MetadataWorkflow:
             exchange="binance",
             source="archive",
             symbol_count=0,
-            data_types=["klines", "aggTrades", "trades"],
+            data_types=["klines", "aggTrades", "trades", "fundingRate"],
             fetched_at=0,
         ),
         VenueMetadata(
@@ -38,7 +38,7 @@ class MetadataWorkflow:
             exchange="binance",
             source="archive",
             symbol_count=0,
-            data_types=["klines", "aggTrades", "fundingRate"],
+            data_types=["klines", "aggTrades", "trades", "fundingRate"],
             fetched_at=0,
         ),
         VenueMetadata(
@@ -47,7 +47,7 @@ class MetadataWorkflow:
             exchange="binance",
             source="archive",
             symbol_count=0,
-            data_types=["klines", "aggTrades", "fundingRate"],
+            data_types=["klines", "aggTrades", "trades", "fundingRate"],
             fetched_at=0,
         ),
     ]

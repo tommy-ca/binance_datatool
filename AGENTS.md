@@ -236,6 +236,16 @@ the complete field-to-source mapping matrix.
 | **REST API** | api.binance.com via SDK | real-time | `gap-fill`, `refresh-metadata` |
 | **WS Stream** | stream.binance.com via SDK | real-time continuous | `stream` (Phase 8) |
 
+### Data Type Coverage
+
+| Type | Archive | REST API | Sink | Table | Notes |
+|------|---------|----------|------|-------|-------|
+| klines | ✓ daily zips | ✓ | ✓ | `klines` | 1h/1d intervals |
+| aggTrades | ✓ daily zips | ✓ | ✓ | `aggTrades` | 8-field CSV |
+| trades | ✓ daily zips | ✓ | ✓ | `aggTrades` | 7-field CSV, same table |
+| fundingRate | ✓ monthly zips | ✓ | ✓ | `fundingRate` | 3-field CSV, has header |
+| bookDepth/bookTicker/... | empty dirs | ✗ | ✗ | — | No data in archive |
+
 ## Data Pipeline Architecture
 
 ```
