@@ -115,18 +115,46 @@ uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
 
 # Or run flows directly via Python
 uv run python3 -c "
-from binance_datatool.workflow.prefect_flows import historical_pipeline
+from binance_datatool.workflow.prefect_flows import historical_pipeline, bulk_backfill
+
+# Single symbol
 result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'])
+print(result)
+
+# Multi-symbol (parallel via .map(), DuckDB serialized via concurrency guard)
+result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT'])
+print(result)
+
+# Bulk backfill with auto-discovered symbols (limits to 10 by default)
+result = bulk_backfill(trade_type='um')
 print(result)
 "
 ```
 
 Available flows:
-- `historical_pipeline` — full download → verify → gap-fill → sink
+- `historical_pipeline` — full metadata → download → verify → gap-fill → sink
+- `bulk_backfill` — multi-symbol, delegates to historical_pipeline
 - `refresh_metadata_flow` — venue/symbol metadata refresh
-- `bulk_backfill` — multi-symbol parallel processing
 - `health_flow` — health check + anomaly detection
 - `sink_flow`, `gap_fill_flow`, `download_flow`, `verify_flow` — individual steps
+
+### Task Graph
+
+```
+historical_pipeline (ThreadPoolTaskRunner, max_workers=4)
+  │
+  ├── refresh_metadata_flow (subflow, sequential)
+  │
+  ├── prepare_symbol.map() ←── parallel fan-out (download→verify→fill_gaps)
+  │     ├── BTCUSDT  ── download → verify → fill_gaps
+  │     ├── ETHUSDT  ── download → verify → fill_gaps
+  │     └── SOLUSDT  ── download → verify → fill_gaps
+  │
+  └── sink_silver() ←── sequential (concurrency guard: ducklake-writer)
+        ├── BTCUSDT → DuckLake  (concurrency slot acquired)
+        ├── ETHUSDT → DuckLake  (waits for slot)
+        └── SOLUSDT → DuckLake  (waits for slot)
+```
 
 ## Data Sources
 
