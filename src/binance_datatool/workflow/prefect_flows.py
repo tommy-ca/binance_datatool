@@ -207,10 +207,33 @@ def sink_silver(
 # ── Composed Flows ───────────────────────────────────────────────
 
 
+@task
+def process_symbol(
+    trade_type: str,
+    symbol: str,
+    data_type: str = "klines",
+    interval: str = "1h",
+    lookback_days: int = 30,
+    archive_home: Path | None = None,
+    catalog_path: Path | None = None,
+) -> dict[str, Any]:
+    """Process a single symbol through the full pipeline (task, fan-out ready)."""
+    home = archive_home or _DEFAULT_ARCHIVE_HOME
+    catalog = catalog_path or home.parent / "lake"
+    tt = TradeType(trade_type)
+    iv = interval if data_type == "klines" else None
+    download_archive(trade_type, symbol, data_type, iv, home)
+    verify_archive(trade_type, symbol, data_type, iv, home)
+    gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
+    rows = sink_silver(tt, symbol, data_type, iv, lookback_days, home, catalog)
+    return {symbol: {"gaps_filled": len(gaps), "rows_sunk": rows}}
+
+
 @flow(
     name="Historical Data Pipeline",
-    description="Download → verify → gap-fill → sink",
+    description="Metadata → download → verify → gap-fill → sink (parallel symbols)",
     log_prints=True,
+    task_runner=ThreadPoolTaskRunner(max_workers=4),
 )
 def historical_pipeline(
     trade_type: str = "spot",
@@ -221,26 +244,32 @@ def historical_pipeline(
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Full historical data pipeline: metadata → download → verify → gap-fill → sink."""
+    """Full historical data pipeline with parallel symbol processing."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
-    results: dict[str, Any] = {}
 
-    # Step 0: Refresh metadata first — venues + symbols available for downstream
+    # Step 0: Metadata refresh (sequential, single task)
     refresh_metadata_flow(trade_type=trade_type, catalog_path=catalog)
     print(f"  Metadata refreshed for {trade_type}")
 
-    for symbol in symbols or ["BTCUSDT"]:
-        print(f"Processing {symbol} ({trade_type}/{data_type}/{interval})")
-        tt = TradeType(trade_type)
-        iv = interval if data_type == "klines" else None
-        download_archive(trade_type, symbol, data_type, iv, home)
-        verify_archive(trade_type, symbol, data_type, iv, home)
-        gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
-        rows = sink_silver(tt, symbol, data_type, iv, lookback_days, home, catalog)
-        results[symbol] = {"gaps_filled": len(gaps), "rows_sunk": rows}
-        print(f"  {symbol}: {len(gaps)} gaps, {rows} rows")
+    # Step 1: Fan-out — process symbols in parallel via Prefect task mapping
+    sym_list = symbols or ["BTCUSDT"]
+    results_list = process_symbol.map(
+        trade_type=[trade_type] * len(sym_list),
+        symbol=sym_list,
+        data_type=[data_type] * len(sym_list),
+        interval=[interval] * len(sym_list),
+        lookback_days=[lookback_days] * len(sym_list),
+        archive_home=[home] * len(sym_list),
+        catalog_path=[catalog] * len(sym_list),
+    )
 
+    # Collate results (wait for all tasks to complete)
+    results: dict[str, Any] = {}
+    for future in results_list:
+        result = future.result()
+        if result:
+            results.update(result)
     return results
 
 
@@ -257,8 +286,8 @@ def bulk_backfill(
     lookback_days: int = 30,
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
-) -> None:
-    """Backfill multiple symbols concurrently (backfillable by design)."""
+) -> dict[str, Any]:
+    """Backfill multiple symbols using historical_pipeline (parallel by design)."""
     if not symbols:
         client = ArchiveClient()
         wf = ArchiveListSymbolsWorkflow(
@@ -270,16 +299,15 @@ def bulk_backfill(
         result = asyncio.run(wf.run())
         symbols = [s.symbol for s in result.matched[:10]]
 
-    for symbol in symbols:
-        historical_pipeline(
-            trade_type=trade_type,
-            symbols=[symbol],
-            data_type=data_type,
-            interval=interval,
-            lookback_days=lookback_days,
-            archive_home=archive_home,
-            catalog_path=catalog_path,
-        )
+    return historical_pipeline(
+        trade_type=trade_type,
+        symbols=symbols,
+        data_type=data_type,
+        interval=interval,
+        lookback_days=lookback_days,
+        archive_home=archive_home,
+        catalog_path=catalog_path,
+    )
 
 
 # ── Standalone Flows (callable from CLI) ────────────────────────
