@@ -101,6 +101,13 @@ def list_symbols_command(
         str | None,
         typer.Option("--catalog", help="DuckLake catalog path (required with --from-catalog)."),
     ] = None,
+    cache_ttl: Annotated[
+        int | None,
+        typer.Option(
+            "--cache-ttl",
+            help="Metadata cache TTL in seconds (default: 3600). Auto-refresh if stale.",
+        ),
+    ] = None,
 ) -> None:
     """List symbol directories under a Binance archive prefix.
 
@@ -108,7 +115,13 @@ def list_symbols_command(
     """
     if from_catalog:
         _list_symbols_from_catalog(
-            trade_type, quotes, exclude_leverage, exclude_stables, contract_type, catalog_path
+            trade_type,
+            quotes,
+            exclude_leverage,
+            exclude_stables,
+            contract_type,
+            catalog_path,
+            cache_ttl,
         )
         return
 
@@ -129,6 +142,26 @@ def list_symbols_command(
         typer.echo(info.symbol)
 
 
+def _refresh_and_query(trade_type: TradeType, catalog_path: str, ttl: int) -> None:
+    """Run metadata refresh inline (no Prefect server)."""
+    import asyncio
+
+    from binance_datatool.archive.client import ArchiveClient
+    from binance_datatool.workflow.metadata import MetadataWorkflow
+
+    client = ArchiveClient()
+    wf = MetadataWorkflow(
+        archive_client=client,
+        catalog_path=Path(catalog_path),
+        source_label="archive",
+        duckdb_path=Path(catalog_path) / "catalog.duckdb",
+    )
+    wf.save_venues(wf.refresh_venues())
+    syms = asyncio.run(wf.refresh_symbols(trade_type))
+    wf.save_symbols(syms)
+    typer.echo(f"  Refreshed {len(syms)} {trade_type.value} symbols", err=True)
+
+
 def _list_symbols_from_catalog(
     trade_type: TradeType,
     quotes: list[str] | None,
@@ -136,29 +169,58 @@ def _list_symbols_from_catalog(
     exclude_stables: bool,
     contract_type: ContractType | None,
     catalog_path: str | None,
+    cache_ttl: int | None = None,
 ) -> None:
-    """List symbols from local DuckDB catalog (no network call)."""
+    """List symbols from local DuckDB catalog (no network call).
+
+    Auto-refreshes metadata if cache is stale (older than ``cache_ttl``).
+    """
+    import time
+
     import duckdb
 
-    if not catalog_path:
-        from binance_datatool.common.settings import settings
+    from binance_datatool.common.settings import settings
 
+    ttl = (cache_ttl if cache_ttl is not None else settings.cache_ttl_seconds) * 1000
+
+    if not catalog_path:
         catalog_path = str(settings.catalog_path or settings.archive_home.parent / "lake")
 
     db_file = Path(catalog_path) / "catalog.duckdb"
     meta = Path(catalog_path) / "metadata.ducklake"
-    if not meta.exists():
-        typer.echo("Catalog not found. Run 'refresh-metadata' first.", err=True)
-        raise typer.Exit(1)
 
-    con = duckdb.connect(str(db_file))
-    try:
-        con.execute("LOAD ducklake")
-        con.execute(
+    # Ensure catalog exists and is fresh
+    if not meta.exists():
+        typer.echo("Catalog not found — auto-refreshing metadata...", err=True)
+        _refresh_and_query(trade_type, catalog_path, ttl)
+        if not meta.exists():
+            typer.echo("Failed to create catalog.", err=True)
+            raise typer.Exit(1)
+
+    def _connect() -> duckdb.DuckDBPyConnection:
+        c = duckdb.connect(str(db_file))
+        c.execute("LOAD ducklake")
+        c.execute(
             f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{catalog_path}/data', AUTOMATIC_MIGRATION true)"
         )
-        con.execute("USE dl")
+        c.execute("USE dl")
+        return c
 
+    con = _connect()
+    try:
+        row = con.execute(
+            "SELECT MAX(fetched_at) FROM venues WHERE trade_type = ?", [trade_type.value]
+        ).fetchone()
+        last_fetch = row[0] if row and row[0] else 0
+        now_ms = int(time.time() * 1000)
+        if now_ms - last_fetch > ttl:
+            typer.echo(
+                f"Cache stale (age={(now_ms - last_fetch) // 1000}s, ttl={ttl // 1000}s) — auto-refreshing...",
+                err=True,
+            )
+            con.close()
+            _refresh_and_query(trade_type, catalog_path, ttl)
+            con = _connect()
         conditions = ["trade_type = ?"]
         params: list[str | bool] = [trade_type.value]
         if quotes:

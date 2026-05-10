@@ -43,5 +43,8 @@ class Settings(BaseSettings):
     s3_endpoint: str = "https://s3-ap-northeast-1.amazonaws.com"
     s3_bucket: str = "data.binance.vision"
 
+    # Metadata cache TTL in seconds (default 1 hour)
+    cache_ttl_seconds: int = 3600
+
 
 settings = Settings()
