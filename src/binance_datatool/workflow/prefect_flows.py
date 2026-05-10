@@ -170,17 +170,17 @@ def fill_gaps(
     return result.gaps_detected
 
 
-@task(retries=1, retry_delay_seconds=5)
 @task(**_RETRY_LIGHT)
 def sink_silver(
     trade_type: TradeType,
     symbol: str,
     data_type: str = "klines",
     interval: str = "1h",
+    lookback_days: int = 30,
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> int:
-    """Sink to DuckLake via SinkWorkflow."""
+    """Sink to DuckLake via SinkWorkflow. Backfillable by design."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     catalog.mkdir(parents=True, exist_ok=True)
@@ -237,7 +237,7 @@ def historical_pipeline(
         download_archive(trade_type, symbol, data_type, iv, home)
         verify_archive(trade_type, symbol, data_type, iv, home)
         gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
-        rows = sink_silver(tt, symbol, data_type, iv, home, catalog)
+        rows = sink_silver(tt, symbol, data_type, iv, lookback_days, home, catalog)
         results[symbol] = {"gaps_filled": len(gaps), "rows_sunk": rows}
         print(f"  {symbol}: {len(gaps)} gaps, {rows} rows")
 
@@ -255,8 +255,10 @@ def bulk_backfill(
     data_type: str = "klines",
     interval: str = "1h",
     lookback_days: int = 30,
+    archive_home: Path | None = None,
+    catalog_path: Path | None = None,
 ) -> None:
-    """Backfill multiple symbols concurrently."""
+    """Backfill multiple symbols concurrently (backfillable by design)."""
     if not symbols:
         client = ArchiveClient()
         wf = ArchiveListSymbolsWorkflow(
@@ -275,6 +277,8 @@ def bulk_backfill(
             data_type=data_type,
             interval=interval,
             lookback_days=lookback_days,
+            archive_home=archive_home,
+            catalog_path=catalog_path,
         )
 
 
