@@ -228,87 +228,11 @@ def bronze_funding_rate_cols() -> list[str]:
 @pytest.fixture
 def sample_archive_root(tmp_path: Path) -> Path:
     """Create a temporary archive root with sample files for all data types."""
-    root = tmp_path / "archive"
-    _write_sample_klines_files(root)
-    _write_sample_agg_trades_files(root)
-    _write_sample_trades_files(root)
-    _write_sample_funding_rate_files(root)
-    return root
+    from tests.sample_archive import SampleArchive
 
-
-def _write_sample_klines_files(root: Path) -> None:
-    import zipfile
-
-    base = root / "data" / "spot" / "daily" / "klines" / "BTCUSDT" / "1h"
-    base.mkdir(parents=True, exist_ok=True)
-
-    rows = "\n".join(
-        [
-            "1502928000000,4000.00,4010.00,3990.00,4005.00,100.0,1502931599999,400500.0,300,50.0,200250.0,0",
-            "1502931600000,4005.00,4020.00,4000.00,4015.00,150.0,1502935199999,602250.0,450,80.0,321200.0,0",
-        ]
-    )
-    zippath = base / "BTCUSDT-1h-2017-08-17.zip"
-    with zipfile.ZipFile(zippath, "w") as z:
-        z.writestr("BTCUSDT-1h-2017-08-17.csv", rows)
-
-    # Filled CSV
-    filled = base / "_filled"
-    filled.mkdir(exist_ok=True)
-    header = "open_time,open,high,low,close,volume,close_time,quote_volume,count,taker_buy_volume,taker_buy_quote_volume,ignore"
-    frows = "1778371200000,80678.41,80770.51,80610.64,80680.04,346.27712,1778374799999,27946302.0,5324,182.44,14722616.0,0"
-    (filled / "BTCUSDT-1h-filled.csv").write_text(f"{header}\n{frows}\n")
-
-
-def _write_sample_agg_trades_files(root: Path) -> None:
-    import zipfile
-
-    base = root / "data" / "spot" / "daily" / "aggTrades" / "BTCUSDT"
-    base.mkdir(parents=True, exist_ok=True)
-
-    rows = "\n".join(
-        [
-            "3952950559,80006.00,1.16331,6280951459,6280951459,1778198400018655,False,True",
-            "3952950560,80006.00,6.24960,6280951460,6280951460,1778198400018669,False,True",
-        ]
-    )
-    zippath = base / "BTCUSDT-aggTrades-2026-05-08.zip"
-    with zipfile.ZipFile(zippath, "w") as z:
-        z.writestr("BTCUSDT-aggTrades-2026-05-08.csv", rows)
-
-
-def _write_sample_trades_files(root: Path) -> None:
-    import zipfile
-
-    base = root / "data" / "spot" / "daily" / "trades" / "BTCUSDT"
-    base.mkdir(parents=True, exist_ok=True)
-
-    rows = "\n".join(
-        [
-            "3952950559,80006.00,1.16331,93123.45,1778198400018655,False,True",
-            "3952950560,80006.00,6.24960,500000.00,1778198400018669,False,True",
-        ]
-    )
-    zippath = base / "BTCUSDT-trades-2026-05-08.zip"
-    with zipfile.ZipFile(zippath, "w") as z:
-        z.writestr("BTCUSDT-trades-2026-05-08.csv", rows)
-
-
-def _write_sample_funding_rate_files(root: Path) -> None:
-    import zipfile
-
-    base = root / "data" / "futures" / "um" / "monthly" / "fundingRate" / "BTCUSDT"
-    base.mkdir(parents=True, exist_ok=True)
-
-    rows = "calc_time,funding_interval_hours,last_funding_rate\n" + "\n".join(
-        [
-            "1775001600000,8,-0.00003449",
-            "1775030400000,8,-0.00000461",
-        ]
-    )
-    zippath = base / "BTCUSDT-fundingRate-2026-04.zip"
-    with zipfile.ZipFile(zippath, "w") as z:
-        z.writestr("BTCUSDT-fundingRate-2026-04.csv", rows)
+    archive = SampleArchive(tmp_path / "archive")
+    archive.create_all()
+    return archive.root
 
 
 # ── Pytest Configuration ──────────────────────────────────────
