@@ -416,37 +416,44 @@ class GapFillWorkflow:
         elif self._data_type == "aggTrades":
             rows = []
             for t in data:
-                if isinstance(t, dict):
+                # Normalize Pydantic model or dict to flat dict
+                record = t
+                if hasattr(t, "model_dump"):
+                    record = t.model_dump()
+                elif not isinstance(t, dict):
+                    record = dict(t) if hasattr(t, "__dict__") else {"val": str(t)}
+                if isinstance(record, dict):
                     rows.append(
                         [
-                            str(t.get("a", "")),
-                            str(t.get("p", "")),
-                            str(t.get("q", "")),
-                            str(t.get("f", "")),
-                            str(t.get("l", "")),
-                            str(t.get("T", "")),
-                            str(t.get("m", "")),
+                            str(record.get("a", "")),
+                            str(record.get("p", "")),
+                            str(record.get("q", "")),
+                            str(record.get("f", "")),
+                            str(record.get("l", "")),
+                            str(record.get("T", "")),
+                            str(record.get("m", "")),  # is_buyer_maker in API
                         ]
                     )
-                else:
-                    rows.append([str(x) for x in t])
             csv_path = filled_dir / f"{symbol}-aggTrades-filled.csv"
             _write_csv(csv_path, header, rows)
             paths.append(csv_path)
         elif self._data_type == "fundingRate":
             rows = []
             for fr in data:
-                if isinstance(fr, dict):
+                record = fr
+                if hasattr(fr, "model_dump"):
+                    record = fr.model_dump()
+                elif not isinstance(fr, dict):
+                    record = dict(fr) if hasattr(fr, "__dict__") else {"val": str(fr)}
+                if isinstance(record, dict):
                     rows.append(
                         [
-                            str(fr.get("symbol", "")),
-                            str(fr.get("fundingTime", "")),
-                            str(fr.get("fundingRate", "")),
-                            str(fr.get("markPrice", "")),
+                            str(record.get("symbol", "")),
+                            str(record.get("fundingTime", "")),
+                            str(record.get("fundingRate", "")),
+                            str(record.get("markPrice", "")),
                         ]
                     )
-                else:
-                    rows.append([str(x) for x in fr])
             csv_path = filled_dir / f"{symbol}-fundingRate-filled.csv"
             _write_csv(csv_path, header, rows)
             paths.append(csv_path)
