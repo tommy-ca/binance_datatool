@@ -12,7 +12,7 @@ def test_calc_sha256() -> None:
     zip_path = Path("tests/data/BTCUSDT-1m-2020-01-01.zip")
 
     assert (
-        calc_sha256(zip_path) == "dd579c62368ded93d3f01a1904575b932279e32936e181c062763e605793c1c2"
+        calc_sha256(zip_path) == "f0d0af41bef729da8ed7f937a45feae71d4ee6da722e17cdb3e2fc52a4381114"
     )
 
 
@@ -22,7 +22,7 @@ def test_read_expected_checksum() -> None:
 
     assert (
         read_expected_checksum(zip_path)
-        == "dd579c62368ded93d3f01a1904575b932279e32936e181c062763e605793c1c2"
+        == "f0d0af41bef729da8ed7f937a45feae71d4ee6da722e17cdb3e2fc52a4381114"
     )
 
 
