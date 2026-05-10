@@ -180,28 +180,30 @@ def sink_silver(
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> int:
-    """Sink to DuckLake via SinkWorkflow. Backfillable by design."""
-    home = archive_home or _DEFAULT_ARCHIVE_HOME
-    catalog = catalog_path or home.parent / "lake"
-    catalog.mkdir(parents=True, exist_ok=True)
-    (catalog / "data").mkdir(parents=True, exist_ok=True)
-    dt = DataType(data_type) if data_type in DataType._value2member_map_ else DataType.klines
-    workflow = SinkWorkflow(
-        archive_home=home,
-        catalog_path=catalog,
-        duckdb_path=catalog / "catalog.duckdb",
-        tracker=LineageTracker(),
-    )
-    stats = workflow.transform(
-        trade_type=TradeType(trade_type),
-        data_type=dt,
-        symbols=[symbol],
-        interval=interval,
-    )
-    # Route transform errors to DuckLake DLQ table (Pattern 4)
-    if stats.errors:
-        _route_to_dlq(catalog, symbol, data_type, stats.errors)
-    return stats.row_count
+    """Sink to DuckLake via SinkWorkflow. Serialized via concurrency guard."""
+    from prefect.concurrency.sync import concurrency as _pcon
+
+    with _pcon("ducklake-writer", occupy=1):
+        home = archive_home or _DEFAULT_ARCHIVE_HOME
+        catalog = catalog_path or home.parent / "lake"
+        catalog.mkdir(parents=True, exist_ok=True)
+        (catalog / "data").mkdir(parents=True, exist_ok=True)
+        dt = DataType(data_type) if data_type in DataType._value2member_map_ else DataType.klines
+        workflow = SinkWorkflow(
+            archive_home=home,
+            catalog_path=catalog,
+            duckdb_path=catalog / "catalog.duckdb",
+            tracker=LineageTracker(),
+        )
+        stats = workflow.transform(
+            trade_type=TradeType(trade_type),
+            data_type=dt,
+            symbols=[symbol],
+            interval=interval,
+        )
+        if stats.errors:
+            _route_to_dlq(catalog, symbol, data_type, stats.errors)
+        return stats.row_count
 
 
 # ── Composed Flows ───────────────────────────────────────────────
