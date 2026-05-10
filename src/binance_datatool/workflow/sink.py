@@ -62,9 +62,20 @@ _BRONZE_FUNDING_COLS = [
     "last_funding_rate",
 ]
 
+_BRONZE_TRADES_COLS = [
+    "trade_id",
+    "price",
+    "qty",
+    "quote_qty",
+    "time",
+    "is_buyer_maker",
+    "is_best_match",
+]
+
 _BRONZE_COLS_BY_TYPE = {
     "klines": _BRONZE_KLINE_COLS,
     "aggTrades": _BRONZE_AGGT_COLS,
+    "trades": _BRONZE_TRADES_COLS,
     "fundingRate": _BRONZE_FUNDING_COLS,
 }
 
@@ -367,6 +378,40 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     return df
 
 
+def _bronze_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
+    """Transform Bronze raw trades CSV to Silver trades schema.
+
+    Binance archive trades CSV fields:
+      trade_id, price, qty, quote_qty, time, is_buyer_maker, is_best_match
+
+    Uses the same Silver schema as aggTrades (compatible columns) but with
+    rtype='trade' and no agg_trade_id.
+    """
+    rename_map = {
+        "time": "ts_event",
+        "price": "price",
+        "qty": "size",
+        "is_buyer_maker": "is_buyer_maker",
+    }
+    df = _rename_to_silver(df, rename_map)
+    df = _normalize_to_microseconds(df)
+    keep = [c for c in ["ts_event", "price", "size", "trade_id"] if c in df.columns]
+    df = df.select(keep)
+    df = df.with_columns(
+        pl.when(pl.col("price").cast(pl.Float64, strict=False).is_null())
+        .then(pl.lit(None, pl.Utf8))
+        .otherwise(pl.lit("trade"))
+        .alias("rtype")
+    )
+    # Remove is_buyer_marker-based side derivation for now — raw trades
+    # have the same pattern but we need to add is_buyer_maker to keep
+    df = df.with_columns(pl.lit(None, pl.Int64).alias("is_buyer_maker"))
+    df = df.with_columns(pl.lit(None, pl.Utf8).alias("side"))
+    df = df.with_columns(pl.lit(None, pl.Int64).alias("agg_trade_id"))
+    df = _cast_columns(df, _FULL_SILVER_AGGT_SCHEMA)
+    return df
+
+
 def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     """Transform Bronze fundingRate CSV to Silver schema.
 
@@ -404,8 +449,10 @@ def _bronze_to_silver(
     """Dispatch Bronze→Silver transform by data type."""
     if data_type == "klines":
         return _bronze_kline_to_silver(df, source)
-    if data_type in ("aggTrades", "trades"):
+    if data_type in ("aggTrades",):
         return _bronze_agg_trades_to_silver(df, source)
+    if data_type in ("trades",):
+        return _bronze_trades_to_silver(df, source)
     if data_type == "fundingRate":
         return _bronze_funding_rate_to_silver(df, source)
     msg = f"Unknown data type: {data_type}"
