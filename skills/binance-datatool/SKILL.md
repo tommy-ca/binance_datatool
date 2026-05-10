@@ -1,262 +1,68 @@
 ---
 name: binance-datatool
-description: >
-  Manage Binance historical market data from data.binance.vision using the binance-datatool CLI.
-  List available symbols, browse remote archive files, download klines/trades/funding rates with
-  aria2, and verify SHA256 checksums. Use this skill whenever the user mentions Binance historical
-  data, klines, candlestick data, trade data, funding rates, data.binance.vision, or asks to
-  download, list, or verify Binance market data — even if they don't mention binance-datatool by
-  name. Also use when the user asks about available Binance symbols or wants to build a local
-  crypto data archive from Binance. Do NOT use this skill for Binance REST API, WebSocket, or
-  real-time market data — it only covers historical archive downloads from data.binance.vision.
+description: |
+  Manage and query Binance historical market data from data.binance.vision.
+  List symbols, browse archive files, download klines/trades/funding rates with
+  aria2, verify SHA256 checksums. Trigger Prefect data pipelines for automated
+  backfilling and DuckDB ingestion. Use when the user mentions Binance historical
+  data, klines, candlestick data, trade data, funding rates, data.binance.vision,
+  or crypto data pipeline orchestration. Do not use for Binance REST API
+  real-time data or WebSocket streaming.
 ---
 
 # binance-datatool
 
-A CLI for downloading and managing Binance historical market data from data.binance.vision.
+CLI for Binance historical market data + Prefect pipeline orchestration.
 
-## Verbosity
+## Quick Start
 
-By default, the CLI runs at WARNING level and produces almost no log output. For agent use,
-**always pass `-v`** so loguru prints INFO-level progress to stderr. This gives you visibility
-into what the tool is doing (listing symbols, downloading files, verifying checksums). Use `-vv`
-for DEBUG-level output when troubleshooting.
+```bash
+# List USDT symbols, download 3 days of 1h klines, verify
+binance-datatool -v list-symbols spot --quote USDT --exclude-stables > syms.txt
+binance-datatool -v download spot --type klines --interval 1h < syms.txt
+binance-datatool -v verify spot --type klines --interval 1h < syms.txt
 
-All log output goes to stderr. Command results (symbol lists, file paths, dry-run diffs) go to
-stdout. This separation means piping stdout is always safe.
+# Or run the full Prefect pipeline (same thing, automated)
+uv run python3 -c "
+from binance_datatool.workflow.prefect_flows import historical_pipeline
+r = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'],
+                        data_type='klines', interval='1h', lookback_days=3)
+print(r)
+"
+```
 
-## Prerequisites
+## CLI Commands
 
-Before running any command, ensure three things are in place:
-
-1. **binance-datatool installed** — `pip install binance-datatool` or `pipx install binance-datatool`
-2. **Archive home configured** — set `BINANCE_DATATOOL_ARCHIVE_HOME` to a directory for local data
-   storage. Required by `download` and `verify`. Can also be passed per-command via `--archive-home`.
-   ```bash
-   export BINANCE_DATATOOL_ARCHIVE_HOME="$HOME/crypto_data/binance_archive"
-   ```
-3. **aria2 installed** — required by the `download` command for parallel, resumable downloads.
-   - macOS: `brew install aria2`
-   - Ubuntu/Debian: `sudo apt install aria2`
-
-## Core Concepts
-
-### Trade Types
-
-| Value  | Market segment                       |
-|--------|--------------------------------------|
-| `spot` | Spot trading market                  |
-| `um`   | USD-M perpetual and delivery futures |
-| `cm`   | COIN-M perpetual and delivery futures|
-
-### Data Frequencies
-
-| Value     | Meaning                    |
-|-----------|----------------------------|
-| `daily`   | Files partitioned by day   |
-| `monthly` | Files partitioned by month |
-
-### Data Types
-
-| CLI value              | Description              | Needs `--interval`? |
-|------------------------|--------------------------|---------------------|
-| `klines`               | Candlestick (OHLCV) data | Yes                 |
-| `aggTrades`            | Aggregated trades        | No                  |
-| `trades`               | Individual trades        | No                  |
-| `fundingRate`          | Futures funding rates    | No                  |
-| `bookDepth`            | Order book depth         | No                  |
-| `bookTicker`           | Best bid/ask updates     | No                  |
-| `indexPriceKlines`     | Index price klines       | Yes                 |
-| `markPriceKlines`      | Mark price klines        | Yes                 |
-| `premiumIndexKlines`   | Premium index klines     | Yes                 |
-| `metrics`              | Futures metrics          | No                  |
-| `liquidationSnapshot`  | Liquidation snapshots    | No                  |
-
-### Kline Intervals
-
-`1m` `3m` `5m` `15m` `30m` `1h` `2h` `4h` `6h` `8h` `12h` `1d` `3d` `1w` `1mo`
-
-Only required for data types marked "Yes" in the table above.
-
-### Contract Types (futures only)
-
-| Value       | Meaning                            |
-|-------------|------------------------------------|
-| `perpetual` | No expiry; open until closed       |
-| `delivery`  | Expires on a fixed settlement date |
-
-## Commands
-
-All commands accept the global options `-v` (verbosity) and `--archive-home PATH`.
+All commands accept `-v` (INFO-level stderr) and `--archive-home PATH`.
 
 ### list-symbols
+`binance-datatool -v list-symbols (spot|um|cm) [--quote USDT] [--exclude-stables]`
 
-List available symbols from the remote archive.
+`binance-datatool -v list-files (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h]`
 
-```
-binance-datatool -v list-symbols <TRADE_TYPE> [OPTIONS]
-```
+`binance-datatool -v download (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h] [--dry-run]`
 
-| Option               | Description                                         |
-|----------------------|-----------------------------------------------------|
-| `--freq`             | Partition frequency (default: `daily`)               |
-| `--type`             | Dataset type (default: `klines`)                     |
-| `--quote ASSET`      | Filter by quote asset (repeatable)                   |
-| `--exclude-leverage` | Exclude leveraged tokens (spot only)                 |
-| `--exclude-stables`  | Exclude stablecoin pairs                             |
-| `--contract-type`    | Filter futures by contract type                      |
+`binance-datatool -v verify (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h]`
 
-Output: one symbol per line to stdout.
-
-### list-files
-
-List archive files for given symbols. Reads symbols from stdin if none given as arguments.
-
-```
-binance-datatool -v list-files <TRADE_TYPE> [SYMBOLS...] [OPTIONS]
-```
-
-| Option             | Description                                        |
-|--------------------|----------------------------------------------------|
-| `--freq`           | Partition frequency (default: `daily`)              |
-| `--type`           | Dataset type (default: `klines`)                    |
-| `--interval`       | Interval for kline-class data types                 |
-| `-l` / `--long`    | Three-column TSV output: size, timestamp, path      |
-| `--only-zip`       | Print only .zip files                               |
-| `--only-checksum`  | Print only .CHECKSUM files                          |
-| `--progress-bar`   | Show progress bar on stderr                         |
-
-Output: one path per line, or TSV with `-l`.
-
-### download
-
-Download archive files into the local archive directory using aria2.
-
-```
-binance-datatool -v download <TRADE_TYPE> [SYMBOLS...] [OPTIONS]
-```
-
-| Option            | Description                                           |
-|-------------------|-------------------------------------------------------|
-| `--freq`          | Partition frequency (default: `daily`)                 |
-| `--type`          | Dataset type (default: `klines`)                       |
-| `--interval`      | Interval for kline-class data types                    |
-| `-n` / `--dry-run`| Preview what would be downloaded without writing files |
-| `--aria2-proxy`   | Let aria2c inherit proxy env vars                      |
-| `--progress-bar`  | Show progress bar on stderr                            |
-
-Dry-run output: TSV lines `<reason>\t<size>\t<path>` where reason is `new` or `updated`.
-Real-run output: download stats on stderr (downloaded/failed/skipped counts).
-
-Exit codes: 0 = success, 2 = partial failure.
-
-### verify
-
-Verify local zip files against SHA256 checksums.
-
-```
-binance-datatool -v verify <TRADE_TYPE> [SYMBOLS...] [OPTIONS]
-```
-
-| Option            | Description                                           |
-|-------------------|-------------------------------------------------------|
-| `--freq`          | Partition frequency (default: `daily`)                 |
-| `--type`          | Dataset type (default: `klines`)                       |
-| `--interval`      | Interval for kline-class data types                    |
-| `--keep-failed`   | Keep failed files instead of deleting them             |
-| `-n` / `--dry-run`| Scan without verifying                                 |
-| `--progress-bar`  | Show progress bar on stderr                            |
-
-Exit codes: 0 = all passed, 2 = verification failures.
-
-## Workflow Templates
-
-### Download Spot USDT 1m Klines
-
-A three-step pipeline: list symbols, download, verify.
-
-```bash
-# Step 1: List USDT spot symbols (exclude stablecoins and leveraged tokens)
-binance-datatool -v list-symbols spot \
-  --quote USDT --exclude-stables --exclude-leverage > symbols.txt
-
-# Step 2: Download daily 1m klines
-binance-datatool -v download spot \
-  --freq daily --type klines --interval 1m < symbols.txt
-
-# Step 3: Verify downloaded files
-binance-datatool -v verify spot \
-  --freq daily --type klines --interval 1m < symbols.txt
-```
-
-### Download USD-M Perpetual 1m Klines
-
-```bash
-binance-datatool -v list-symbols um \
-  --quote USDT --exclude-stables --contract-type perpetual > symbols.txt
-
-binance-datatool -v download um \
-  --freq daily --type klines --interval 1m < symbols.txt
-
-binance-datatool -v verify um \
-  --freq daily --type klines --interval 1m < symbols.txt
-```
-
-### Download USD-M Funding Rates
-
-Note: funding rates use `monthly` frequency and no interval.
-
-```bash
-binance-datatool -v list-symbols um \
-  --freq monthly --type fundingRate \
-  --quote USDT --exclude-stables --contract-type perpetual > symbols.txt
-
-binance-datatool -v download um \
-  --freq monthly --type fundingRate < symbols.txt
-
-binance-datatool -v verify um \
-  --freq monthly --type fundingRate < symbols.txt
-```
-
-## Best Practices
-
-- **Always use `-v`** so you can see INFO-level progress on stderr. Without it the tool is
-  nearly silent under normal operation.
-- **Dry-run before downloading.** Run `download --dry-run` first to preview what will be
-  fetched, especially for broad queries like all USDT symbols.
-- **Reuse symbol lists.** Save `list-symbols` output to a file and pipe it into both `download`
-  and `verify` to keep the symbol set consistent across steps.
-- **Check exit codes.** Exit code 2 means partial failure — some symbols succeeded while others
-  failed. Review stderr for details.
-- **Frequency matters.** Some data types are only available at specific frequencies. For example,
-  futures `fundingRate` typically requires `--freq monthly`. If `list-files` returns nothing,
-  try switching the frequency.
-- **stdin composition.** When no positional `SYMBOLS` arguments are given, commands read symbols
-  from stdin. This enables `list-symbols | download` pipelines or file-based workflows.
-- **`--type` values are camelCase.** Use the exact values from the Data Types table above (e.g.
-  `fundingRate`, `aggTrades`, `bookDepth`), not snake_case variants like `funding_rate`.
+Verifies SHA256 checksums. Exit 0 = all pass, 2 = partial failure.
 
 ## Prefect Workflows
 
-The project includes Prefect 3.x orchestration for automated data pipelines. Workflows are
-in ``src/binance_datatool/workflow/prefect_flows.py`` and run via the Python API — no
-Prefect server is required.
+Full pipeline orchestration at `src/binance_datatool/workflow/prefect_flows.py`.
 
-### Available Flows
+**Available flows:**
 
-| Flow | Description | Parallelism |
-|------|-------------|-------------|
-| ``historical_pipeline`` | Full pipeline: metadata → download → verify → gap-fill → sink → health | ``prepare_symbol.map()`` (configurable via ``PREFECT_MAX_WORKERS`` env var) |
-| ``bulk_backfill`` | Auto-discovers symbols and runs ``historical_pipeline`` | Delegates to ``historical_pipeline`` |
-| ``download_flow`` | Multi-symbol archive download | ``download_archive.map()`` |
-| ``verify_flow`` | Multi-symbol checksum verification | ``verify_archive.map()`` |
-| ``gap_fill_flow`` | Single-symbol REST API gap-fill | Sequential |
-| ``sink_flow`` | Single-symbol Bronze→Silver→DuckDB | Sequential (DuckDB constraints) |
-| ``health_flow`` | Single-symbol DuckLake anomaly detection | Sequential |
-| ``refresh_metadata_flow`` | Refresh venue/symbol metadata tables | Sequential (with ``ducklake-writer`` guard) |
+| Flow | Purpose | Parallelism |
+|------|---------|-------------|
+| `historical_pipeline` | Full ETL: metadata→download→verify→fill→sink→health | `prepare_symbol.map()` via `PREFECT_MAX_WORKERS` |
+| `bulk_backfill` | Auto-discover + historical_pipeline | Delegates to historical_pipeline |
+| `download_flow` | Multi-symbol archive download | `download_archive.map()` |
+| `verify_flow` | Multi-symbol checksum verification | `verify_archive.map()` |
+| `sink_flow` | Bronze→Silver→DuckDB ingestion | Sequential (DuckDB constraint) |
+| `health_flow` | DuckLake anomaly detection | Sequential |
+| `refresh_metadata_flow` | Venue/symbol metadata refresh | Sequential |
 
-### Task Graph
-
+**Task graph:**
 ```
 historical_pipeline
   ├── refresh_metadata_flow        (subflow, sequential)
@@ -266,58 +72,66 @@ historical_pipeline
   └── health_flow()                (sequential, per-symbol)
 ```
 
-### Running Workflows
-
-Use the Python API directly — all flows accept the same parameters as the CLI:
-
+**Run via Python API:**
 ```python
 from binance_datatool.workflow.prefect_flows import historical_pipeline, bulk_backfill
 
-# Single symbol, last 3 days of 1h klines
-result = historical_pipeline(
-    trade_type="spot", symbols=["BTCUSDT"],
-    data_type="klines", interval="1h", lookback_days=3,
-)
+# Single symbol
+result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'],
+                             data_type='klines', interval='1h', lookback_days=3)
 
-# Multi-symbol (parallel via .map(), configurable PREFECT_MAX_WORKERS)
-result = historical_pipeline(
-    trade_type="spot", symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-    data_type="klines", interval="1h", lookback_days=3,
-)
-
-# Bulk backfill with auto-discovered symbols
-result = bulk_backfill(
-    trade_type="um", max_symbols=5,
-    data_type="klines", interval="1h", lookback_days=3,
-)
-
-# Each symbol result: {"rows_sunk": 70, "gaps_filled": 2, "healthy": True}
+# Multi-symbol batch
+result = bulk_backfill(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+                       data_type='klines', interval='1h', lookback_days=3)
 ```
 
-### Serving Deployments
+## Data Types
 
-```bash
-# No server/worker needed — serve directly
-uv run python -m binance_datatool.workflow.prefect_flows serve
+| Type | Archive | REST API | Table | Needs interval |
+|------|---------|----------|-------|----------------|
+| klines | daily zips | ✓ | `klines` | Yes (1m/1h/1d) |
+| aggTrades | daily zips | ✓ | `aggTrades` | No |
+| trades | daily zips | ✓ | `aggTrades` (shared) | No |
+| fundingRate | monthly zips | ✓ | `fundingRate` | No |
+
+Pipeline sink handlers exist for these 4 types. Types like `bookDepth`, `bookTicker`,
+`indexPriceKlines`, `markPriceKlines`, `premiumIndexKlines`, `metrics`, `liquidationSnapshot`
+exist in the archive but have no Silver transform yet.
+
+## Archive Structure (data.binance.vision)
+
+```
+data/
+├── spot/daily/     klines(13 intv)  aggTrades(6376f)  trades(6376f)
+├── spot/monthly/   klines(16 intv)  aggTrades(210f)   trades(210f)
+├── futures/um/daily/  9 data types,  833 symbols, 6376 files/sym
+├── futures/um/monthly/ 8 data types, 833 symbols
+├── futures/cm/daily/  10 data types, 267 symbols (USD_PERP naming)
+├── futures/cm/monthly/ 8 data types, 267 symbols
+└── option/daily/  BVOLIndex(2 syms)  EOHSummary(5 syms)
 ```
 
-Registers two cron deployments:
-- ``daily-backfill`` at 06:00 UTC (``historical_pipeline``)
-- ``hourly-metadata`` at every hour (``refresh_metadata_flow``)
+File naming: `{symbol}-{dataType}-{date}.zip` + `.CHECKSUM` companion.
+Klines add interval subdirectory: `{symbol}/{interval}/{symbol}-{interval}-{date}.zip`.
 
-Trigger a run:
-```bash
-uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
-```
+## Configuration
 
-### Data Quality
+Settings via environment variables or `.env`:
 
-All pipelines include a health check step that detects:
-- Null/zero prices
-- Duplicate timestamps
-- Date gaps
-- Price outliers (Z-score > 3.0)
-- Per-rtype filtering for shared aggTrades/trades table
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PREFECT_MAX_WORKERS` | 8 | Thread pool workers |
+| `ARCHIVE_HOME` | `~/.binance-datatool/archive` | Local archive root |
+| `CATALOG_PATH` | `ARCHIVE_HOME/../lake` | DuckLake catalog root |
+| `DEFAULT_LOOKBACK_DAYS` | 30 | Pipeline lookback window |
 
-Failed records are routed to a DuckDB DLQ (dead letter queue) table.
-Concurrent DuckDB writes are serialized via a Prefect concurrency guard.`
+## Best Practices
+
+- **Always pass `-v`** — output is nearly silent at default WARNING level.
+- **Dry-run before download** — `download --dry-run` to preview.
+- **Frequency matters** — fundingRate requires `--freq monthly`.
+- **Type names are camelCase** — `fundingRate`, `aggTrades`, not `funding_rate`.
+- **Exit code 2** means partial failure — check stderr for details.
+- **Stdin composition** — `list-symbols | download` when no positional args given.
+- **Workflows prefer Python API** — flows accept same params as CLI but add parallelism.
+- **Serve deployments** — `uv run python -m binance_datatool.workflow.prefect_flows serve` for cron.
