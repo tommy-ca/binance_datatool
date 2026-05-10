@@ -91,11 +91,27 @@ def list_symbols_command(
         ContractType | None,
         typer.Option("--contract-type", help="Filter futures symbols by contract type."),
     ] = None,
+    from_catalog: Annotated[
+        bool,
+        typer.Option(
+            "--from-catalog", help="Query local DuckDB metadata table instead of remote archive."
+        ),
+    ] = False,
+    catalog_path: Annotated[
+        str | None,
+        typer.Option("--catalog", help="DuckLake catalog path (required with --from-catalog)."),
+    ] = None,
 ) -> None:
     """List symbol directories under a Binance archive prefix.
 
     Prints one symbol per line to stdout.
     """
+    if from_catalog:
+        _list_symbols_from_catalog(
+            trade_type, quotes, exclude_leverage, exclude_stables, contract_type, catalog_path
+        )
+        return
+
     symbol_filter = build_symbol_filter(
         trade_type=trade_type,
         quote_assets=frozenset(quote.upper() for quote in quotes) if quotes else None,
@@ -111,6 +127,61 @@ def list_symbols_command(
     )
     for info in asyncio.run(workflow.run()).matched:
         typer.echo(info.symbol)
+
+
+def _list_symbols_from_catalog(
+    trade_type: TradeType,
+    quotes: list[str] | None,
+    exclude_leverage: bool,
+    exclude_stables: bool,
+    contract_type: ContractType | None,
+    catalog_path: str | None,
+) -> None:
+    """List symbols from local DuckDB catalog (no network call)."""
+    import duckdb
+
+    if not catalog_path:
+        from binance_datatool.common.settings import settings
+
+        catalog_path = str(settings.catalog_path or settings.archive_home.parent / "lake")
+
+    db_file = Path(catalog_path) / "catalog.duckdb"
+    meta = Path(catalog_path) / "metadata.ducklake"
+    if not meta.exists():
+        typer.echo("Catalog not found. Run 'refresh-metadata' first.", err=True)
+        raise typer.Exit(1)
+
+    con = duckdb.connect(str(db_file))
+    try:
+        con.execute("LOAD ducklake")
+        con.execute(
+            f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{catalog_path}/data', AUTOMATIC_MIGRATION true)"
+        )
+        con.execute("USE dl")
+
+        conditions = ["trade_type = ?"]
+        params: list[str | bool] = [trade_type.value]
+        if quotes:
+            qs = [q.upper() for q in quotes]
+            placeholders = ",".join("?" for _ in qs)
+            conditions.append(f"quote_asset IN ({placeholders})")
+            params.extend(qs)
+        if exclude_leverage:
+            conditions.append("(is_leverage IS NULL OR is_leverage = false)")
+        if exclude_stables:
+            conditions.append("(is_stable_pair IS NULL OR is_stable_pair = false)")
+        if contract_type:
+            conditions.append("contract_type = ?")
+            params.append(contract_type.value)
+
+        rows = con.execute(
+            f"SELECT symbol FROM symbols WHERE {' AND '.join(conditions)} ORDER BY symbol",
+            params,
+        ).fetchall()
+        for row in rows:
+            typer.echo(row[0])
+    finally:
+        con.close()
 
 
 def _resolve_symbols(symbols: list[str] | None) -> list[str]:

@@ -118,6 +118,9 @@ uv run python -m binance_datatool.workflow.prefect_flows serve
 # In another terminal, trigger a run
 uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
 
+# List symbols from local catalog (instant, no network)
+uv run binance-datatool list-symbols spot --from-catalog --catalog /path/to/lake
+
 # Or run flows directly via Python
 uv run python3 -c "
 from binance_datatool.workflow.prefect_flows import historical_pipeline, bulk_backfill

@@ -36,7 +36,11 @@ print(r)
 All commands accept `-v` (INFO-level stderr) and `--archive-home PATH`.
 
 ### list-symbols
-`binance-datatool -v list-symbols (spot|um|cm) [--quote USDT] [--exclude-stables]`
+`binance-datatool -v list-symbols (spot|um|cm) [--quote USDT] [--exclude-stables] [--from-catalog --catalog PATH]`
+
+Queries remote archive by default. With `--from-catalog`, queries local DuckDB
+symbols table (no network, faster, supports `--contract-type`). Requires
+`refresh-metadata` to have been run first.
 
 ### list-files
 `binance-datatool -v list-files (spot|um|cm) [SYMBOLS...] [--type klines] [--interval 1h]`
