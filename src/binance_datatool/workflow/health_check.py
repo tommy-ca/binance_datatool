@@ -238,6 +238,7 @@ class AnomalyReport:
             and self.zero_volumes == 0
             and self.duplicate_timestamps == 0
             and len(self.date_gaps) == 0
+            and self.outlier_rows == 0
         )
 
 

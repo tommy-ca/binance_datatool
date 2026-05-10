@@ -120,6 +120,37 @@ def test_list_files_preserves_order(fake_adapter):
     assert [entry.symbol for entry in result.per_symbol] == ["AAA", "BBB"]
 ```
 
+## Specs
+
+### `check_ducklake_anomalies` (health_check.py)
+- **Purpose**: Query DuckLake native tables for data quality anomalies (null/zero prices, duplicate timestamps, date gaps, price outliers).
+- **Inputs**: DuckDB connection, table_name (sanitized), symbol (parameterized), outlier_std threshold.
+- **Outputs**: `AnomalyReport` dataclass with counts for each anomaly type + `is_clean` property.
+- **Side-effects**: None (read-only queries).
+- **Success**: Returns accurate counts; `is_clean` is `True` only when ALL anomaly counts are zero.
+- **Errors**: Outlier query failures are caught and logged as warnings (not propagated); other queries raise on DuckDB errors.
+- **Tests**: Unit test with in-memory DuckDB table; edge cases: empty table, clean data, all-null prices, duplicate timestamps, missing dates, STDDEV=0.
+
+### `_sanitize_identifier` (health_check.py)
+- **Purpose**: Strip non-alphanumeric characters from DuckDB identifiers for safe f-string interpolation.
+- **Inputs**: `name: str`
+- **Outputs**: Sanitized `str` containing only `[a-zA-Z0-9_]`.
+- **Tests**: Verify special chars removed, alphanumeric preserved, empty input.
+
+### `_parse_symbol_from_path` (sink.py)
+- **Purpose**: Extract symbol from Binance archive filename using `startswith()` pattern.
+- **Inputs**: `path: Path`, `known_symbols: Sequence[str]`
+- **Outputs**: Matching symbol string or `None`.
+- **Side-effects**: None.
+- **Success**: Returns correct symbol when filename starts with `{sym}-`; returns `None` for no match.
+- **Verification**: Substring matching bug fixed: "BTC" should NOT match "BTCUSDT-1h-2024.zip".
+- **Tests**: Exact match, prefix-only match (bug regression), no match, empty symbols list.
+
+### `AnomalyReport` (health_check.py)
+- **Purpose**: Data class aggregating all anomaly counts from DuckLake checks.
+- **Properties**: `null_prices`, `zero_volumes`, `duplicate_timestamps`, `date_gaps`, `outlier_rows`, `is_clean`.
+- **Tests**: `is_clean` returns `True` when all counts zero, `False` when any non-zero.
+
 9. Concluding Notes
 -------------------
 
