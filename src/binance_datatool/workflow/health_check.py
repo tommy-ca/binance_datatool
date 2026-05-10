@@ -330,8 +330,8 @@ def check_ducklake_anomalies(
     # Price outliers (Z-score > threshold)
     try:
         outliers = con.execute(
-            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {tn} {_where()}) WHERE ABS(z) > ?",
-            _params() + [outlier_std],
+            f"SELECT COUNT(*) FROM {tn}, (SELECT AVG(close) AS avg_c, STDDEV(close) AS std_c FROM {tn} {_where()}) stats {_where()} AND ABS((close - avg_c) / NULLIF(std_c, 0)) > ?",
+            _params() + _params() + [outlier_std],
         ).fetchone()[0]
         report.outlier_rows = outliers
     except Exception:

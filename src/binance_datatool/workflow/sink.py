@@ -181,10 +181,23 @@ def _scan_bronze_files(
     data_type: str,
     symbols: Sequence[str],
     interval: str | None = None,
+    lookback_days: int | None = None,
 ) -> list[Path]:
-    """Scan Bronze archive for CSV/ZIP files."""
+    """Scan Bronze archive for CSV/ZIP files.
+
+    When ``lookback_days`` is set, only files whose date falls within
+    the last N days are included (based on YYYY-MM-DD in filename).
+    """
+    import re
+    from datetime import UTC, datetime, timedelta
+
     files: list[Path] = []
     data_freq = "monthly" if data_type == "fundingRate" else "daily"
+    date_pattern = re.compile(r".*?-(\d{4}-\d{2}-\d{2})(?:\.zip|\.csv)")
+    date_cutoff = (
+        datetime.now(UTC) - timedelta(days=lookback_days) if lookback_days is not None else None
+    )
+
     for symbol in symbols:
         base = archive_home / "data" / trade_type.s3_path / data_freq / data_type / symbol
         if interval:
@@ -193,6 +206,12 @@ def _scan_bronze_files(
             continue
         for entry in sorted(base.iterdir()):
             if entry.suffix in (".zip", ".csv"):
+                if date_cutoff is not None:
+                    m = date_pattern.match(entry.name)
+                    if m:
+                        fdate = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
+                        if fdate < date_cutoff:
+                            continue
                 files.append(entry)
             elif entry.is_dir() and entry.name == "_filled":
                 for f in sorted(entry.iterdir()):

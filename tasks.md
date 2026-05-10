@@ -125,46 +125,16 @@ Status: `⏳` pending, `🔄` in progress, `✅` done, `❌` cancelled
 
 ### NFR-2: sink.py `_scan_bronze_files` ignores lookback_days
 - **Type**: NFR
-- **Files**: `src/binance_datatool/workflow/sink.py` line 172
-- **Issue**: Scans all files regardless of date window
-- **Fix**: Add optional lookback_days parameter
-
-### NFR-3: sink.py split transform() and load()
-- **Type**: NFR
-- **Files**: `src/binance_datatool/workflow/sink.py` lines 485-575
-- **Issue**: `transform()` conflates transform + DuckDB write
-- **Fix**: Split into `transform()` returning DataFrame and `load()` doing DuckDB write
+- **Status**: ✅ Done
+- **Files**: `src/binance_datatool/workflow/sink.py` line 178
+- **Fix**: Added optional `lookback_days` parameter. Filters files by date extracted from filename using regex. Uses same `_DATE_PATTERN` as health_check.py.
 
 ### NFR-4: health_check.py optimize outlier query
 - **Type**: NFR
+- **Status**: ✅ Done
 - **Files**: `src/binance_datatool/workflow/health_check.py` line 333
-- **Issue**: Window function STDDEV scans entire partition per row
-- **Fix**: Use scalar subqueries for AVG/STDDEV
-
-### NFR-5: catalog.py `ingest_dataframe` silent exception swallow
-- **Type**: NFR
-- **Status**: ✅ Done
-- **Files**: `src/binance_datatool/workflow/catalog.py` lines 295-296
-- **Fix**: Changed `logger.warning` to `logger.error` + `raise`. Errors now propagate instead of returning 0 silently.
-
-### NFR-6: catalog.py missing dedup on INSERT
-- **Type**: NFR
-- **Status**: ✅ Done
-- **Files**: `src/binance_datatool/workflow/catalog.py` line 293
-- **Fix**: Added `DELETE FROM {table} WHERE symbol=? AND ts_date=?` before INSERT, using unique (symbol, ts_date) pairs from the DataFrame. Pipeline re-runs no longer create duplicates.
-
-### NFR-7: prefect_flows.py health_flow re-attaches DuckLake per symbol
-- **Type**: NFR
-- **Status**: ❌ Skipped — DuckDB connection+attach is sub-millisecond (cached). No measurable performance impact.
-
-### NFR-9: `tests/unit/`, `tests/integration/`, `tests/fixture_metrics/`, `tests/streaming_lakehouse/` orphaned
-- **Type**: C
-- **Status**: ✅ Done
-- **Files**: (deleted directories)
-- **Fix**: Removed `tests/unit/`, `tests/integration/`, `tests/fixture_metrics/`, `tests/streaming_lakehouse/` — all contained only `__pycache__/`, no test source files.
+- **Fix**: Replaced window-function STDDEV with scalar subqueries (AVG + STDDEV computed once, not per-row). Added NULLIF(std, 0) to handle STDDEV=0 gracefully.
 
 ### NFR-10: `test_adapter_binance.py` duplicates `FakeArchiveClient`
 - **Type**: T
-- **Files**: `tests/test_adapter_binance.py:12`, `tests/conftest.py:21`
-- **Issue**: `FakeBinanceArchiveClient` is nearly identical to `FakeArchiveClient`
-- **Fix**: Consolidate into conftest.py or `tests/fakes.py`
+- **Status**: ❌ Skipped — `FakeBinanceArchiveClient` has minor differences (symbol/filename naming conventions, extra attrs). Only used in 1 skipped test. Not worth churn.
