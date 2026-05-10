@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -25,15 +26,21 @@ MANIFEST_PATH = Path("tests/fixture/binance/manifest.json")
 FIXTURE_FILES = [
     # spot klines (1h interval)
     "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-08.zip",
+    "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-08.zip.CHECKSUM",
     "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-09.zip",
+    "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-09.zip.CHECKSUM",
     # spot aggTrades
     "data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-08.zip",
+    "data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-08.zip.CHECKSUM",
     # spot trades
     "data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2026-05-08.zip",
+    "data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2026-05-08.zip.CHECKSUM",
     # um fundingRate (monthly)
     "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-04.zip",
+    "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-04.zip.CHECKSUM",
     # cm aggTrades
     "data/futures/cm/daily/aggTrades/BTCUSD_PERP/BTCUSD_PERP-aggTrades-2026-05-08.zip",
+    "data/futures/cm/daily/aggTrades/BTCUSD_PERP/BTCUSD_PERP-aggTrades-2026-05-08.zip.CHECKSUM",
 ]
 
 BASE_URL = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
@@ -64,24 +71,37 @@ def download() -> list[dict[str, Any]]:
     manifest: list[dict[str, Any]] = []
     for rel_path in FIXTURE_FILES:
         dl = FIXTURE_ROOT / rel_path
-        ck = _checksum_path(dl)
         url = f"{BASE_URL}/{rel_path}"
 
-        # 1. Download CHECKSUM first (source of truth from Binance archive)
-        try:
-            _download(f"{url}.CHECKSUM", ck)
-        except Exception as e:
-            print(f"  ✗ {rel_path}.CHECKSUM: {e}")
+        # CHECKSUM files: download and record their content as sha256
+        if rel_path.endswith(".CHECKSUM"):
+            try:
+                _download(f"{url}", dl)
+                content = dl.read_text().strip()
+                manifest.append(
+                    {
+                        "path": rel_path,
+                        "sha256": content.split()[0] if content else None,
+                        "size": dl.stat().st_size,
+                    }
+                )
+                print(f"  ✓ {rel_path}")
+            except Exception as e:
+                print(f"  ✗ {rel_path}: {e}")
             continue
 
-        # 2. Download the zip file
+        # ZIP files: download CHECKSUM first if needed, then verify
+        ck = _checksum_path(dl)
+        if not ck.exists():
+            with suppress(Exception):
+                _download(f"{url}.CHECKSUM", ck)
         try:
             _download(url, dl)
         except Exception as e:
             print(f"  ✗ {rel_path}: {e}")
             continue
 
-        # 3. Use Binance's checksum (not locally computed)
+        ck = _checksum_path(dl)
         expected = _read_binance_checksum(ck)
         actual = hashlib.sha256(dl.read_bytes()).hexdigest()
         size = dl.stat().st_size
@@ -105,12 +125,26 @@ def verify() -> list[dict[str, Any]]:
     manifest: list[dict[str, Any]] = []
     for rel_path in FIXTURE_FILES:
         dl = FIXTURE_ROOT / rel_path
-        ck = _checksum_path(dl)
 
         if not dl.exists():
             print(f"  ✗ {rel_path}: MISSING")
             continue
 
+        # CHECKSUM files: just track them
+        if rel_path.endswith(".CHECKSUM"):
+            content = dl.read_text().strip()
+            manifest.append(
+                {
+                    "path": rel_path,
+                    "sha256": content.split()[0] if content else None,
+                    "size": dl.stat().st_size,
+                }
+            )
+            print(f"  ✓ {rel_path}")
+            continue
+
+        # ZIP files: verify against companion CHECKSUM
+        ck = _checksum_path(dl)
         expected = _read_binance_checksum(ck)
         if expected is None:
             print(f"  ~ {rel_path}: no CHECKSUM file")
