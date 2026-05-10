@@ -108,6 +108,7 @@ def download_archive(
     symbol: str,
     data_type: str = "klines",
     interval: str | None = "1h",
+    lookback_days: int | None = None,
     archive_home: Path | None = None,
 ) -> int:
     """Download archive data via ArchiveDownloadWorkflow."""
@@ -125,6 +126,7 @@ def download_archive(
         symbols=[symbol],
         archive_home=home,
         interval=interval,
+        lookback_days=lookback_days,
     )
     result = asyncio.run(wf.run())
     return result.downloaded
@@ -238,7 +240,7 @@ def prepare_symbol(
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     tt = TradeType(trade_type)
     iv = interval if data_type == "klines" else None
-    download_archive(trade_type, symbol, data_type, iv, home)
+    download_archive(trade_type, symbol, data_type, iv, lookback_days, home)
     verify_archive(trade_type, symbol, data_type, iv, home)
     gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
     return {"symbol": symbol, "gaps": len(gaps)}

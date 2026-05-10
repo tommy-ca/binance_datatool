@@ -197,7 +197,7 @@ def _cast_columns(df: pl.DataFrame, schema: dict[str, pl.DataType]) -> pl.DataFr
         if col in df.columns:
             casts[col] = pl.col(col).cast(dtype, strict=False)
     if casts:
-        df = df.with_columns(**casts)
+        df = df.with_columns(list(casts.values()))
     return df
 
 
@@ -251,7 +251,7 @@ def _normalize_to_microseconds(df: pl.DataFrame) -> pl.DataFrame:
     """
     if "ts_event" not in df.columns or len(df) == 0:
         return df
-    max_ts = df.select(pl.max(pl.col("ts_event").cast(pl.Int64, strict=False))).item()
+    max_ts = df.select(pl.col("ts_event").cast(pl.Int64, strict=False).max()).item()
     if max_ts is not None and max_ts < 1_000_000_000_000_000:
         df = df.with_columns((pl.col("ts_event").cast(pl.Int64, strict=False) * 1000).alias("ts_event"))
     elif max_ts is not None:

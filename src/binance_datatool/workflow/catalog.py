@@ -165,11 +165,11 @@ _DUCKLAKE_ANALYTICS_VIEWS = """
 -- Analytics views on top of unified DuckLake tables.
 
 CREATE OR REPLACE VIEW daily_ohlcv AS
-SELECT CAST(epoch_ms(ts_event / 1000) AS DATE) AS trade_date,
+SELECT CAST(epoch_ms(ts_event // 1000) AS DATE) AS trade_date,
 
-       CAST(epoch_ms(MAX(ts_event / 1000)) AS DATE) AS latest_date,
+       CAST(epoch_ms(MAX(ts_event // 1000)) AS DATE) AS latest_date,
 
-       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event / 1000)) AS DATE), CURRENT_DATE) AS days_stale
+       DATEDIFF('day', CAST(epoch_ms(MAX(ts_event // 1000)) AS DATE), CURRENT_DATE) AS days_stale
 FROM klines GROUP BY symbol, trade_type
 HAVING days_stale > 3;
 """
@@ -285,7 +285,7 @@ class DuckLakeCatalog:
             if has_event:
                 con.execute(
                     f"INSERT INTO {table_name} SELECT {select_expr}, "
-                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT) / 1000) AS DATE) AS ts_date "
+                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT) // 1000) AS DATE) AS ts_date "
                     f"FROM df"
                 )
             else:

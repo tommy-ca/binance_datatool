@@ -43,6 +43,7 @@ class ArchiveDownloadWorkflow:
         progress_bar: bool = False,
         client: ArchiveClient | None = None,
         download_func: Callable[..., Aria2DownloadResult] | None = None,
+        lookback_days: int | None = None,
     ) -> None:
         """Initialize the download workflow.
 
@@ -70,12 +71,21 @@ class ArchiveDownloadWorkflow:
         self.progress_bar = progress_bar
         self.client = client or ArchiveClient()
         self.download_func = download_func or download_archive_files
+        self.lookback_days = lookback_days
 
     def _build_diff_result(self, list_result: ListFilesResult) -> DiffResult:
         """Compute the download diff from remote file listings."""
+        import re
+        from datetime import UTC, datetime, timedelta
+
         to_download: list[DiffEntry] = []
         skipped = 0
         listing_errors: list[SymbolListingError] = []
+        date_cutoff: datetime | None = (
+            datetime.now(UTC) - timedelta(days=self.lookback_days)
+            if self.lookback_days is not None
+            else None
+        )
 
         for entry in list_result.per_symbol:
             if entry.error is not None:
@@ -84,6 +94,16 @@ class ArchiveDownloadWorkflow:
 
             for remote_file in entry.files:
                 local_path = self.archive_home / Path(remote_file.key)
+
+                # Skip files outside lookback window
+                if date_cutoff is not None:
+                    m = re.search(r"(\d{4}-\d{2}-\d{2})", remote_file.key)
+                    if m:
+                        fdate = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
+                        if fdate < date_cutoff:
+                            skipped += 1
+                            continue
+
                 if (
                     local_path.exists()
                     and local_path.stat().st_mtime >= remote_file.last_modified.timestamp()
