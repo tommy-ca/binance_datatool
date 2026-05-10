@@ -154,6 +154,7 @@ class SampleArchive:
     """
 
     SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+    CM_SYMBOLS = ["BTCUSD_PERP", "ETHUSD_PERP"]
 
     # Structure: trade_type -> freq -> [(data_type, has_interval, is_monthly_with_header)]
     TYPES: dict[str, dict[str, list[tuple[str, bool, bool]]]] = {
@@ -184,10 +185,22 @@ class SampleArchive:
             ],
         },
         "cm": {
-            # CM archive directories exist but all are empty (no data files).
-            # CM data is available via REST API gap-fill only.
-            "daily": [],
-            "monthly": [],
+            # CM (COIN-M delivery futures) — symbols use USD_PERP naming
+            # Real archive: 267 symbols, 10 daily + 8 monthly data types
+            "daily": [
+                ("aggTrades", False, False),
+                ("trades", False, False),
+                ("klines", True, False),
+                ("indexPriceKlines", True, False),
+                ("markPriceKlines", True, False),
+                ("premiumIndexKlines", True, False),
+            ],
+            "monthly": [
+                ("aggTrades", False, False),
+                ("trades", False, False),
+                ("fundingRate", False, True),
+                ("klines", True, False),
+            ],
         },
     }
 
@@ -226,7 +239,8 @@ class SampleArchive:
         has_interval: bool,
         has_header: bool,
     ) -> None:
-        for symbol in self.SYMBOLS:
+        symbols = self.CM_SYMBOLS if trade_type.value == "cm" else self.SYMBOLS
+        for symbol in symbols:
             path_parts = [self._root, "data", trade_type.s3_path, freq, data_type, symbol]
             if has_interval:
                 path_parts.append("1h")
