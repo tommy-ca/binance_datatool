@@ -92,6 +92,7 @@ def download() -> list[dict[str, Any]]:
 
         # ZIP files: download CHECKSUM first if needed, then verify
         ck = _checksum_path(dl)
+        ck_rel = f"{rel_path}.CHECKSUM"
         if not ck.exists():
             with suppress(Exception):
                 _download(f"{url}.CHECKSUM", ck)
@@ -101,7 +102,6 @@ def download() -> list[dict[str, Any]]:
             print(f"  ✗ {rel_path}: {e}")
             continue
 
-        ck = _checksum_path(dl)
         expected = _read_binance_checksum(ck)
         actual = hashlib.sha256(dl.read_bytes()).hexdigest()
         size = dl.stat().st_size
@@ -110,7 +110,9 @@ def download() -> list[dict[str, Any]]:
             print(f"  ✗ {rel_path}: checksum MISMATCH (download corrupted)")
             continue
 
-        manifest.append({"path": rel_path, "sha256": expected, "size": size})
+        manifest.append(
+            {"path": rel_path, "sha256": expected, "size": size, "checksum_path": ck_rel}
+        )
         print(
             f"  ✓ {rel_path} ({size / 1024:.1f} KB)"
             if size > 1024
@@ -144,7 +146,8 @@ def verify() -> list[dict[str, Any]]:
             continue
 
         # ZIP files: verify against companion CHECKSUM
-        ck = _checksum_path(dl)
+        ck_rel = f"{rel_path}.CHECKSUM"
+        ck = FIXTURE_ROOT / ck_rel
         expected = _read_binance_checksum(ck)
         if expected is None:
             print(f"  ~ {rel_path}: no CHECKSUM file")
@@ -152,7 +155,9 @@ def verify() -> list[dict[str, Any]]:
 
         actual = hashlib.sha256(dl.read_bytes()).hexdigest()
         size = dl.stat().st_size
-        manifest.append({"path": rel_path, "sha256": expected, "size": size})
+        manifest.append(
+            {"path": rel_path, "sha256": expected, "size": size, "checksum_path": ck_rel}
+        )
 
         if actual == expected:
             print(f"  ✓ {rel_path}")
