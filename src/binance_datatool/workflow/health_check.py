@@ -241,6 +241,11 @@ class AnomalyReport:
         )
 
 
+def _sanitize_identifier(name: str) -> str:
+    """Sanitize a DuckDB identifier (table/column name) for safe f-string usage."""
+    return "".join(c for c in name if c.isalnum() or c == "_")
+
+
 def check_ducklake_anomalies(
     con: Any,
     table_name: str,
@@ -258,14 +263,16 @@ def check_ducklake_anomalies(
     - Price outliers (values beyond mean +/- N standard deviations)
     """
     report = AnomalyReport(symbol=symbol)
+    tn = _sanitize_identifier(table_name)
 
-    if not _table_exists(con, table_name):
+    if not _table_exists(con, tn):
         return report
 
     # Null/zero price check
     for col in ("open", "high", "low", "close"):
         nulls = con.execute(
-            f"SELECT COUNT(*) FROM {table_name} WHERE symbol = '{symbol}' AND ({col} IS NULL OR {col} = 0)"
+            f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND ({col} IS NULL OR {col} = 0)",
+            [symbol],
         ).fetchone()[0]
         report.null_prices += nulls
 
@@ -273,23 +280,27 @@ def check_ducklake_anomalies(
     if "volume" in [
         c[0]
         for c in con.execute(
-            f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table_name}'"
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?",
+            [tn],
         ).fetchall()
     ]:
         zeros = con.execute(
-            f"SELECT COUNT(*) FROM {table_name} WHERE symbol = '{symbol}' AND (volume IS NULL OR volume = 0)"
+            f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND (volume IS NULL OR volume = 0)",
+            [symbol],
         ).fetchone()[0]
         report.zero_volumes = zeros
 
     # Duplicate timestamps
     dups = con.execute(
-        f"SELECT COUNT(*) FROM (SELECT ts_event FROM {table_name} WHERE symbol = '{symbol}' GROUP BY ts_event HAVING COUNT(*) > 1)"
+        f"SELECT COUNT(*) FROM (SELECT ts_event FROM {tn} WHERE symbol = ? GROUP BY ts_event HAVING COUNT(*) > 1)",
+        [symbol],
     ).fetchone()[0]
     report.duplicate_timestamps = dups
 
     # Date gaps
     dates = con.execute(
-        f"SELECT DISTINCT ts_date FROM {table_name} WHERE symbol = '{symbol}' ORDER BY ts_date"
+        f"SELECT DISTINCT ts_date FROM {tn} WHERE symbol = ? ORDER BY ts_date",
+        [symbol],
     ).fetchall()
     if len(dates) > 1:
         date_strs = [str(d[0]) for d in dates]
@@ -299,13 +310,14 @@ def check_ducklake_anomalies(
     # Price outliers (Z-score > threshold)
     try:
         outliers = con.execute(
-            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {table_name} WHERE symbol = '{symbol}') WHERE ABS(z) > {outlier_std}"
+            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {tn} WHERE symbol = ?) WHERE ABS(z) > ?",
+            [symbol, outlier_std],
         ).fetchone()[0]
         report.outlier_rows = outliers
     except Exception:
         logger.warning(
             "Outlier query failed for {}/{} — STDDEV may be 0 or schema mismatch",
-            table_name,
+            tn,
             symbol,
         )
 

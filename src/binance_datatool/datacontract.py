@@ -48,20 +48,22 @@ Example:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
-class DataSource(str, Enum):
+class DataSource(StrEnum):
     BINANCE = "binance"
     BYBIT = "bybit"
     OKX = "okx"
 
 
-class MarketType(str, Enum):
+class MarketType(StrEnum):
     """Market segment for a trading pair."""
 
     SPOT = "spot"
@@ -70,7 +72,7 @@ class MarketType(str, Enum):
     OPTIONS = "options"
 
 
-class DataType(str, Enum):
+class DataType(StrEnum):
     """Specific dataset type within a market."""
 
     KLINES = "klines"  # OHLCV candlesticks
@@ -81,7 +83,7 @@ class DataType(str, Enum):
     FUNDING_RATE = "fundingRate"  # Perpetual funding
 
 
-class PartitionFreq(str, Enum):
+class PartitionFreq(StrEnum):
     """Temporal partitioning frequency."""
 
     DAILY = "daily"
@@ -194,7 +196,7 @@ class DataContract:
 
         # Check schema on first row
         first_row = rows[0]
-        for col, expected_type in self.schema.items():
+        for col, expected_type in self.schema.items():  # noqa: B007
             if col not in first_row:
                 errors.append(
                     ValidationError(

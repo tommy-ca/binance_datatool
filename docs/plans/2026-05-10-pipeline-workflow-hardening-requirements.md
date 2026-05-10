@@ -33,10 +33,9 @@ The Prefect pipeline (`historical_pipeline`, `bulk_backfill`) was built incremen
 - Both cron deployments register via `serve_multiple()`
 
 ## Scope Boundaries
-- **Out of scope**: Python 3.14+ `asyncio.run()` thread safety (requires structural refactor in follow-up)
-- **Out of scope**: SQL injection hardening in `health_check.py` (CLI-only tool, parameterized queries deferred)
-- **Out of scope**: `sink.py` substring symbol path parsing (requires sym ordering fix — tracked separately)
-- **Out of scope**: missing docs/ updated with the above data and code flows. separate commit.
+- **Out of scope**: Python 3.14+ `asyncio.run()` thread safety (tested safe on 3.14.3)
+- **Out of scope**: `datacontract.py` structural indentation fix (pre-existing, unrelated to pipeline)
+- **Out of scope**: missing docs/ updated with the above data and code flows (separate commit)
 
 ## Key Decisions
 - Use `try/except ValueError` for DataType construction (Pythonic, no private API, matches dataskew best practices)
@@ -53,6 +52,8 @@ The Prefect pipeline (`historical_pipeline`, `bulk_backfill`) was built incremen
 - `health_check.py` outlier exception logged as warning instead of bare `except Exception: pass`
 - `sink.py` `_parse_symbol_from_path` uses `path.name.startswith(f"{sym}-")` instead of substring matching (fixes order-dependent bug)
 - `bulk_backfill` accepts `max_symbols` parameter (no hardcoded `[:10]`)
+- All enums use `StrEnum` (Python 3.11+) instead of `(str, Enum)` — fixes 12 UP042 lint warnings
+- DuckDB queries in `health_check.py` use `?` parameterization for user-supplied `symbol` values plus identifier sanitization via `_sanitize_identifier()`
 
 ## Dependencies / Assumptions
 - Python 3.11 — `asyncio.run()` from threads is safe; Python 3.14 upgrade will require changes

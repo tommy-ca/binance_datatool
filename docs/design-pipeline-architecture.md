@@ -136,6 +136,32 @@ except ValueError:
     dt = DataType.klines
 ```
 
+### StrEnum Pattern
+All enum classes use `enum.StrEnum` (Python 3.11+) instead of the legacy
+`(str, Enum)` pattern. This eliminates the UP042 lint warning and provides
+native string comparison, `.value` access, and `__members__` introspection:
+
+```python
+from enum import StrEnum
+
+class TradeType(StrEnum):
+    spot = "spot"
+    um = "um"
+```
+
+### SQL Injection Prevention
+All DuckDB queries in `health_check.py` use parameterized queries (`?`
+placeholders) for user-supplied values. Table/column names use an
+identifier sanitizer (`_sanitize_identifier`) that strips non-alphanumeric
+characters:
+
+```python
+tn = _sanitize_identifier(table_name)  # safe for f-string
+result = con.execute(
+    f"SELECT COUNT(*) FROM {tn} WHERE symbol = ?", [symbol]
+).fetchone()[0]
+```
+
 ## Task Fan-Out Design
 
 ### Parallel (Stage 1)
