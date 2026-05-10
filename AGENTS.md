@@ -160,6 +160,12 @@ SinkWorkflow (binance-datatool sink)
   ├── normalize to Silver schemas (ts_event, ts_recv)
   └── DuckLake v1.0 native tables (ACID, snapshots, partitioning)
         DuckDB manages Parquet storage, file layout, partition tracking
+
+Multi-symbol parallel processing (Prefect task mapping):
+                    ┌── BTCUSDT ── download → verify → fill → sink ──┐
+  historical_       ├── ETHUSDT ── download → verify → fill → sink ──┤
+  pipeline ──►      ├── SOLUSDT ── download → verify → fill → sink ──┤  (4 workers)
+                    └── ...       (parallel via .map())              ┘
 ```
 
 ## CLI Commands Reference

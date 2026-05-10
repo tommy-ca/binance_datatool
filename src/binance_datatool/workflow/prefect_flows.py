@@ -208,25 +208,24 @@ def sink_silver(
 
 
 @task
-def process_symbol(
+def prepare_symbol(
     trade_type: str,
     symbol: str,
     data_type: str = "klines",
     interval: str = "1h",
     lookback_days: int = 30,
     archive_home: Path | None = None,
-    catalog_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Process a single symbol through the full pipeline (task, fan-out ready)."""
+    """Prepare data: download → verify → fill_gaps (parallel-safe).
+    Does NOT write to DuckDB — avoids concurrent write conflicts.
+    """
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    catalog = catalog_path or home.parent / "lake"
     tt = TradeType(trade_type)
     iv = interval if data_type == "klines" else None
     download_archive(trade_type, symbol, data_type, iv, home)
     verify_archive(trade_type, symbol, data_type, iv, home)
     gaps = fill_gaps(tt, symbol, data_type, iv, lookback_days, home)
-    rows = sink_silver(tt, symbol, data_type, iv, lookback_days, home, catalog)
-    return {symbol: {"gaps_filled": len(gaps), "rows_sunk": rows}}
+    return {"symbol": symbol, "gaps": len(gaps)}
 
 
 @flow(
@@ -252,24 +251,28 @@ def historical_pipeline(
     refresh_metadata_flow(trade_type=trade_type, catalog_path=catalog)
     print(f"  Metadata refreshed for {trade_type}")
 
-    # Step 1: Fan-out — process symbols in parallel via Prefect task mapping
+    # Step 1: Fan-out — prepare symbols in parallel (no DuckDB writes)
     sym_list = symbols or ["BTCUSDT"]
-    results_list = process_symbol.map(
+    prep_results = prepare_symbol.map(
         trade_type=[trade_type] * len(sym_list),
         symbol=sym_list,
         data_type=[data_type] * len(sym_list),
         interval=[interval] * len(sym_list),
         lookback_days=[lookback_days] * len(sym_list),
         archive_home=[home] * len(sym_list),
-        catalog_path=[catalog] * len(sym_list),
     )
 
-    # Collate results (wait for all tasks to complete)
+    # Step 2: Sequential sink — DuckDB does not support concurrent writers
+    tt = TradeType(trade_type)
+    iv = interval if data_type == "klines" else None
     results: dict[str, Any] = {}
-    for future in results_list:
-        result = future.result()
-        if result:
-            results.update(result)
+    for future in prep_results:
+        meta = future.result()
+        sym = meta["symbol"]
+        rows = sink_silver(tt, sym, data_type, iv, lookback_days, home, catalog)
+        results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
+        print(f"  {sym}: {meta['gaps']} gaps, {rows} rows")
+
     return results
 
 
