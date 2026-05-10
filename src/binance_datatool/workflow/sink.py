@@ -57,10 +57,9 @@ _BRONZE_AGGT_COLS = [
 ]
 
 _BRONZE_FUNDING_COLS = [
-    "symbol",
-    "funding_time",
-    "funding_rate",
-    "mark_price",
+    "calc_time",
+    "funding_interval_hours",
+    "last_funding_rate",
 ]
 
 _BRONZE_COLS_BY_TYPE = {
@@ -174,8 +173,9 @@ def _scan_bronze_files(
 ) -> list[Path]:
     """Scan Bronze archive for CSV/ZIP files."""
     files: list[Path] = []
+    data_freq = "monthly" if data_type == "fundingRate" else "daily"
     for symbol in symbols:
-        base = archive_home / "data" / trade_type.s3_path / "daily" / data_type / symbol
+        base = archive_home / "data" / trade_type.s3_path / data_freq / data_type / symbol
         if interval:
             base = base / interval
         if not base.exists():
@@ -194,10 +194,11 @@ def _parse_csv_line(line: str) -> list[str]:
     return next(csv.reader([line]))
 
 
-def _read_zip_csv(path: Path, bronze_cols: list[str] | None = None) -> pl.DataFrame:
+def _read_zip_csv(path: Path, bronze_cols: list[str] | None = None, skip_header: bool = False) -> pl.DataFrame:
     """Read CSV from a Binance archive ZIP file.
 
-    Binance archive CSVs have no header row — the first line is data.
+    Most Binance archive CSVs have no header row — the first line is data.
+    ``fundingRate`` is an exception and has a header row.
     Uses the provided ``bronze_cols`` schema, or falls back to the first
     data line for backward compatibility.
     """
@@ -210,8 +211,9 @@ def _read_zip_csv(path: Path, bronze_cols: list[str] | None = None) -> pl.DataFr
     lines = content.strip().split("\n")
     if len(lines) < 1:
         return pl.DataFrame()
+    start = 1 if skip_header else 0
     schema = bronze_cols or _parse_csv_line(lines[0])
-    rows = [_parse_csv_line(line) for line in lines]
+    rows = [_parse_csv_line(line) for line in lines[start:]]
     return pl.DataFrame(rows, schema=schema, orient="row")
 
 
@@ -369,10 +371,10 @@ def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFram
     """Transform Bronze fundingRate CSV to Silver schema.
 
     Maps Binance archive fundingRate CSV to our Silver schema.
-    Binance archive CSV: symbol, funding_time, funding_rate, mark_price
-    tardis.dev derivative_ticker: timestamp, funding_timestamp, funding_rate, mark_price, ...
+    Binance archive CSV: calc_time, funding_interval_hours, last_funding_rate
+    Silver schema: ts_event, funding_rate, mark_price, funding_timestamp
     """
-    rename_map = {"funding_time": "ts_event"}
+    rename_map = {"calc_time": "ts_event", "last_funding_rate": "funding_rate"}
     df = _rename_to_silver(df, rename_map)
     df = _normalize_to_microseconds(df)
     # Map funding_time as both ts_event (for sorting) and funding_timestamp
@@ -458,7 +460,11 @@ class SinkWorkflow:
             try:
                 source = "api_filled" if "_filled" in str(path.parent) else "archive"
                 df = (
-                    _read_zip_csv(path, bronze_cols=_BRONZE_COLS_BY_TYPE.get(data_type_str))
+                    _read_zip_csv(
+                        path,
+                        bronze_cols=_BRONZE_COLS_BY_TYPE.get(data_type_str),
+                        skip_header=data_type_str == "fundingRate",
+                    )
                     if path.suffix == ".zip"
                     else _read_filled_csv(path)
                 )

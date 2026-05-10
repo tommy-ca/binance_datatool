@@ -275,16 +275,24 @@ class DuckLakeCatalog:
         All type casting and ts_date computation happens in the Polars
         transform stage (sink.py) — this is a zero-copy INSERT.
         Reorders DataFrame columns to match TABLE_DEFS for positional INSERT.
+        Any TABLE_DEF columns missing from the DataFrame are filled with NULL.
         """
         self.ensure_table(con, table_name)
         ingested = 0
         try:
             cols = self.TABLE_DEFS.get(table_name, "")
             table_cols = [c.split()[0] for c in cols.split(",")]
-            # Filter df columns to those in TABLE_DEFS and reorder
-            ordered = [c for c in table_cols if c in df.columns]
-            df = df.select(ordered)
-            con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
+            # Build select list: existing columns + NULL for missing ones
+            select_parts = []
+            for c in table_cols:
+                if c in df.columns:
+                    select_parts.append(c)
+                else:
+                    select_parts.append(f"NULL AS {c}")
+            df = df.with_columns(pl.lit(None).alias("_null_placeholder"))
+            con.execute(
+                f"INSERT INTO {table_name} SELECT {', '.join(select_parts)} FROM df"
+            )
             ingested = len(df)
         except Exception as e:
             logger.warning("DuckLake: failed to ingest DataFrame: {}", e)

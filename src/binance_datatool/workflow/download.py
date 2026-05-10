@@ -98,9 +98,21 @@ class ArchiveDownloadWorkflow:
                 # Skip files outside lookback window
                 if date_cutoff is not None:
                     m = re.search(r"(\d{4}-\d{2}-\d{2})", remote_file.key)
+                    if not m:
+                        m = re.search(r"(\d{4}-\d{2})", remote_file.key)
                     if m:
-                        fdate = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
-                        if fdate < date_cutoff:
+                        date_str = m.group(1)
+                        fmt = "%Y-%m-%d" if len(date_str) == 10 else "%Y-%m"
+                        fdate = datetime.strptime(date_str, fmt).replace(tzinfo=UTC)
+                        if len(date_str) == 7:
+                            # Monthly files: keep if any part of the month is in range
+                            from calendar import monthrange
+                            from datetime import timedelta
+                            month_end = fdate.replace(day=monthrange(fdate.year, fdate.month)[1])
+                            if month_end < date_cutoff:
+                                skipped += 1
+                                continue
+                        elif fdate < date_cutoff:
                             skipped += 1
                             continue
 
