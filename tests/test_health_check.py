@@ -1,7 +1,5 @@
 """Tests for health check workflow — TDD spec: docs/specs-driven-development.md"""
 
-from pathlib import Path
-
 import duckdb
 import pytest
 
@@ -10,7 +8,6 @@ from binance_datatool.workflow.health_check import (
     _sanitize_identifier,
     check_ducklake_anomalies,
 )
-
 
 # ── AnomalyReport ──────────────────────────────────────────────
 

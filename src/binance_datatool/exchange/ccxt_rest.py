@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from binance_datatool.common.enums import TradeType
+from typing import TYPE_CHECKING
+
 from binance_datatool.common.intervals import VALID_INTERVALS
 from binance_datatool.common.types import KlineData
+
+if TYPE_CHECKING:
+    from binance_datatool.common.enums import TradeType
 
 __all__ = ["CCXTExchangeClient"]
 

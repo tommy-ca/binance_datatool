@@ -401,8 +401,6 @@ class TestBinanceAdapterFetchFile:
         This is a placeholder to document the expected behavior.
         Real integration tests should mock aiohttp.
         """
-        adapter = BinanceAdapter()
-
-        # In real integration tests, mock aiohttp.ClientSession
+        # In real integration tests, create BinanceAdapter() and mock aiohttp
         # For now, we skip actual network tests
         pytest.skip("Requires mocking aiohttp")

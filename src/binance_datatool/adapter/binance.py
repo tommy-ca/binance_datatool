@@ -17,10 +17,15 @@ Example:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import aiohttp
 
-from binance_datatool.archive.client import ArchiveClient, ArchiveFile
+from binance_datatool.archive.client import ArchiveClient
 from binance_datatool.common.enums import DataFrequency, DataType, TradeType
+
+if TYPE_CHECKING:
+    from binance_datatool.archive.client import ArchiveFile
 
 from . import FileMetadata
 
@@ -170,11 +175,9 @@ class BinanceAdapter:
         """
         # Remove any suffix like _PERP for parsing
         symbol_to_parse = raw_symbol
-        suffix = ""
         if "_" in raw_symbol:
             parts = raw_symbol.rsplit("_", 1)
             symbol_to_parse = parts[0]
-            suffix = "_" + parts[1]
 
         # Simple heuristic: assume common quote assets
         common_quotes = [
