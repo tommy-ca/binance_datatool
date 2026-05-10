@@ -162,6 +162,47 @@ result = con.execute(
 ).fetchone()[0]
 ```
 
+### Test Fixtures: Sample Archive
+
+Test fixture data mirrors the Binance S3 archive structure at
+``tests/fixture/binance/data/``, organized by source:
+
+```
+tests/fixture/binance/
+├── manifest.json              # Versioned checksum manifest (12 entries)
+└── data/
+    ├── spot/daily/klines/...  (2 real daily zips + .CHECKSUM)
+    ├── spot/daily/aggTrades/  (1 real daily zip)
+    ├── spot/daily/trades/     (1 real daily zip)
+    ├── futures/um/fundingRate/(1 real monthly zip)
+    └── futures/cm/aggTrades/  (1 real daily zip, USD_PERP naming)
+```
+
+**Refresh**: ``uv run python3 scripts/refresh_fixtures.py`` downloads all
+fixtures from ``data.binance.vision`` and verifies SHA256 against the
+archive's own ``.CHECKSUM`` files.
+
+**Verify**: ``uv run python3 scripts/refresh_fixtures.py --verify`` checks
+local files against the Binance-sourced checksums.
+
+**Synthetic generation**: ``SampleArchive(tmp_path / "archive").create_all()``
+generates a complete synthetic archive (48 zip files) covering all trade
+types × frequencies × data types for offline testing. See
+``tests/sample_archive.py`` for the declarative ``TYPES`` dict.
+
+### Data Type Coverage by Market
+
+| Market | Daily Types | Monthly Types |
+|--------|-------------|--------------|
+| spot (3,591 syms) | klines aggTrades trades | klines aggTrades trades |
+| um (833 syms) | aggTrades bookDepth bookTicker indexPriceKlines klines markPriceKlines metrics premiumIndexKlines trades | aggTrades bookTicker fundingRate indexPriceKlines klines markPriceKlines premiumIndexKlines trades |
+| cm (267 syms, USD_PERP) | Same as um + liquidationSnapshot | Same as um - metrics + fundingRate |
+| option (2-5 syms) | BVOLIndex EOHSummary | — |
+
+**Pipeline sink handlers**: klines, aggTrades, trades, fundingRate (4 of 11
+archive data types). Remaining types (indexPriceKlines, markPriceKlines,
+etc.) are available in the archive but have no Silver transform yet.
+
 ## Task Fan-Out Design
 
 ### Parallel (Stage 1)

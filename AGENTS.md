@@ -246,6 +246,29 @@ the complete field-to-source mapping matrix.
 | fundingRate | ✓ monthly zips | ✓ | ✓ | `fundingRate` | 3-field CSV, has header |
 | bookDepth/bookTicker/... | empty dirs | ✗ | ✗ | — | No data in archive |
 
+### Archive Structure (data.binance.vision)
+
+```
+data/
+├── spot/
+│   ├── daily/     klines(3,591 syms, 13 intv)  aggTrades(3,599 syms)  trades(3,599 syms)
+│   └── monthly/   klines(3,602 syms, 16 intv)  aggTrades(3,597 syms)  trades(3,597 syms)
+├── futures/um/
+│   ├── daily/     aggTrades bookDepth bookTicker indexPriceKlines klines
+│   │              markPriceKlines metrics premiumIndexKlines trades  (833 syms each)
+│   └── monthly/   aggTrades bookTicker fundingRate indexPriceKlines klines
+│                  markPriceKlines premiumIndexKlines trades  (833 syms each)
+├── futures/cm/
+│   ├── daily/     Same as um but 267 syms, USD_PERP naming (BTCUSD_PERP)
+│   └── monthly/   Same as um less bookDepth/metrics/liquidationSnapshot
+└── option/
+    └── daily/     BVOLIndex(2 syms)  EOHSummary(5 syms)
+```
+
+File naming: `{symbol}-{dataType}-{date}.zip` with companion `.CHECKSUM`
+Date format: `YYYY-MM-DD` (daily) or `YYYY-MM` (monthly)
+Klines have interval subdirectory: `{symbol}/{interval}/{symbol}-{dataType}-{interval}-{date}.zip`
+
 ## Data Pipeline Architecture
 
 ```
