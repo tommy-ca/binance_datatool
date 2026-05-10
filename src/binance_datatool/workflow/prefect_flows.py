@@ -115,10 +115,7 @@ def download_archive(
     import asyncio
 
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    try:
-        dt = DataType(data_type)
-    except ValueError:
-        dt = DataType.klines
+    dt = DataType(data_type)
     wf = ArchiveDownloadWorkflow(
         trade_type=TradeType(trade_type),
         data_freq=DataFrequency.monthly if data_type == "fundingRate" else DataFrequency.daily,
@@ -142,10 +139,7 @@ def verify_archive(
 ) -> int:
     """Verify checksums via ArchiveVerifyWorkflow."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    try:
-        dt = DataType(data_type)
-    except ValueError:
-        dt = DataType.klines
+    dt = DataType(data_type)
     wf = ArchiveVerifyWorkflow(
         trade_type=TradeType(trade_type),
         data_freq=DataFrequency.monthly if data_type == "fundingRate" else DataFrequency.daily,
@@ -183,7 +177,7 @@ def fill_gaps(
     return result.gaps_detected
 
 
-@task(**_RETRY_LIGHT)
+@task
 def sink_silver(
     trade_type: TradeType,
     symbol: str,
@@ -201,10 +195,7 @@ def sink_silver(
         catalog = catalog_path or home.parent / "lake"
         catalog.mkdir(parents=True, exist_ok=True)
         (catalog / "data").mkdir(parents=True, exist_ok=True)
-        try:
-            dt = DataType(data_type)
-        except ValueError:
-            dt = DataType.klines
+        dt = DataType(data_type)
         workflow = SinkWorkflow(
             archive_home=home,
             catalog_path=catalog,
