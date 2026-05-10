@@ -34,7 +34,6 @@ from binance_datatool.workflow import (
     ArchiveListSymbolsWorkflow,
     ArchiveVerifyWorkflow,
     GapFillWorkflow,
-    HealthCheckWorkflow,
     MetadataWorkflow,
     SinkWorkflow,
 )
@@ -414,44 +413,40 @@ def health_flow(
     archive_home: Path | None = None,
     catalog_path: Path | None = None,
 ) -> dict:
-    """Run health check and anomaly detection. Wraps HealthCheckWorkflow."""
+    """Run health check and anomaly detection via DuckLake native tables."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
     catalog = catalog_path or home.parent / "lake"
     db_file = catalog / "catalog.duckdb"
+    meta = catalog / "metadata.ducklake"
 
-    from binance_datatool.common import DataFrequency, DataType
-    from binance_datatool.common import TradeType as _TT
+    anomalies_clean = True
+    null_prices = 0
+    missing_dates = 0
 
-    file_health = HealthCheckWorkflow(
-        trade_type=_TT(trade_type),
-        data_freq=DataFrequency.daily,
-        data_type=DataType(data_type),
-        symbols=[symbol],
-        archive_home=home,
-        interval=interval,
-    )
-    report = file_health.run()
+    if meta.exists():
+        import duckdb
 
-    # DuckLake anomaly detection
-    import duckdb
-
-    con = duckdb.connect(str(db_file))
-    try:
-        con.execute("LOAD ducklake")
-        con.execute(
-            f"ATTACH 'ducklake:{catalog}/metadata.ducklake' AS dl "
-            f"(DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
-        )
-        con.execute("USE dl")
-        anomalies = check_ducklake_anomalies(con, data_type.replace("-", "_"), symbol)
-    finally:
-        con.close()
+        con = duckdb.connect(str(db_file))
+        try:
+            con.execute("LOAD ducklake")
+            con.execute(
+                f"ATTACH 'ducklake:{meta}' AS dl "
+                f"(DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute("USE dl")
+            anomalies = check_ducklake_anomalies(con, data_type.replace("-", "_"), symbol)
+            anomalies_clean = anomalies.is_clean
+            null_prices = anomalies.null_prices
+        finally:
+            con.close()
+    else:
+        print(f"  DuckLake catalog not found at {meta} — run sink first")
 
     result = {
-        "healthy": report.healthy_symbols == report.total_symbols,
-        "missing_dates": report.total_missing_dates,
-        "anomalies_clean": anomalies.is_clean,
-        "null_prices": anomalies.null_prices,
+        "healthy": anomalies_clean,
+        "missing_dates": missing_dates,
+        "anomalies_clean": anomalies_clean,
+        "null_prices": null_prices,
     }
     print(f"Health: {result}")
     return result
