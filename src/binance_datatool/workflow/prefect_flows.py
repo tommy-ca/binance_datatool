@@ -274,6 +274,20 @@ def historical_pipeline(
         results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
         print(f"  {sym}: {meta['gaps']} gaps, {rows} rows")
 
+    # Step 3: Health check — verify DuckLake data quality for each symbol
+    print("  Running health checks...")
+    for sym in sym_list:
+        health_flow(
+            trade_type=trade_type,
+            symbol=sym,
+            data_type=data_type,
+            interval=interval,
+            archive_home=home,
+            catalog_path=catalog,
+        )
+        if results.get(sym):
+            results[sym]["healthy"] = True
+
     return results
 
 
