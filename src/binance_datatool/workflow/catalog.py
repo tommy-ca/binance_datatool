@@ -270,23 +270,15 @@ class DuckLakeCatalog:
         table_name: str,
         df: pl.DataFrame,
     ) -> int:
-        """Ingest a Polars DataFrame into a DuckLake native table."""
+        """Ingest a Polars DataFrame into a DuckLake native table.
+
+        All type casting and ts_date computation happens in the Polars
+        transform stage (sink.py) — this is a zero-copy INSERT.
+        """
         self.ensure_table(con, table_name)
         ingested = 0
         try:
-            cols = self.TABLE_DEFS.get(table_name, "")
-            table_cols = [c.split()[0] for c in cols.split(",") if c.split()[0] != "ts_date"]
-            select_cols = [c for c in table_cols if c in df.columns]
-            select_expr = ", ".join(select_cols)
-            has_event = "ts_event" in table_cols and "ts_event" in df.columns
-            if has_event:
-                con.execute(
-                    f"INSERT INTO {table_name} SELECT {select_expr}, "
-                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT) // 1000) AS DATE) AS ts_date "
-                    f"FROM df"
-                )
-            else:
-                con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
+            con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
             ingested = len(df)
         except Exception as e:
             logger.warning("DuckLake: failed to ingest DataFrame: {}", e)

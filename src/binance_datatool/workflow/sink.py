@@ -116,6 +116,7 @@ _FULL_SILVER_KLINE_SCHEMA = {
     "interval": pl.Utf8,
     "data_type": pl.Utf8,
     "ingested_at": pl.Int64,
+    "ts_date": pl.Date,
 }
 
 _FULL_SILVER_AGGT_SCHEMA = {
@@ -134,6 +135,7 @@ _FULL_SILVER_AGGT_SCHEMA = {
     "symbol": pl.Utf8,
     "data_type": pl.Utf8,
     "ingested_at": pl.Int64,
+    "ts_date": pl.Date,
 }
 
 _FULL_SILVER_FUNDING_SCHEMA = {
@@ -148,6 +150,7 @@ _FULL_SILVER_FUNDING_SCHEMA = {
     "symbol": pl.Utf8,
     "data_type": pl.Utf8,
     "ingested_at": pl.Int64,
+    "ts_date": pl.Date,
 }
 
 
@@ -264,7 +267,7 @@ def _add_silver_metadata(
     now_us = int(time.time() * 1_000_000)
     exchange = _exchange_for(trade_type)
     df = df.with_columns(pl.lit(now_us).alias("ts_recv"))
-    return df.with_columns(
+    df = df.with_columns(
         pl.lit(source).alias("source"),
         pl.lit(exchange).alias("exchange"),
         pl.lit(trade_type).alias("trade_type"),
@@ -273,6 +276,14 @@ def _add_silver_metadata(
         pl.lit(data_type).alias("data_type"),
         pl.lit(now_us).alias("ingested_at"),
     )
+    # Compute ts_date from ts_event (μs → date) — all transforms produce ts_event
+    if "ts_event" in df.columns:
+        df = df.with_columns(
+            pl.from_epoch(pl.col("ts_event") // 1_000_000, time_unit="s")
+            .dt.date()
+            .alias("ts_date")
+        )
+    return df
 
 
 def _normalize_to_microseconds(df: pl.DataFrame) -> pl.DataFrame:
