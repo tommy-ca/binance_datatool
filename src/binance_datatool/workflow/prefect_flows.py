@@ -241,7 +241,7 @@ def prepare_symbol(
     name="Historical Data Pipeline",
     description="Metadata → download → verify → gap-fill → sink (parallel symbols)",
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=8),
+    task_runner=ThreadPoolTaskRunner(),
 )
 def historical_pipeline(
     trade_type: str = "spot",
@@ -361,7 +361,7 @@ def bulk_backfill(
 @flow(
     name="Download",
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=8),
+    task_runner=ThreadPoolTaskRunner(),
 )
 def download_flow(
     trade_type: str,
@@ -384,7 +384,7 @@ def download_flow(
 @flow(
     name="Verify",
     log_prints=True,
-    task_runner=ThreadPoolTaskRunner(max_workers=8),
+    task_runner=ThreadPoolTaskRunner(),
 )
 def verify_flow(
     trade_type: str,
