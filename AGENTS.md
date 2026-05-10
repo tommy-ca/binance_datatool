@@ -107,8 +107,8 @@ The `exchange/` module uses **official Binance SDK packages** (not hand-rolled `
 ## Running Workflows with Prefect
 
 ```bash
-# Serve a flow directly (no server/worker needed)
-uv run prefect flow serve src/binance_datatool/workflow/prefect_flows.py:historical_pipeline
+# Serve deployments (both daily backfill + hourly metadata — no server/worker needed)
+uv run python -m binance_datatool.workflow.prefect_flows serve
 
 # In another terminal, trigger a run
 uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
@@ -132,7 +132,7 @@ print(result)
 ```
 
 Available flows:
-- `historical_pipeline` — full metadata → download → verify → gap-fill → sink
+- `historical_pipeline` — full metadata → download → verify → gap-fill → sink → health
 - `bulk_backfill` — multi-symbol, delegates to historical_pipeline
 - `refresh_metadata_flow` — venue/symbol metadata refresh
 - `health_flow` — health check + anomaly detection
@@ -150,11 +150,36 @@ historical_pipeline (ThreadPoolTaskRunner, max_workers=4)
   │     ├── ETHUSDT  ── download → verify → fill_gaps
   │     └── SOLUSDT  ── download → verify → fill_gaps
   │
-  └── sink_silver() ←── sequential (concurrency guard: ducklake-writer)
-        ├── BTCUSDT → DuckLake  (concurrency slot acquired)
-        ├── ETHUSDT → DuckLake  (waits for slot)
-        └── SOLUSDT → DuckLake  (waits for slot)
+  ├── sink_silver() ←── sequential (concurrency guard: ducklake-writer)
+  │     ├── BTCUSDT → DuckLake  (concurrency slot acquired)
+  │     ├── ETHUSDT → DuckLake  (waits for slot)
+  │     └── SOLUSDT → DuckLake  (waits for slot)
+  │
+  └── health_flow() ←── per-symbol health check (skips errored symbols)
+        ├── BTCUSDT → anomaly detection (null prices, date gaps, outliers)
+        ├── ETHUSDT → anomaly detection
+        └── SOLUSDT → anomaly detection
 ```
+
+### Error Isolation
+
+A single symbol failure does not abort the pipeline. Each symbol in
+`sink_silver()` is wrapped in `try/except`, collecting partial results and
+recording the error message:
+
+```python
+for future in prep_results:
+    try:
+        meta = future.result()
+        sym = meta["symbol"]
+        rows = sink_silver(tt, sym, ...)
+        results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
+    except Exception as exc:
+        results[sym] = {"gaps_filled": 0, "rows_sunk": 0, "error": str(exc)}
+        print(f"  {sym}: FAILED — {exc}")
+```
+
+Errored symbols are also skipped during the health check phase to avoid noise.
 
 ## Data Sources
 

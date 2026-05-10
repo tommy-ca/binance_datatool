@@ -69,6 +69,7 @@ def _route_to_dlq(catalog: Path, symbol: str, data_type: str, errors: list[str])
     meta = catalog / "metadata.ducklake"
     if not meta.exists():
         return
+    con = None
     try:
         con = duckdb.connect(str(catalog / "catalog.duckdb"))
         con.execute("LOAD ducklake")
@@ -90,9 +91,11 @@ def _route_to_dlq(catalog: Path, symbol: str, data_type: str, errors: list[str])
             )
         cnt = con.execute("SELECT COUNT(*) FROM dlq").fetchone()[0]
         _log.info("DLQ: %d total failures for %s/%s", cnt, symbol, data_type)
-        con.close()
     except Exception as e:
         _log.warning("DLQ route failed: %s", e)
+    finally:
+        if con is not None:
+            con.close()
 
 
 # ── Tasks ───────────────────────────────────────────────────────
@@ -107,8 +110,13 @@ def download_archive(
     archive_home: Path | None = None,
 ) -> int:
     """Download archive data via ArchiveDownloadWorkflow."""
+    import asyncio
+
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    dt = DataType(data_type) if data_type in DataType._value2member_map_ else DataType.klines
+    try:
+        dt = DataType(data_type)
+    except ValueError:
+        dt = DataType.klines
     wf = ArchiveDownloadWorkflow(
         trade_type=TradeType(trade_type),
         data_freq=DataFrequency.daily,
@@ -117,8 +125,8 @@ def download_archive(
         archive_home=home,
         interval=interval,
     )
-    result = wf.run()
-    return len(result.to_download) if hasattr(result, "to_download") else 0
+    result = asyncio.run(wf.run())
+    return result.downloaded
 
 
 @task(**_RETRY_CONFIG)
@@ -131,7 +139,10 @@ def verify_archive(
 ) -> int:
     """Verify checksums via ArchiveVerifyWorkflow."""
     home = archive_home or _DEFAULT_ARCHIVE_HOME
-    dt = DataType(data_type) if data_type in DataType._value2member_map_ else DataType.klines
+    try:
+        dt = DataType(data_type)
+    except ValueError:
+        dt = DataType.klines
     wf = ArchiveVerifyWorkflow(
         trade_type=TradeType(trade_type),
         data_freq=DataFrequency.daily,
@@ -187,7 +198,10 @@ def sink_silver(
         catalog = catalog_path or home.parent / "lake"
         catalog.mkdir(parents=True, exist_ok=True)
         (catalog / "data").mkdir(parents=True, exist_ok=True)
-        dt = DataType(data_type) if data_type in DataType._value2member_map_ else DataType.klines
+        try:
+            dt = DataType(data_type)
+        except ValueError:
+            dt = DataType.klines
         workflow = SinkWorkflow(
             archive_home=home,
             catalog_path=catalog,
@@ -263,30 +277,42 @@ def historical_pipeline(
         archive_home=[home] * len(sym_list),
     )
 
-    # Step 2: Sequential sink — DuckDB does not support concurrent writers
+    # Step 2: Sequential sink — DuckDB does not support concurrent writers.
+    # Each symbol is wrapped in try/except so one failure does not abort the batch.
     tt = TradeType(trade_type)
     iv = interval if data_type == "klines" else None
     results: dict[str, Any] = {}
     for future in prep_results:
-        meta = future.result()
-        sym = meta["symbol"]
-        rows = sink_silver(tt, sym, data_type, iv, lookback_days, home, catalog)
-        results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
-        print(f"  {sym}: {meta['gaps']} gaps, {rows} rows")
+        sym = None
+        try:
+            meta = future.result()
+            sym = meta["symbol"]
+            rows = sink_silver(tt, sym, data_type, iv, lookback_days, home, catalog)
+            results[sym] = {"gaps_filled": meta["gaps"], "rows_sunk": rows}
+            print(f"  {sym}: {meta['gaps']} gaps, {rows} rows")
+        except Exception as exc:
+            sym = sym or "unknown"
+            results[sym] = {"gaps_filled": 0, "rows_sunk": 0, "error": str(exc)}
+            print(f"  {sym}: FAILED — {exc}")
 
     # Step 3: Health check — verify DuckLake data quality for each symbol
     print("  Running health checks...")
     for sym in sym_list:
-        health_flow(
-            trade_type=trade_type,
-            symbol=sym,
-            data_type=data_type,
-            interval=interval,
-            archive_home=home,
-            catalog_path=catalog,
-        )
-        if results.get(sym):
-            results[sym]["healthy"] = True
+        if sym not in results or results[sym].get("error"):
+            continue
+        try:
+            h = health_flow(
+                trade_type=trade_type,
+                symbol=sym,
+                data_type=data_type,
+                interval=interval,
+                archive_home=home,
+                catalog_path=catalog,
+            )
+            results[sym]["healthy"] = h.get("healthy", False)
+        except Exception as exc:
+            results[sym]["healthy"] = False
+            results[sym]["health_error"] = str(exc)
 
     return results
 
@@ -451,6 +477,7 @@ def health_flow(
             anomalies = check_ducklake_anomalies(con, data_type.replace("-", "_"), symbol)
             anomalies_clean = anomalies.is_clean
             null_prices = anomalies.null_prices
+            missing_dates = len(anomalies.date_gaps)
         finally:
             con.close()
     else:
@@ -473,7 +500,11 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1 and sys.argv[1] == "serve":
         # `python -m binance_datatool.workflow.prefect_flows serve`
-        historical_pipeline.serve(name="daily-backfill", cron="0 6 * * *")
-        refresh_metadata_flow.serve(name="hourly-metadata", cron="0 * * * *")
+        from prefect import serve as _serve
+
+        _serve(
+            historical_pipeline.to_deployment(name="daily-backfill", cron="0 6 * * *"),
+            refresh_metadata_flow.to_deployment(name="hourly-metadata", cron="0 * * * *"),
+        )
     else:
         historical_pipeline()
