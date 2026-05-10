@@ -7,9 +7,12 @@ callables that return adapters to allow lazy instantiation in tests.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING
 
-from .adapter import DataSourceAdapter
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .adapter import DataSourceAdapter
 
 
 class SourceRegistry:

@@ -6,16 +6,15 @@ import pytest
 
 from binance_datatool.common.enums import TradeType
 from binance_datatool.exchange import (
+    BinanceCmRestClient,
+    BinanceCmWsClient,
     BinanceRestClient,
     BinanceSpotRestClient,
-    BinanceUmRestClient,
-    BinanceCmRestClient,
-    BinanceWsClient,
     BinanceSpotWsClient,
+    BinanceUmRestClient,
     BinanceUmWsClient,
-    BinanceCmWsClient,
+    BinanceWsClient,
     CCXTExchangeClient,
-    CCXTProExchangeClient,
 )
 from binance_datatool.exchange.client import ExchangeClient
 
@@ -73,23 +72,23 @@ class TestBackwardCompatibility:
 
 
 class TestBinanceRestClients:
-    """Test REST client configuration and base URL selection."""
+    """Test REST client configuration and SDK initialization."""
 
-    def test_spot_rest_api_base(self) -> None:
+    def test_spot_rest_has_sdk_client(self) -> None:
         client = BinanceSpotRestClient()
-        assert client._api_base == "https://api.binance.com/api/v3"
+        assert hasattr(client, "_client")
+        assert "Spot" in type(client._client).__name__
+        assert client.exchange_id == "binance_spot"
 
-    def test_spot_rest_testnet(self) -> None:
-        client = BinanceSpotRestClient(testnet=True)
-        assert "testnet" in client._api_base
-
-    def test_um_rest_api_base(self) -> None:
+    def test_um_rest_has_sdk_client(self) -> None:
         client = BinanceUmRestClient()
-        assert client._api_base == "https://fapi.binance.com/fapi/v1"
+        assert hasattr(client, "_client")
+        assert client.exchange_id == "binance_um"
 
-    def test_cm_rest_api_base(self) -> None:
+    def test_cm_rest_has_sdk_client(self) -> None:
         client = BinanceCmRestClient()
-        assert client._api_base == "https://dapi.binance.com/dapi/v1"
+        assert hasattr(client, "_client")
+        assert client.exchange_id == "binance_cm"
 
     def test_rest_clients_have_same_interface(self) -> None:
         spot = BinanceSpotRestClient()
@@ -102,27 +101,7 @@ class TestBinanceRestClients:
 
 
 class TestBinanceWsClients:
-    """Test WebSocket client configuration and URL building."""
-
-    def test_spot_ws_url(self) -> None:
-        client = BinanceSpotWsClient()
-        url = client._build_stream_url("btcusdt@kline_1h")
-        assert url == "wss://stream.binance.com:9443/ws/btcusdt@kline_1h"
-
-    def test_um_ws_url(self) -> None:
-        client = BinanceUmWsClient()
-        url = client._build_stream_url("btcusdt@kline_1h")
-        assert url == "wss://fstream.binance.com/ws/btcusdt@kline_1h"
-
-    def test_cm_ws_url(self) -> None:
-        client = BinanceCmWsClient()
-        url = client._build_stream_url("btcusdt@kline_1h")
-        assert url == "wss://dstream.binance.com/ws/btcusdt@kline_1h"
-
-    def test_spot_ws_testnet_url(self) -> None:
-        client = BinanceSpotWsClient(testnet=True)
-        url = client._build_stream_url("btcusdt@kline_1h")
-        assert "testnet" in url
+    """Test WebSocket client configuration and SDK initialization."""
 
     def test_ws_clients_have_same_interface(self) -> None:
         spot = BinanceSpotWsClient()
@@ -132,6 +111,21 @@ class TestBinanceWsClients:
             assert hasattr(client, "stream_ohlcv")
             assert hasattr(client, "fetch_ohlcv")
             assert hasattr(client, "close")
+
+    def test_spot_ws_exchange_id(self) -> None:
+        client = BinanceSpotWsClient()
+        assert client.exchange_id == "binance_spot"
+        assert client.trade_type == "spot"
+
+    def test_um_ws_exchange_id(self) -> None:
+        client = BinanceUmWsClient()
+        assert client.exchange_id == "binance_um"
+        assert client.trade_type == "um"
+
+    def test_cm_ws_exchange_id(self) -> None:
+        client = BinanceCmWsClient()
+        assert client.exchange_id == "binance_cm"
+        assert client.trade_type == "cm"
 
 
 class TestCCXTExchangeClient:

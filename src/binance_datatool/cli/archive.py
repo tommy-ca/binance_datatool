@@ -27,14 +27,41 @@ from binance_datatool.workflow import (
     ArchiveVerifyWorkflow,
     DiffResult,
     DownloadResult,
+    HealthCheckWorkflow,
     SymbolListingError,
     VerifyDiffResult,
     VerifyResult,
 )
+from binance_datatool.workflow.prefect_flows import (
+    gap_fill_flow,
+    refresh_metadata_flow,
+    sink_flow,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
+
+    from binance_datatool.exchange.client import ExchangeClient
+
+
+from pathlib import Path
+
+
+def _exchange_client_for_trade_type(trade_type: TradeType) -> ExchangeClient:
+    """Create a REST exchange client for the given trade type."""
+    match trade_type:
+        case TradeType.spot:
+            from binance_datatool.exchange import BinanceSpotRestClient
+
+            return BinanceSpotRestClient()
+        case TradeType.um:
+            from binance_datatool.exchange import BinanceUmRestClient
+
+            return BinanceUmRestClient()
+        case TradeType.cm:
+            from binance_datatool.exchange import BinanceCmRestClient
+
+            return BinanceCmRestClient()
 
 
 @app.command("list-symbols")
@@ -482,3 +509,237 @@ def verify_command(
         typer.echo("Failed files were kept because --keep-failed is enabled.", err=True)
 
     _warn_if_empty_local_scan(total_zips=result.total_zips)
+
+
+@app.command("gap-fill")
+def gap_fill_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type to fill."),
+    ] = DataType.klines,
+    symbol: Annotated[
+        str, typer.Option("--symbol", help="Trading symbol (e.g. BTCUSDT).")
+    ] = "BTCUSDT",
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Kline interval (required for klines)."),
+    ] = None,
+    start_time: Annotated[
+        int | None,
+        typer.Option("--start-time", help="Start time in ms."),
+    ] = None,
+    end_time: Annotated[
+        int | None,
+        typer.Option("--end-time", help="End time in ms."),
+    ] = None,
+    auto_detect: Annotated[
+        bool,
+        typer.Option("--auto-detect", help="Auto-detect gaps from local archive."),
+    ] = False,
+    lookback: Annotated[
+        int,
+        typer.Option("--lookback", help="Days to look back for gap detection."),
+    ] = 30,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Fill archive data gaps via REST API.
+
+    Uses the Binance REST API (via official SDK) to fill gaps in archive data
+    for klines, aggregated trades, or funding rate data.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+
+    if data_type.has_interval_layer and interval is None:
+        typer.echo("Error: --interval is required for kline-class data types", err=True)
+        raise typer.Exit(code=2)
+    if not data_type.has_interval_layer and interval is not None:
+        typer.echo("Error: --interval is not applicable for non-kline data types", err=True)
+        raise typer.Exit(code=2)
+
+    n_gaps = gap_fill_flow(
+        trade_type=trade_type.value,
+        symbol=symbol,
+        data_type=data_type.value,
+        interval=interval,
+        lookback_days=lookback,
+        archive_home=archive_home,
+    )
+
+    typer.echo(f"Gaps detected: {n_gaps}", err=True)
+    if n_gaps == 0:
+        return
+
+
+@app.command("health")
+def health_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    symbols: Annotated[list[str] | None, typer.Argument(help="Symbols to check.")] = None,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type to check."),
+    ] = DataType.klines,
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Interval for kline-class data types."),
+    ] = None,
+    max_stale: Annotated[
+        int,
+        typer.Option("--max-stale", help="Max days since latest data before warning."),
+    ] = 3,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Check health of local archive data.
+
+    Reports completeness, freshness, and integrity for each symbol.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+    from binance_datatool.common import DataFrequency
+
+    resolved_symbols = symbols or []
+    if not resolved_symbols:
+        typer.echo("Error: At least one SYMBOL argument required.", err=True)
+        raise typer.Exit(code=2)
+
+    workflow = HealthCheckWorkflow(
+        trade_type=trade_type,
+        data_freq=DataFrequency.daily,
+        data_type=data_type,
+        symbols=resolved_symbols,
+        archive_home=archive_home,
+        interval=interval,
+        max_stale_days=max_stale,
+    )
+
+    report = workflow.run()
+
+    for health in report.per_symbol:
+        status = "HEALTHY" if health.is_healthy else "ISSUES"
+        typer.echo(
+            f"{health.symbol}: {status} "
+            f"(dates: {health.date_count}, "
+            f"missing: {len(health.missing_dates)}, "
+            f"corrupted: {len(health.corrupted_files)}, "
+            f"latest: {health.latest_date or 'N/A'})"
+        )
+        if health.missing_dates:
+            typer.echo(f"  Missing: {health.missing_dates[:10]}", err=True)
+        if health.corrupted_files:
+            typer.echo(f"  Corrupted: {health.corrupted_files[:5]}", err=True)
+
+    typer.echo(
+        f"Summary: {report.healthy_symbols}/{report.total_symbols} healthy, "
+        f"{report.total_missing_dates} missing dates, "
+        f"{report.total_corrupted} corrupted files",
+        err=True,
+    )
+    if report.errors:
+        for err in report.errors:
+            typer.echo(f"Error: {err}", err=True)
+    if report.total_symbols > 0 and report.healthy_symbols < report.total_symbols:
+        raise typer.Exit(code=2)
+
+
+@app.command("sink")
+def sink_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    symbols: Annotated[list[str] | None, typer.Argument(help="Symbols to transform.")] = None,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type."),
+    ] = DataType.klines,
+    interval: Annotated[
+        str | None,
+        typer.Option("--interval", help="Kline interval."),
+    ] = None,
+    target: Annotated[
+        str,
+        typer.Option("--target", help="Sink target: parquet, duckdb, or all."),
+    ] = "parquet",
+    duckdb_path: Annotated[
+        str | None,
+        typer.Option("--duckdb", help="DuckDB file path (default: :memory:)."),
+    ] = None,
+    catalog_path: Annotated[
+        str | None,
+        typer.Option("--catalog", help="Parquet catalog directory."),
+    ] = None,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Transform archive data to Parquet and load into DuckDB.
+
+    Reads raw archive data (ZIP CSVs and filled CSVs), normalizes schemas,
+    writes partitioned Parquet files, and optionally loads into DuckDB.
+    """
+    archive_home = resolve_archive_home(archive_home_path)
+
+    resolved_symbols = symbols or []
+    if not resolved_symbols:
+        typer.echo("Error: At least one SYMBOL argument required.", err=True)
+        raise typer.Exit(code=2)
+
+    total_rows = sink_flow(
+        trade_type=trade_type.value,
+        symbols=resolved_symbols,
+        data_type=data_type.value,
+        interval=interval,
+        archive_home=archive_home,
+        catalog_path=Path(catalog_path) if catalog_path else None,
+    )
+
+    typer.echo(f"Transformed {len(resolved_symbols)} symbols, {total_rows} rows", err=True)
+
+
+@app.command("refresh-metadata")
+def refresh_metadata_command(
+    trade_type: Annotated[TradeType, typer.Argument(help="Market segment.")],
+    data_freq: Annotated[
+        DataFrequency,
+        typer.Option("--freq", help="Partition frequency."),
+    ] = DataFrequency.daily,
+    data_type: Annotated[
+        DataType,
+        typer.Option("--type", help="Dataset type."),
+    ] = DataType.klines,
+    from_api: Annotated[
+        bool,
+        typer.Option("--from-api", help="Fetch symbols from REST API instead of archive."),
+    ] = False,
+    duckdb_path: Annotated[
+        str | None,
+        typer.Option("--duckdb", help="Also register in DuckLake catalog (path to .duckdb)."),
+    ] = None,
+    catalog_path: Annotated[
+        str | None,
+        typer.Option("--catalog", help="Output catalog directory."),
+    ] = None,
+    archive_home_path: Annotated[
+        str | None,
+        typer.Option("--archive-home", help="Override archive home."),
+    ] = None,
+) -> None:
+    """Refresh venue and symbol metadata tables.
+
+    Lists symbols from the Binance archive (or REST API), saves as Parquet,
+    and optionally registers in a DuckLake catalog as native tables.
+    """
+
+    archive_home = resolve_archive_home(archive_home_path)
+    catalog = Path(catalog_path) if catalog_path else archive_home.parent / "lake"
+
+    n_syms = refresh_metadata_flow(
+        trade_type=trade_type.value,
+        catalog_path=catalog,
+        from_api=from_api,
+        duckdb_path=duckdb_path or str(catalog / "catalog.duckdb"),
+    )
+    typer.echo(f"Saved {n_syms} symbols for {trade_type.value}", err=True)

@@ -57,13 +57,9 @@ class CCXTProExchangeClient:
                 {"enableRateLimit": enable_rate_limit}
             )
         elif trade_type is TradeType.um:
-            self._exchange = ccxt_pro.binanceusdm(
-                {"enableRateLimit": enable_rate_limit}
-            )
+            self._exchange = ccxt_pro.binanceusdm({"enableRateLimit": enable_rate_limit})
         elif trade_type is TradeType.cm:
-            self._exchange = ccxt_pro.binancecoinm(
-                {"enableRateLimit": enable_rate_limit}
-            )
+            self._exchange = ccxt_pro.binancecoinm({"enableRateLimit": enable_rate_limit})
         else:
             raise ValueError(f"Unsupported trade_type: {trade_type}")
 
@@ -103,10 +99,7 @@ class CCXTProExchangeClient:
             KlineData objects as they arrive.
         """
         if interval not in VALID_INTERVALS:
-            raise ValueError(
-                f"Invalid interval: {interval!r}. "
-                f"Expected one of: {VALID_INTERVALS}"
-            )
+            raise ValueError(f"Invalid interval: {interval!r}. Expected one of: {VALID_INTERVALS}")
 
         interval_ms = self._interval_to_ms(interval)
         ccxt_symbol = self._to_ccxt_symbol(symbol)
@@ -157,7 +150,9 @@ class CCXTProExchangeClient:
         """
         if self._trade_type is TradeType.spot:
             base = symbol[:-4] if symbol.endswith(("USDT", "BUSD", "TUSD", "USDC")) else symbol[:-3]
-            quote = symbol[-4:] if symbol.endswith(("USDT", "BUSD", "TUSD", "USDC")) else symbol[-3:]
+            quote = (
+                symbol[-4:] if symbol.endswith(("USDT", "BUSD", "TUSD", "USDC")) else symbol[-3:]
+            )
             return f"{base}/{quote}"
         elif self._trade_type is TradeType.um:
             base = symbol[:-4] if symbol.endswith(("USDT", "BUSD", "TUSD", "USDC")) else symbol[:-3]
@@ -177,7 +172,6 @@ class CCXTProExchangeClient:
         """
         if interval not in VALID_INTERVALS:
             raise ValueError(
-                f"Unsupported interval: {interval!r}. "
-                f"Expected one of: {VALID_INTERVALS}"
+                f"Unsupported interval: {interval!r}. Expected one of: {VALID_INTERVALS}"
             )
         return interval

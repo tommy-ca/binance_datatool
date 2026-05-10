@@ -9,7 +9,7 @@ LineageTracker records and queries data source operations to enable:
 Example:
     ```python
     tracker = LineageTracker()
-    
+
     # Record a download event
     tracker.record(LineageEvent(
         source="binance",
@@ -18,10 +18,10 @@ Example:
         event_type=LineageEventType.DOWNLOADED,
         metadata={"file": "BTCUSDT-1d-2024-01-01.zip"}
     ))
-    
+
     # Query lineage for a symbol
     events = tracker.query(symbol="BTCUSDT")
-    
+
     # Export all events
     json_str = tracker.export(format="json")
     ```
@@ -32,11 +32,17 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from loguru import logger
+
+if TYPE_CHECKING:
+    import polars as pl
 
 
-class LineageEventType(str, Enum):
+class LineageEventType(StrEnum):
     """Types of lineage events."""
 
     DISCOVERED = "discovered"  # Symbol/file discovered
@@ -50,6 +56,13 @@ class LineageEventType(str, Enum):
     TRANSFORMED = "transformed"  # Data transformed
     LOADED = "loaded"  # Data loaded to storage
     REJECTED = "rejected"  # Data rejected
+    FILLED = "filled"  # Gap filled via REST API
+    HEALTH_CHECKED = "health_checked"  # Health check ran
+    SUNK = "sunk"  # Data sinked to DuckLake native table
+    STREAMED = "streamed"  # Data received via WebSocket stream
+    ANOMALY_DETECTED = "anomaly_detected"  # Anomaly found in health check
+    EXPORTED = "exported"  # Data exported for downstream use
+    BACKTESTED = "backtested"  # Data used in backtesting
 
 
 @dataclass(frozen=True)
@@ -70,7 +83,7 @@ class LineageEvent:
     symbol: str
     event_type: LineageEventType
     timestamp: datetime
-    date: Optional[str] = None
+    date: str | None = None
     message: str = ""
     metadata: dict = field(default_factory=dict)
 
@@ -110,11 +123,11 @@ class LineageTracker:
 
     def query(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-        date: Optional[str] = None,
-        event_type: Optional[LineageEventType] = None,
-        date_range: Optional[tuple[datetime, datetime]] = None,
+        source: str | None = None,
+        symbol: str | None = None,
+        date: str | None = None,
+        event_type: LineageEventType | None = None,
+        date_range: tuple[datetime, datetime] | None = None,
     ) -> list[LineageEvent]:
         """Query lineage events with optional filters.
 
@@ -151,9 +164,9 @@ class LineageTracker:
 
     def get_latest(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-    ) -> Optional[LineageEvent]:
+        source: str | None = None,
+        symbol: str | None = None,
+    ) -> LineageEvent | None:
         """Get the most recent lineage event matching filters.
 
         Args:
@@ -170,9 +183,9 @@ class LineageTracker:
 
     def count(
         self,
-        source: Optional[str] = None,
-        symbol: Optional[str] = None,
-        event_type: Optional[LineageEventType] = None,
+        source: str | None = None,
+        symbol: str | None = None,
+        event_type: LineageEventType | None = None,
     ) -> int:
         """Count lineage events matching filters.
 
@@ -213,10 +226,7 @@ class LineageTracker:
         elif format == "csv":
             return self._export_csv()
         else:
-            raise ValueError(
-                f"Unsupported export format: {format}. "
-                "Supported: json, jsonl, csv"
-            )
+            raise ValueError(f"Unsupported export format: {format}. Supported: json, jsonl, csv")
 
     def _export_json(self) -> str:
         """Export events as JSON array."""
@@ -276,6 +286,88 @@ class LineageTracker:
 
         return output.getvalue()
 
+    def to_dataframe(self) -> pl.DataFrame:
+        """Export lineage events as a Polars DataFrame.
+
+        Returns:
+            DataFrame with columns: source, symbol, date, event_type,
+            timestamp, message, plus metadata columns.
+        """
+        import polars as pl
+
+        rows = []
+        for event in self._events:
+            row = {
+                "source": event.source,
+                "symbol": event.symbol,
+                "date": event.date or "",
+                "event_type": event.event_type.value,
+                "timestamp": event.timestamp.isoformat(),
+                "message": event.message,
+                "metadata": json.dumps(event.metadata),
+            }
+            rows.append(row)
+        return pl.DataFrame(rows) if rows else pl.DataFrame()
+
+    def save_ducklake(self, duckdb_path: str, catalog_path: str | None = None) -> int:
+        """Persist lineage events to a DuckLake native table.
+
+        Creates/updates a ``lineage`` table in DuckLake so downstream
+        tools (backtesting, replay, live trading) can query data provenance.
+
+        Args:
+            duckdb_path: Path to DuckDB database file.
+            catalog_path: Path to DuckLake catalog (default: auto-derived).
+
+        Returns:
+            Number of events persisted.
+        """
+        if not self._events:
+            return 0
+        import duckdb
+
+        lake = Path(catalog_path) if catalog_path else Path(duckdb_path).parent / "lake"
+        meta = lake / "metadata.ducklake"
+
+        con = duckdb.connect(duckdb_path)
+        try:
+            con.execute("LOAD ducklake")
+            con.execute(
+                f"ATTACH 'ducklake:{meta}' AS dl (DATA_PATH '{lake}/data', AUTOMATIC_MIGRATION true)"
+            )
+            con.execute("USE dl")
+
+            # Create lineage table if not exists
+            con.execute(
+                "CREATE TABLE IF NOT EXISTS lineage ("
+                "source VARCHAR, symbol VARCHAR, date VARCHAR, "
+                "event_type VARCHAR, timestamp VARCHAR, message VARCHAR, "
+                "metadata VARCHAR, ingested_at BIGINT"
+                ")"
+            )
+
+            now_ms = int(datetime.now().timestamp() * 1000)
+            for event in self._events:
+                con.execute(
+                    "INSERT INTO lineage VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        event.source,
+                        event.symbol,
+                        event.date or "",
+                        event.event_type.value,
+                        event.timestamp.isoformat(),
+                        event.message,
+                        json.dumps(event.metadata),
+                        now_ms,
+                    ],
+                )
+
+            count = con.execute("SELECT COUNT(*) FROM lineage").fetchone()[0]
+            logger.info("Lineage: saved {} events to DuckLake table", count)
+        finally:
+            con.close()
+        return len(self._events)
+
     def stats(self) -> dict:
         """Return summary statistics about recorded events.
 
@@ -297,9 +389,7 @@ class LineageTracker:
             )
 
             # Count by source
-            stats_dict["by_source"][event.source] = (
-                stats_dict["by_source"].get(event.source, 0) + 1
-            )
+            stats_dict["by_source"][event.source] = stats_dict["by_source"].get(event.source, 0) + 1
 
             # Track unique symbols
             stats_dict["by_symbol"].add(event.symbol)

@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
-import aiohttp
+from binance_common.configuration import ConfigurationRestAPI
+from binance_common.constants import (
+    DERIVATIVES_TRADING_COIN_FUTURES_REST_API_PROD_URL,
+    DERIVATIVES_TRADING_USDS_FUTURES_REST_API_PROD_URL,
+    SPOT_REST_API_PROD_URL,
+    SPOT_REST_API_TESTNET_URL,
+)
+from binance_sdk_derivatives_trading_coin_futures.derivatives_trading_coin_futures import (
+    DerivativesTradingCoinFutures,
+)
+from binance_sdk_derivatives_trading_usds_futures.derivatives_trading_usds_futures import (
+    DerivativesTradingUsdsFutures,
+)
+from binance_sdk_spot.spot import Spot
 
 from binance_datatool.common.enums import TradeType
 from binance_datatool.common.intervals import VALID_INTERVALS
@@ -10,21 +23,41 @@ from binance_datatool.common.types import KlineData
 
 __all__ = ["BinanceSpotRestClient", "BinanceUmRestClient", "BinanceCmRestClient"]
 
-#: Maximum candles per Binance klines request.
 _KLINES_LIMIT = 1000
 
-#: Base URLs for each market type.
-_BASE_URLS = {
-    TradeType.spot: "https://api.binance.com/api/v3",
-    TradeType.um: "https://fapi.binance.com/fapi/v1",
-    TradeType.cm: "https://dapi.binance.com/dapi/v1",
+_SDK_CLASSES = {
+    TradeType.spot: Spot,
+    TradeType.um: DerivativesTradingUsdsFutures,
+    TradeType.cm: DerivativesTradingCoinFutures,
 }
 
-_TESTNET_BASE = "https://testnet.binance.vision/api/v3"
+_SDK_BASE_URLS = {
+    TradeType.spot: SPOT_REST_API_PROD_URL,
+    TradeType.um: DERIVATIVES_TRADING_USDS_FUTURES_REST_API_PROD_URL,
+    TradeType.cm: DERIVATIVES_TRADING_COIN_FUTURES_REST_API_PROD_URL,
+}
+
+_REST_API_METHOD = {
+    TradeType.spot: "klines",
+    TradeType.um: "kline_candlestick_data",
+    TradeType.cm: "kline_candlestick_data",
+}
+
+_AGG_TRADES_METHOD = {
+    TradeType.spot: "agg_trades",
+    TradeType.um: "compressed_aggregate_trades_list",
+    TradeType.cm: "compressed_aggregate_trades_list",
+}
+
+_FUNDING_RATE_METHOD = {
+    TradeType.spot: None,
+    TradeType.um: "get_funding_rate_history",
+    TradeType.cm: "get_funding_rate_history_of_perpetual_futures",
+}
 
 
 class _BinanceRestClientBase:
-    """Base class for Binance REST clients using aiohttp.
+    """Base class for Binance REST clients using official SDK.
 
     Not intended for direct use — use the market-specific subclasses.
     """
@@ -33,12 +66,16 @@ class _BinanceRestClientBase:
         self,
         trade_type: TradeType,
         timeout_seconds: int | float = 30,
-        trust_env: bool = True,
     ) -> None:
         self._trade_type = trade_type
-        self._timeout_seconds = timeout_seconds
-        self._trust_env = trust_env
-        self._api_base = _BASE_URLS[trade_type]
+        base_url = _SDK_BASE_URLS[trade_type]
+        config = ConfigurationRestAPI(
+            api_key="",
+            api_secret="",
+            base_path=base_url,
+            timeout=int(timeout_seconds * 1000),
+        )
+        self._client = _SDK_CLASSES[trade_type](config_rest_api=config)
 
     @property
     def exchange_id(self) -> str:
@@ -56,30 +93,72 @@ class _BinanceRestClientBase:
         end_time: int | None,
         limit: int,
     ) -> list[KlineData]:
-        """Fetch a single page of klines from Binance REST API."""
-        params: dict[str, str | int] = {
+        method_name = _REST_API_METHOD[self._trade_type]
+        rest_api = self._client.rest_api
+        method = getattr(rest_api, method_name)
+
+        params: dict = {
             "symbol": symbol.upper(),
             "interval": interval,
             "limit": limit,
         }
         if start_time is not None:
-            params["startTime"] = start_time
+            params["start_time"] = start_time
         if end_time is not None:
-            params["endTime"] = end_time
+            params["end_time"] = end_time
 
-        timeout = aiohttp.ClientTimeout(total=self._timeout_seconds)
-        async with aiohttp.ClientSession(
-            timeout=timeout, trust_env=self._trust_env
-        ) as session, session.get(
-            f"{self._api_base}/klines", params=params
-        ) as response:
-            response.raise_for_status()
-            data = await response.json()
+        response = method(**params)
+        data = response.data()
 
         return [KlineData.from_binance_api(kline) for kline in data]
 
+    async def fetch_agg_trades(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        method_name = _AGG_TRADES_METHOD[self._trade_type]
+        rest_api = self._client.rest_api
+        method = getattr(rest_api, method_name)
+
+        params: dict = {"symbol": symbol.upper()}
+        if since is not None:
+            params["start_time"] = since
+        if until is not None:
+            params["end_time"] = until
+        if limit is not None:
+            params["limit"] = limit
+
+        response = method(**params)
+        return response.data()
+
+    async def fetch_funding_rate(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        method_name = _FUNDING_RATE_METHOD.get(self._trade_type)
+        if method_name is None:
+            raise NotImplementedError(f"Funding rate not supported for {self._trade_type}")
+        rest_api = self._client.rest_api
+        method = getattr(rest_api, method_name)
+
+        params: dict = {"symbol": symbol.upper()}
+        if since is not None:
+            params["start_time"] = since
+        if until is not None:
+            params["end_time"] = until
+        if limit is not None:
+            params["limit"] = limit
+
+        response = method(**params)
+        return response.data()
+
     async def close(self) -> None:
-        """No-op for stateless REST client."""
         return
 
 
@@ -92,23 +171,18 @@ class BinanceSpotRestClient(_BinanceRestClientBase):
     def __init__(
         self,
         timeout_seconds: int | float = 30,
-        trust_env: bool = True,
         testnet: bool = False,
     ) -> None:
-        """Initialize spot REST client.
-
-        Args:
-            timeout_seconds: HTTP request timeout.
-            trust_env: Honour HTTP_PROXY environment variables.
-            testnet: Use Binance spot testnet.
-        """
-        super().__init__(
-            trade_type=TradeType.spot,
-            timeout_seconds=timeout_seconds,
-            trust_env=trust_env,
+        self._trade_type = TradeType.spot
+        self._timeout_seconds = timeout_seconds
+        base_url = SPOT_REST_API_TESTNET_URL if testnet else SPOT_REST_API_PROD_URL
+        config = ConfigurationRestAPI(
+            api_key="",
+            api_secret="",
+            base_path=base_url,
+            timeout=int(timeout_seconds * 1000),
         )
-        if testnet:
-            self._api_base = _TESTNET_BASE
+        self._client = Spot(config_rest_api=config)
 
     async def fetch_ohlcv(
         self,
@@ -118,28 +192,20 @@ class BinanceSpotRestClient(_BinanceRestClientBase):
         until: int | None = None,
         limit: int | None = None,
     ) -> list[KlineData]:
-        """Fetch spot klines via REST API with auto-pagination."""
         if interval not in VALID_INTERVALS:
-            raise ValueError(
-                f"Invalid interval: {interval!r}. "
-                f"Expected one of: {VALID_INTERVALS}"
-            )
+            raise ValueError(f"Invalid interval: {interval!r}. Expected one of: {VALID_INTERVALS}")
 
         if limit is not None and limit > _KLINES_LIMIT:
             raise ValueError(f"Limit cannot exceed {_KLINES_LIMIT}")
 
-        # Single request path
         if limit is not None and limit <= _KLINES_LIMIT:
             return await self._fetch_page(symbol, interval, since, until, limit)
 
-        # Auto-pagination path
         all_klines: list[KlineData] = []
         current_start = since
 
         while True:
-            batch = await self._fetch_page(
-                symbol, interval, current_start, until, _KLINES_LIMIT
-            )
+            batch = await self._fetch_page(symbol, interval, current_start, until, _KLINES_LIMIT)
             if not batch:
                 break
 
@@ -156,7 +222,6 @@ class BinanceSpotRestClient(_BinanceRestClientBase):
         return all_klines
 
     async def stream_ohlcv(self, symbol: str, interval: str):
-        """Not supported over REST — raises NotImplementedError."""
         raise NotImplementedError("Use BinanceSpotWsClient for WebSocket streaming")
 
 
@@ -170,18 +235,10 @@ class BinanceUmRestClient(_BinanceRestClientBase):
     def __init__(
         self,
         timeout_seconds: int | float = 30,
-        trust_env: bool = True,
     ) -> None:
-        """Initialize UM futures REST client.
-
-        Args:
-            timeout_seconds: HTTP request timeout.
-            trust_env: Honour HTTP_PROXY environment variables.
-        """
         super().__init__(
             trade_type=TradeType.um,
             timeout_seconds=timeout_seconds,
-            trust_env=trust_env,
         )
 
     async def fetch_ohlcv(
@@ -192,12 +249,8 @@ class BinanceUmRestClient(_BinanceRestClientBase):
         until: int | None = None,
         limit: int | None = None,
     ) -> list[KlineData]:
-        """Fetch USD-M futures klines via REST API with auto-pagination."""
         if interval not in VALID_INTERVALS:
-            raise ValueError(
-                f"Invalid interval: {interval!r}. "
-                f"Expected one of: {VALID_INTERVALS}"
-            )
+            raise ValueError(f"Invalid interval: {interval!r}. Expected one of: {VALID_INTERVALS}")
 
         if limit is not None and limit > _KLINES_LIMIT:
             raise ValueError(f"Limit cannot exceed {_KLINES_LIMIT}")
@@ -209,9 +262,7 @@ class BinanceUmRestClient(_BinanceRestClientBase):
         current_start = since
 
         while True:
-            batch = await self._fetch_page(
-                symbol, interval, current_start, until, _KLINES_LIMIT
-            )
+            batch = await self._fetch_page(symbol, interval, current_start, until, _KLINES_LIMIT)
             if not batch:
                 break
 
@@ -241,18 +292,10 @@ class BinanceCmRestClient(_BinanceRestClientBase):
     def __init__(
         self,
         timeout_seconds: int | float = 30,
-        trust_env: bool = True,
     ) -> None:
-        """Initialize CM futures REST client.
-
-        Args:
-            timeout_seconds: HTTP request timeout.
-            trust_env: Honour HTTP_PROXY environment variables.
-        """
         super().__init__(
             trade_type=TradeType.cm,
             timeout_seconds=timeout_seconds,
-            trust_env=trust_env,
         )
 
     async def fetch_ohlcv(
@@ -263,12 +306,8 @@ class BinanceCmRestClient(_BinanceRestClientBase):
         until: int | None = None,
         limit: int | None = None,
     ) -> list[KlineData]:
-        """Fetch COIN-M futures klines via REST API with auto-pagination."""
         if interval not in VALID_INTERVALS:
-            raise ValueError(
-                f"Invalid interval: {interval!r}. "
-                f"Expected one of: {VALID_INTERVALS}"
-            )
+            raise ValueError(f"Invalid interval: {interval!r}. Expected one of: {VALID_INTERVALS}")
 
         if limit is not None and limit > _KLINES_LIMIT:
             raise ValueError(f"Limit cannot exceed {_KLINES_LIMIT}")
@@ -280,9 +319,7 @@ class BinanceCmRestClient(_BinanceRestClientBase):
         current_start = since
 
         while True:
-            batch = await self._fetch_page(
-                symbol, interval, current_start, until, _KLINES_LIMIT
-            )
+            batch = await self._fetch_page(symbol, interval, current_start, until, _KLINES_LIMIT)
             if not batch:
                 break
 
@@ -302,5 +339,4 @@ class BinanceCmRestClient(_BinanceRestClientBase):
         raise NotImplementedError("Use BinanceCmWsClient for WebSocket streaming")
 
 
-# Backward compatibility alias
 BinanceRestClient = BinanceSpotRestClient

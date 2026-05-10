@@ -60,6 +60,134 @@ class KlineData:
     taker_buy_volume: str
     taker_buy_quote_volume: str
 
+    @classmethod
+    def from_binance_api(cls, kline: list) -> KlineData:
+        """Create a KlineData from a Binance REST API kline response.
+
+        The Binance klines endpoint returns an array of 12 elements:
+        [open_time, open, high, low, close, volume, close_time,
+         quote_volume, num_trades, taker_buy_volume, taker_buy_quote_volume, ignore]
+        """
+        return cls(
+            open_time=int(kline[0]),
+            open=str(kline[1]),
+            high=str(kline[2]),
+            low=str(kline[3]),
+            close=str(kline[4]),
+            volume=str(kline[5]),
+            close_time=int(kline[6]),
+            quote_volume=str(kline[7]),
+            num_trades=int(kline[8]),
+            taker_buy_volume=str(kline[9]),
+            taker_buy_quote_volume=str(kline[10]),
+        )
+
+
+@dataclass(slots=True)
+class SilverKline:
+    """Normalized silver-layer kline record.
+
+    Unifies spot/um/cm klines from all sources (archive, API, WS).
+    Follows Databento DBN conventions with ts_event/ts_recv.
+
+    DBN: https://databento.com/docs/schemas/dbn
+    tardis.dev: https://docs.tardis.dev/api/data-structures
+    """
+
+    ts_event: int
+    ts_recv: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    quote_volume: float
+    trade_count: int
+    taker_buy_volume: float
+    taker_buy_quote_volume: float
+    source: str
+    trade_type: str
+    symbol: str
+    interval: str
+    data_type: str
+    ingested_at: int
+
+
+@dataclass(slots=True)
+class SilverTrade:
+    """Normalized silver-layer trade record.
+
+    Unifies trades/aggTrades from all trade types.
+    Follows DBN action/side and tardis.dev price/size conventions.
+
+    DBN: https://databento.com/docs/schemas/dbn-trades
+    tardis.dev: https://docs.tardis.dev/api/data-structures#trade
+    """
+
+    ts_event: int
+    ts_recv: int
+    price: float
+    size: float
+    side: str | None
+    trade_id: int
+    rtype: str = "trade"
+    agg_trade_id: int | None = None
+    is_buyer_maker: int | None = None
+    source: str = ""
+    trade_type: str = ""
+    symbol: str = ""
+    data_type: str = ""
+    ingested_at: int = 0
+
+
+@dataclass(slots=True)
+class SilverFundingRate:
+    """Normalized silver-layer funding rate record.
+
+    Follows tardis.dev funding rate structure while keeping
+    Databento DBN ts_event/ts_recv convention.
+    """
+
+    ts_event: int
+    ts_recv: int
+    funding_rate: float
+    mark_price: float
+    source: str = ""
+    trade_type: str = ""
+    symbol: str = ""
+    data_type: str = ""
+    ingested_at: int = 0
+
+
+@dataclass(slots=True)
+class VenueMetadata:
+    """Trading venue metadata fetched from archive or API."""
+
+    venue: str
+    trade_type: str
+    exchange: str
+    source: str
+    symbol_count: int
+    data_types: list[str]
+    fetched_at: int
+
+
+@dataclass(slots=True)
+class SymbolMetadata:
+    """Trading symbol metadata fetched from archive or API."""
+
+    symbol: str
+    trade_type: str
+    exchange: str
+    base_asset: str
+    quote_asset: str
+    contract_type: str | None = None
+    is_leverage: bool = False
+    is_stable_pair: bool = False
+    source: str = ""
+    status: str = "trading"
+    fetched_at: int = 0
+
 
 __all__ = [
     "SymbolInfoBase",
@@ -68,4 +196,9 @@ __all__ = [
     "CmSymbolInfo",
     "SymbolInfo",
     "KlineData",
+    "SilverKline",
+    "SilverTrade",
+    "SilverFundingRate",
+    "VenueMetadata",
+    "SymbolMetadata",
 ]

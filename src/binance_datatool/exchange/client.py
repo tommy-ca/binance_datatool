@@ -41,6 +41,46 @@ class ExchangeClient(Protocol):
         """
         ...
 
+    async def fetch_agg_trades(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """Fetch historical aggregated trades.
+
+        Args:
+            symbol: Trading pair (e.g. "BTCUSDT").
+            since: Start time in milliseconds.
+            until: End time in milliseconds.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of aggregated trade records.
+        """
+        ...
+
+    async def fetch_funding_rate(
+        self,
+        symbol: str,
+        since: int | None = None,
+        until: int | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """Fetch historical funding rate data (futures only).
+
+        Args:
+            symbol: Trading pair (e.g. "BTCUSDT").
+            since: Start time in milliseconds.
+            until: End time in milliseconds.
+            limit: Maximum number of records to return.
+
+        Returns:
+            List of funding rate records.
+        """
+        ...
+
     async def stream_ohlcv(
         self,
         symbol: str,

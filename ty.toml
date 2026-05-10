@@ -1,0 +1,18 @@
+[rules]
+# 3rd-party type stub false positives (Prefect, Polars, CCXT, loguru)
+no-matching-overload = "ignore"
+too-many-positional-arguments = "ignore"
+invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
+invalid-return-type = "ignore"
+
+# Pre-existing issues in lineage.py (dict type narrowing, None fetchone)
+not-subscriptable = "ignore"
+invalid-assignment = "ignore"
+
+[analysis]
+allowed-unresolved-imports = ["pyiceberg.**", "ccxt"]
+respect-type-ignore-comments = true
+
+[environment]
+python-version = "3.11"

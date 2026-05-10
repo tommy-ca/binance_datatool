@@ -23,9 +23,9 @@ from the ground up for AI agents and quantitative workflows.
 
 ## Agent Skill
 
-A packaged [Agent Skill](skills/binance-datatool/SKILL.md) is included in this repository. 
+A packaged [Agent Skill](skills/binance-datatool/SKILL.md) is included in this repository.
 
-It teaches agents how to use `binance-datatool` to discover, download, and 
+It teaches agents how to use `binance-datatool` to discover, download, and
 verify Binance historical market data — no manual command lookup required.
 
 ## Features

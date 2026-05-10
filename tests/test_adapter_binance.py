@@ -86,9 +86,7 @@ class TestBinanceAdapterListSymbols:
     async def test_list_symbols_um_monthly(self):
         """Test listing UM futures monthly symbols."""
         adapter = BinanceAdapter()
-        adapter._client = FakeBinanceArchiveClient(
-            symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"]
-        )
+        adapter._client = FakeBinanceArchiveClient(symbols=["BTCUSDT", "ETHUSDT", "BNBUSDT"])
 
         symbols = await adapter.list_symbols(
             market_type="um", partition="monthly", data_type="klines"
@@ -113,27 +111,21 @@ class TestBinanceAdapterListSymbols:
         adapter = BinanceAdapter()
 
         with pytest.raises(ValueError, match="Invalid market_type"):
-            await adapter.list_symbols(
-                market_type="invalid", partition="daily", data_type="klines"
-            )
+            await adapter.list_symbols(market_type="invalid", partition="daily", data_type="klines")
 
     async def test_list_symbols_invalid_partition(self):
         """Test list_symbols with invalid partition."""
         adapter = BinanceAdapter()
 
         with pytest.raises(ValueError, match="Invalid partition"):
-            await adapter.list_symbols(
-                market_type="spot", partition="weekly", data_type="klines"
-            )
+            await adapter.list_symbols(market_type="spot", partition="weekly", data_type="klines")
 
     async def test_list_symbols_invalid_data_type(self):
         """Test list_symbols with invalid data_type."""
         adapter = BinanceAdapter()
 
         with pytest.raises(ValueError, match="Invalid data_type"):
-            await adapter.list_symbols(
-                market_type="spot", partition="daily", data_type="invalid"
-            )
+            await adapter.list_symbols(market_type="spot", partition="daily", data_type="invalid")
 
     async def test_list_symbols_agg_trades(self):
         """Test listing symbols for aggTrades data type."""
@@ -166,9 +158,7 @@ class TestBinanceAdapterListFiles:
                 last_modified=datetime(2024, 1, 3, tzinfo=UTC),
             ),
         ]
-        adapter._client = FakeBinanceArchiveClient(
-            files_by_symbol={"BTCUSDT": archive_files}
-        )
+        adapter._client = FakeBinanceArchiveClient(files_by_symbol={"BTCUSDT": archive_files})
 
         files = await adapter.list_files(
             market_type="spot",
@@ -192,9 +182,7 @@ class TestBinanceAdapterListFiles:
                 last_modified=datetime(2024, 1, 2, tzinfo=UTC),
             ),
         ]
-        adapter._client = FakeBinanceArchiveClient(
-            files_by_symbol={"BTCUSDT": archive_files}
-        )
+        adapter._client = FakeBinanceArchiveClient(files_by_symbol={"BTCUSDT": archive_files})
 
         files = await adapter.list_files(
             market_type="spot",
@@ -231,9 +219,7 @@ class TestBinanceAdapterListFiles:
                 last_modified=datetime(2024, 1, 2, tzinfo=UTC),
             ),
         ]
-        adapter._client = FakeBinanceArchiveClient(
-            files_by_symbol={"BTCUSDT": archive_files}
-        )
+        adapter._client = FakeBinanceArchiveClient(files_by_symbol={"BTCUSDT": archive_files})
 
         files = await adapter.list_files(
             market_type="spot",
@@ -415,8 +401,6 @@ class TestBinanceAdapterFetchFile:
         This is a placeholder to document the expected behavior.
         Real integration tests should mock aiohttp.
         """
-        adapter = BinanceAdapter()
-
-        # In real integration tests, mock aiohttp.ClientSession
+        # In real integration tests, create BinanceAdapter() and mock aiohttp
         # For now, we skip actual network tests
         pytest.skip("Requires mocking aiohttp")

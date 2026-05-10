@@ -8,7 +8,7 @@ Example:
     ```python
     # Get an adapter via source name
     adapter = get_adapter_for_source("binance")
-    
+
     # Use it with existing workflow parameters
     symbols = await adapter.list_symbols("spot", "daily", "klines")
     ```

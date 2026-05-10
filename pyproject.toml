@@ -28,8 +28,15 @@ classifiers = [
 ]
 dependencies = [
   "aiohttp>=3.13.5",
+  "binance-sdk-derivatives-trading-coin-futures>=1.0.0",
+  "binance-sdk-derivatives-trading-usds-futures>=9.0.0",
+  "binance-sdk-spot>=8.0.0",
+  "duckdb>=1.5.0",
   "loguru>=0.7.3",
-  "python-binance>=1.0.32",
+  "polars>=1.0.0",
+  "prefect>=3.7.0",
+  "pyarrow>=24.0.0",
+  "pydantic-settings>=2.0.0",
   "tenacity>=9.1.4",
   "tqdm>=4.67.1",
   "typer>=0.24.1",
@@ -70,7 +77,6 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 extend-select = ["W", "I", "UP", "B", "SIM", "TC"]
-future-annotations = true
 
 [tool.ruff.lint.per-file-ignores]
 "src/binance_datatool/cli/*.py" = ["TC001"]

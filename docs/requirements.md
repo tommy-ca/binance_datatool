@@ -2,9 +2,9 @@
 
 ## 1. Project Overview
 
-**Project**: `binance-datatool` — A multi-source cryptocurrency market data ingestion toolkit  
-**Current Scope**: Binance public archive (data.binance.vision) with support for spot, USD-M futures, and COIN-M futures  
-**Target Scope**: Multi-exchange support (Coinbase, Kraken, Bybit, etc.) with explicit DataOps and MLOps concerns  
+**Project**: `binance-datatool` — A multi-source cryptocurrency market data ingestion toolkit
+**Current Scope**: Binance public archive (data.binance.vision) with support for spot, USD-M futures, and COIN-M futures
+**Target Scope**: Multi-exchange support (Coinbase, Kraken, Bybit, etc.) with explicit DataOps and MLOps concerns
 **Principles**: SOLID, KISS, DRY, YAGNI with specification-driven development and TDD
 
 ---
@@ -41,9 +41,9 @@
 
 ### 3.1 User Personas
 
-1. **Quant Researcher**: Downloads historical OHLCV data for backtesting  
-2. **MLOps Engineer**: Ingests data into a lakehouse for feature engineering  
-3. **Data Platform Owner**: Orchestrates multi-source data pipelines; monitors quality  
+1. **Quant Researcher**: Downloads historical OHLCV data for backtesting
+2. **MLOps Engineer**: Ingests data into a lakehouse for feature engineering
+3. **Data Platform Owner**: Orchestrates multi-source data pipelines; monitors quality
 4. **AI Agent / Subagent**: Programmatically discovers, downloads, and verifies data
 
 ### 3.2 Key Use Cases
@@ -119,14 +119,14 @@ Foundation Layer (enums, types, filters, progress)
 
 ### 4.3 Design Principles
 
-**Single Responsibility**: Each module/class owns ONE clear concern  
-**Open/Closed**: Open to extension (new adapters) via plugins; closed to modification (core workflows stay stable)  
-**Liskov Substitution**: All adapters implement the same protocol; workflows don't know the concrete type  
-**Interface Segregation**: Thin protocols (DataSourceAdapter, StorageBackend) not monolithic interfaces  
+**Single Responsibility**: Each module/class owns ONE clear concern
+**Open/Closed**: Open to extension (new adapters) via plugins; closed to modification (core workflows stay stable)
+**Liskov Substitution**: All adapters implement the same protocol; workflows don't know the concrete type
+**Interface Segregation**: Thin protocols (DataSourceAdapter, StorageBackend) not monolithic interfaces
 **Dependency Inversion**: Core depends on abstractions (protocols), not concrete implementations
 
-**KISS**: Keep it simple and focused. No unnecessary abstraction or premature generalization.  
-**DRY**: Reuse shared logic via base classes, mixins, or utility functions. Don't duplicate patterns.  
+**KISS**: Keep it simple and focused. No unnecessary abstraction or premature generalization.
+**DRY**: Reuse shared logic via base classes, mixins, or utility functions. Don't duplicate patterns.
 **YAGNI**: Only implement features when explicitly requested. No speculative hooks or "future-proofing".
 
 ---
@@ -201,24 +201,24 @@ class SymbolMetadata:
 @dataclass
 class DataContract:
     """Explicit schema and validation rules for a dataset."""
-    
+
     source: DataSource
     market_type: MarketType
     data_type: DataType
     partition_freq: PartitionFreq
-    
+
     # Schema: columns, types, nullability
     schema: dict[str, type]
-    
+
     # Partition keys for organization
     partition_cols: list[str]
-    
+
     # Primary/unique key columns
     key_cols: list[str]
-    
+
     # Validation rules (e.g., "price > 0", "volume >= 0")
     validators: list[Callable[[Any], bool]]
-    
+
     def validate(self, dataframe) -> ValidationResult:
         """Validate a dataframe against this contract."""
         # Check schema, nullability, constraints
@@ -241,24 +241,24 @@ Flow:
     ↓ builds SymbolFilter(quote_assets=frozenset(["USDT"]), exclude_stables=True)
     ↓ constructs ArchiveListSymbolsWorkflow(client, filter)
     ↓ calls asyncio.run(workflow.run())
-    
+
   Workflow (workflow/list_symbols.py)
     ↓ calls client.list_symbols(trade_type, data_freq, data_type)
-    
+
   Archive Client (archive/client.py)
     ↓ builds S3 prefix: "data/spot/daily/klines/"
     ↓ creates async HTTP session
     ↓ calls list_dir(session, prefix) → paginated S3 listing
     ↓ parses XML responses → list of symbol prefixes
     ↓ returns sorted list: ["BTCUSDT", "ETHUSDT", ...]
-    
+
   Workflow (continued)
     ↓ infers symbol metadata: infer_spot_info("BTCUSDT")
       → SpotSymbolInfo(symbol, base, quote, is_leverage, is_stable_pair)
     ↓ applies filter.matches(info) → True/False
     ↓ splits into matched, filtered_out, unmatched buckets
     ↓ returns ListSymbolsResult(matched=[...], filtered_out=[...], unmatched=[...])
-    
+
   CLI (continued)
     ↓ prints matched symbols one per line to stdout
     ↓ exit code 0
@@ -276,33 +276,33 @@ Flow:
     ↓ parses args → trade_type, data_type, interval, symbols (from stdin or args)
     ↓ resolves archive_home from --archive-home or BINANCE_DATATOOL_ARCHIVE_HOME
     ↓ constructs ArchiveDownloadWorkflow(
-        trade_type, data_type, symbols, archive_home, 
+        trade_type, data_type, symbols, archive_home,
         interval, dry_run=True
       )
     ↓ calls asyncio.run(workflow.run())
-    
+
   Workflow (workflow/download.py)
     ↓ Step 1: List remote files
       - constructs ArchiveListFilesWorkflow(symbols=...)
       - calls client.list_symbol_files_batch(symbols) concurrently
       - collects files and per-symbol errors
-      
+
     ↓ Step 2: Compute diff (local vs remote)
       - scans local archive_home/data/spot/.../symbol/ for existing files
       - compares last_modified timestamps
       - classifies each remote file as: new, updated, or skipped
-      
+
     ↓ Step 3a (dry_run=True): Return diff
       - returns DiffResult(to_download=[...], skipped=N, listing_errors=[...])
       - CLI prints each entry: "new\tSize\tpath"
-      
+
     ↓ Step 3b (dry_run=False): Download
       - invalidates stale verify markers for updated files
       - deletes local copies of files marked "updated"
       - calls downloader.download(DownloadRequest list)
         - aria2c fetches files in batches with retry logic
       - returns DownloadResult(downloaded=N, failed=M, ...)
-      
+
   CLI (continued)
     ↓ prints results
     ↓ if dry_run: prints diff; exit 0
@@ -319,7 +319,7 @@ Flow:
     ↓ resolves archive_home
     ↓ constructs ArchiveVerifyWorkflow(symbols, archive_home, dry_run=False)
     ↓ calls workflow.run()  (note: sync, not async)
-    
+
   Workflow (workflow/verify.py)
     ↓ Step 1: Scan local directory
       - uses ThreadPoolExecutor to scan symbol directories in parallel
@@ -327,10 +327,10 @@ Flow:
         - scans .zip files and .zip.CHECKSUM files
         - checks for .verified marker files (timestamped)
         - classifies: to_verify, already_verified (skipped), orphaned
-        
+
     ↓ Step 2a (dry_run=True): Return scan results
       - returns VerifyDiffResult(to_verify=[...], skipped=N, orphan_zips=[...])
-      
+
     ↓ Step 2b (dry_run=False): Verify
       - cleans orphaned files (deletes orphan .zip and .CHECKSUM)
       - uses ProcessPoolExecutor to verify files in parallel
@@ -341,7 +341,7 @@ Flow:
       - for passed verifications: writes .zip.TIMESTAMP.verified marker
       - for failed verifications: optionally deletes both .zip and .CHECKSUM
       - returns VerifyResult(verified=N, failed=M, orphan_zips=P, ...)
-      
+
   CLI (continued)
     ↓ prints summary
     ↓ exit 0 if no failures; exit 2 if failures
@@ -551,17 +551,17 @@ Example subagent structure:
 ```python
 class DiscoverSymbolsSubagent:
     """Discover symbols from a source."""
-    
+
     def __init__(self, source_registry, logger):
         self.registry = source_registry
         self.logger = logger
-    
-    async def run(self, 
-                  source: str, 
-                  market_type: str, 
+
+    async def run(self,
+                  source: str,
+                  market_type: str,
                   filters: dict) -> dict:
         """Run the subagent.
-        
+
         Returns:
             {
                 "success": bool,
@@ -605,6 +605,40 @@ End-to-End Tests (Slowest, Full System)
 ├─ Full CLI invocation
 ├─ CI/CD gates or manual only
 └─ Example: test_cli_download_real_data()
+
+### 6.6 Exchange Client Data Flow (Official SDK)
+
+```
+ExchangeClient (protocol)
+  ↓ fetch_ohlcv(symbol, interval, since, until, limit)
+
+BinanceSpotRestClient (or Um/Cm)
+  ↓ SDK rest_api.klines() / rest_api.kline_candlestick_data()
+
+ConfigurationRestAPI (api_key="", base_path=PROD_URL)
+  ↓ HTTPS GET
+Binance REST API (api.binance.com / fapi.binance.com / dapi.binance.com)
+  ↓
+SDK ApiResponse.data() → list of 12-element kline arrays
+  ↓ KlineData.from_binance_api(kline)
+list[KlineData] → returned to caller
+
+---
+
+ExchangeClient (protocol)
+  ↓ stream_ohlcv(symbol, interval)
+
+BinanceSpotWsClient (or Um/Cm)
+  ↓ SDK websocket_streams.create_connection()
+  ↓ connection.kline(symbol, interval) or connection.kline_candlestick_streams()
+  ↓
+RequestStreamHandle
+  ↓ on("message", queue.put_nowait)
+  ↓
+asyncio.Queue → async generator
+  ↓ parse kline JSON
+AsyncIterator[KlineData] → yielded to caller
+```
 ```
 
 ### 9.2 Test Template (TDD)
@@ -619,10 +653,10 @@ def test_list_files_returns_sorted_results():
         FileMetadata(key="...2026-02.zip", ...),
     ])
     workflow = ArchiveListFilesWorkflow(adapter=fake_adapter, symbols=["BTCUSDT"])
-    
+
     # Act
     result = asyncio.run(workflow.run())
-    
+
     # Assert
     assert [f.key for f in result.per_symbol[0].files] == [
         "...2026-01.zip",
@@ -689,13 +723,90 @@ class ArchiveListFilesWorkflow:
 - ✅ Implement `BinanceSpotRestClient`, `BinanceUmRestClient`, `BinanceCmRestClient`
 - ✅ Implement `BinanceSpotWsClient`, `BinanceUmWsClient`, `BinanceCmWsClient`
 - ✅ Add optional CCXT integration (`ccxt_rest.py`, `ccxt_pro.py`)
-- ✅ Add exchange client tests (20 tests in test_exchange.py)
+- ✅ Add exchange client tests (18 tests in test_exchange.py)
+- ✅ **Migrated to official Binance SDK** (`binance-sdk-spot` for Spot, `binance-sdk-derivatives-trading-usds-futures` for UM, `binance-sdk-derivatives-trading-coin-futures` for CM)
+  - Replaced hand-rolled `aiohttp` REST clients with SDK `rest_api.klines()`/`kline_candlestick_data()` calls
+  - Replaced hand-rolled `aiohttp` WS clients with SDK `websocket_streams` + async generator wrapper
+  - Preserved `ExchangeClient` protocol and backward-compatible aliases
+  - Archive client (`archive/` module) kept intact (still uses `aiohttp` for S3 access)
+- ✅ **Extended ExchangeClient protocol** with `fetch_agg_trades()` and `fetch_funding_rate()` methods
+  - Spot: SDK `rest_api.agg_trades()` for aggTrades
+  - UM: `rest_api.compressed_aggregate_trades_list()` + `get_funding_rate_history()`
+  - CM: same as UM + `get_funding_rate_history_of_perpetual_futures()`
+- ✅ **Gap-fill workflow** (`workflow/gap_fill.py`) detects and fills missing archive data via REST API
+  - CLI: `binance-datatool gap-fill` command with `--auto-detect` flag
+  - Supports klines, aggTrades, fundingRate with auto gap detection
+  - Saves filled data as CSV with SHA256 checksum in `_filled/` subdirectory
+  - Records lineage events (LineageEventType.FILLED) for each operation
+- ✅ **Health check workflow** (`workflow/health_check.py`) monitors data health
+  - CLI: `binance-datatool health` command
+  - Checks completeness (missing dates), freshness (staleness), and integrity (checksums)
+  - Per-symbol health report with summary
+- ✅ **Enhanced LineageEventType**: Added `FILLED` (gap fill) and `HEALTH_CHECKED` events
 - ⏳ Implement `ExchangeRegistry` and `create_client()` factory
 - ⏳ Wire up new clients to CLI commands (Phase 6c)
+- ⏳ Transform/normalize/sink pipeline to DuckDB/Iceberg (Phase 7)
+
+### Phase 7: Transform, Normalize, and Sink (Complete)
+
+Goal: Transform raw archive data into queryable columnar format (Parquet), normalize schemas
+across data types and trade types, and sink to DuckDB (local) and/or Apache Iceberg (catalog).
+
+**Rationale**: Raw archive ZIPs are opaque. For analytics, ML feature engineering, and
+DataOps pipelines, we need columnar data with consistent schemas.
+
+**Proposed architecture**:
+```
+Archive (local ZIPs + filled CSVs)
+  ↓ Polars (read + transform)
+Normalized DataFrames (standardized schema)
+  ↓ Partition by (trade_type, data_type, date)
+Parquet files (columnar)
+  ↓ Load
+DuckDB (local analytics) ─ OR ─ Iceberg (catalog-driven lakehouse)
+```
+
+**Key design decisions**:
+- **Polars**: Already in dependencies. LazyFrame for efficient streaming transforms.
+- **Parquet as interchange format**: Universal columnar format, works with DuckDB, Iceberg,
+  Polars, Pandas, Spark.
+- **DuckDB first**: Local SQL analytics without external infrastructure.
+- **Iceberg later**: When catalog-driven schema evolution and multi-engine access are needed.
+- **Incremental loads**: Process only new/changed files since last run (track via lineage).
+
+**Normalized schema** (all trade types, all data types):
+
+```python
+{
+    "trade_type": str,      # "spot" | "um" | "cm"
+    "data_type": str,        # "klines" | "aggTrades" | "fundingRate"
+    "symbol": str,           # "BTCUSDT"
+    "open_time": int,        # epoch ms (for klines)
+    "open": Decimal,         # standard price fields
+    "high": Decimal,
+    "low": Decimal,
+    "close": Decimal,
+    "volume": Decimal,
+    # ... type-specific fields
+}
+```
+
+**Implementation order**:
+1. ✅ Polars-based archive reader (read ZIP CSVs + filled CSVs)
+2. ✅ Schema normalization per data type
+3. ✅ Parquet writer (partitioned by trade_type/data_type/date)
+4. ✅ DuckDB sink (CREATE OR REPLACE TABLE)
+5. ⏳ Iceberg catalog integration (pyiceberg, planned)
+
+**Done**: `SinkWorkflow` in `workflow/sink.py`, `binance-datatool sink` CLI command.
+**Silver schema design**: Follows Databento DBN (`ts_event`, `ts_recv`), tardis.dev
+  conventions, and Binance archive naming. See `docs/silver-layer-spec.md`.
+**DuckLake catalog**: Uses official DuckLake v1.0 format (`ATTACH 'ducklake:metadata.ducklake'`)
+  with zero-copy `read_parquet()` views. Self-describing paths:
+  `data/exchange=binance-spot/data-type=klines/symbol=BTCUSDT/interval=1h/date=N/data.parquet`.
+**Iceberg**: File-system catalog available for pyiceberg integration.
 
 ---
-
-## 11. Summary
 
 This requirements document formalizes the project vision, architecture, data models, and development process. It serves as:
 
@@ -708,7 +819,7 @@ All future work should reference this document and follow the TDD + audit checkl
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
-**Maintainer**: Team  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
+**Maintainer**: Team
 **Status**: Active (Phase 2 in progress)

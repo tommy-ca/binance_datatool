@@ -77,26 +77,26 @@ This document guides developers through implementing the specifications and buil
 ```python
 class LineageTracker:
     """Track data provenance through pipeline."""
-    
+
     def record_discovery(self, source: str, symbol_count: int, filters: dict) -> None:
         """Record symbol discovery."""
         ...
-    
-    def record_download(self, source: str, symbol: str, partition: str, 
+
+    def record_download(self, source: str, symbol: str, partition: str,
                        file_count: int, status: str, errors: list[str]) -> None:
         """Record download completion."""
         ...
-    
-    def record_verification(self, symbol: str, partition: str, 
+
+    def record_verification(self, symbol: str, partition: str,
                            verified: int, failed: int) -> None:
         """Record verification results."""
         ...
-    
-    def record_validation(self, source: str, symbol: str, partition: str, 
+
+    def record_validation(self, source: str, symbol: str, partition: str,
                          contract_id: str, status: str, errors: list[str]) -> None:
         """Record data contract validation."""
         ...
-    
+
     def to_dict(self) -> dict:
         """Serialize all events."""
         ...
@@ -129,7 +129,7 @@ def test_query_by_symbol():
     tracker = LineageTracker()
     tracker.record_download(..., symbol="BTCUSDT", ...)
     tracker.record_download(..., symbol="ETHUSDT", ...)
-    
+
     btc_events = tracker.query(symbol="BTCUSDT")
     assert len(btc_events) == 1
 ```
@@ -154,12 +154,12 @@ from binance_datatool.adapter import DataSourceAdapter
 
 class BinanceAdapter(DataSourceAdapter):
     """Adapter for Binance public archive."""
-    
+
     source: str = "binance"
-    
+
     def __init__(self, client: ArchiveClient):
         self.client = client
-    
+
     async def list_symbols(
         self,
         market_type: str,
@@ -168,7 +168,7 @@ class BinanceAdapter(DataSourceAdapter):
     ) -> list[str]:
         """Delegate to ArchiveClient."""
         return await self.client.list_symbols(...)
-    
+
     async def list_files(
         self,
         symbol: str,
@@ -179,7 +179,7 @@ class BinanceAdapter(DataSourceAdapter):
     ) -> list[FileMetadata]:
         """Delegate to ArchiveClient."""
         return await self.client.list_files(...)
-    
+
     async def fetch_file(
         self,
         symbol: str,
@@ -189,7 +189,7 @@ class BinanceAdapter(DataSourceAdapter):
         """Download a file."""
         # Use existing downloader; return FileResult(success, bytes, checksum)
         ...
-    
+
     def parse_symbol(self, symbol_str: str) -> SymbolMetadata:
         """Parse 'BTCUSDT' → SymbolMetadata(base='BTC', quote='USDT', ...)"""
         base, quote = infer_spot_info(symbol_str)
@@ -200,7 +200,7 @@ class BinanceAdapter(DataSourceAdapter):
             source=DataSource.BINANCE,
             market_type=MarketType.SPOT  # Simplified; real code infers
         )
-    
+
     async def get_metadata(self) -> dict:
         """Return info about this source."""
         return {
@@ -257,27 +257,27 @@ def test_binance_adapter_parse_symbol():
 ```python
 class CoinbaseAdapter(DataSourceAdapter):
     """Adapter for Coinbase API."""
-    
+
     source: str = "coinbase"
-    
+
     def __init__(self, api_key: str | None = None, base_url: str = "https://api.exchange.coinbase.com"):
         self.api_key = api_key
         self.base_url = base_url
-    
+
     async def list_symbols(self, market_type: str, partition: str, data_type: str) -> list[str]:
         """Fetch from GET /products; filter by product_id pattern."""
         raise NotImplementedError("Coinbase adapter in progress")
-    
+
     async def list_files(self, ...) -> list[FileMetadata]:
         raise NotImplementedError("Coinbase adapter in progress")
-    
+
     async def fetch_file(self, ...) -> FileResult:
         raise NotImplementedError("Coinbase adapter in progress")
-    
+
     def parse_symbol(self, symbol_str: str) -> SymbolMetadata:
         """Parse 'BTC-USD' → SymbolMetadata(base='BTC', quote='USD', ...)"""
         raise NotImplementedError("Coinbase adapter in progress")
-    
+
     async def get_metadata(self) -> dict:
         return {
             "rate_limit": "15 requests/second",
@@ -300,10 +300,10 @@ class CoinbaseAdapter(DataSourceAdapter):
 class TestBinanceAdapterUnit:
     async def test_list_symbols_delegates_to_client(self, fake_client):
         ...
-    
+
     def test_parse_symbol_handles_spot_pairs(self):
         ...
-    
+
     def test_parse_symbol_handles_futures_contracts(self):
         ...
 
@@ -342,7 +342,7 @@ async def list_symbols(
     if not adapter:
         typer.echo(f"Unknown source: {source}", err=True)
         raise typer.Exit(1)
-    
+
     # Construct workflow with adapter
     workflow = ArchiveListSymbolsWorkflow(adapter=adapter, filter=...)
     result = await workflow.run()
@@ -387,7 +387,7 @@ async def discover_symbols(
     timeout_seconds: int = 30,
 ) -> dict:
     """Discover trading symbols with filters.
-    
+
     Args:
         source: Data source (binance, coinbase, kraken).
         market_type: Market segment (spot, um, cm, options).
@@ -397,7 +397,7 @@ async def discover_symbols(
         exclude_leverage: Skip leverage symbols (2x, 3x, 5x, etc.).
         exclude_stables: Skip stablecoin pairs (USDTUSD, etc.).
         timeout_seconds: Network timeout.
-    
+
     Returns:
         {
             "success": bool,
@@ -410,7 +410,7 @@ async def discover_symbols(
     """
     import time
     start_time = time.time()
-    
+
     try:
         # Get adapter
         registry = SourceRegistry()
@@ -424,13 +424,13 @@ async def discover_symbols(
                 "counts": {"total_found": 0, "matched": 0, "filtered": 0},
                 "duration_seconds": time.time() - start_time,
             }
-        
+
         # List symbols
         all_symbols = await asyncio.wait_for(
             adapter.list_symbols(market_type, partition_freq, data_type),
             timeout=timeout_seconds
         )
-        
+
         # Parse and filter
         filter_obj = build_symbol_filter(
             market_type=market_type,
@@ -438,10 +438,10 @@ async def discover_symbols(
             exclude_leverage=exclude_leverage,
             exclude_stables=exclude_stables
         )
-        
+
         matched = []
         filtered_out = []
-        
+
         for symbol in all_symbols:
             try:
                 info = adapter.parse_symbol(symbol)
@@ -452,7 +452,7 @@ async def discover_symbols(
             except Exception as e:
                 # Parsing error; skip this symbol
                 pass
-        
+
         return {
             "success": True,
             "symbols": sorted(matched),
@@ -465,7 +465,7 @@ async def discover_symbols(
             },
             "duration_seconds": time.time() - start_time,
         }
-    
+
     except asyncio.TimeoutError:
         return {
             "success": False,
@@ -475,7 +475,7 @@ async def discover_symbols(
             "counts": {"total_found": 0, "matched": 0, "filtered": 0},
             "duration_seconds": time.time() - start_time,
         }
-    
+
     except Exception as e:
         return {
             "success": False,
@@ -511,14 +511,14 @@ def fake_registry(fake_adapter):
 async def test_discover_symbols_happy_path(fake_adapter, fake_registry, monkeypatch):
     # Inject fake registry
     monkeypatch.setattr("binance_datatool.skills.discover_symbols.SourceRegistry", lambda: fake_registry)
-    
+
     result = await discover_symbols(
         source="binance",
         market_type="spot",
         data_type="klines",
         quote_asset="USDT"
     )
-    
+
     assert result["success"] is True
     assert "BTCUSDT" in result["symbols"]
     assert "USDTUSD" not in result["symbols"]  # Filtered
@@ -645,6 +645,6 @@ All work follows TDD, SOLID principles, and clear specifications. Success criter
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
 **Status**: Implementation guidance ready; awaiting developer to begin Phase 2

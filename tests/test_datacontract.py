@@ -4,7 +4,6 @@ Tests follow TDD principles: test the happy path, edge cases, and error modes
 with minimal but complete fixtures.
 """
 
-import time
 from decimal import Decimal
 
 import pytest

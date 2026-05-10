@@ -1,8 +1,11 @@
 """Workflow helpers for archive operations."""
 
 from .download import ArchiveDownloadWorkflow
+from .gap_fill import GapFillResult, GapFillWorkflow
+from .health_check import HealthCheckWorkflow, HealthReport, SymbolHealth
 from .list_files import ArchiveListFilesWorkflow
 from .list_symbols import ArchiveListSymbolsWorkflow
+from .metadata import MetadataWorkflow
 from .results import (
     DiffEntry,
     DiffResult,
@@ -14,6 +17,7 @@ from .results import (
     VerifyDiffResult,
     VerifyResult,
 )
+from .sink import SinkStats, SinkWorkflow
 from .verify import ArchiveVerifyWorkflow
 
 __all__ = [
@@ -24,8 +28,16 @@ __all__ = [
     "DiffEntry",
     "DiffResult",
     "DownloadResult",
+    "GapFillResult",
+    "GapFillWorkflow",
+    "HealthCheckWorkflow",
+    "HealthReport",
     "ListFilesResult",
     "ListSymbolsResult",
+    "MetadataWorkflow",
+    "SinkStats",
+    "SinkWorkflow",
+    "SymbolHealth",
     "SymbolListFilesResult",
     "SymbolListingError",
     "VerifyDiffResult",

@@ -8,8 +8,10 @@ only implement the small Protocol below so tests can stub them easily.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 
 @dataclass(slots=True)
@@ -39,7 +41,12 @@ class DataSourceAdapter(Protocol):
         """Return available symbols for the requested parameters."""
 
     async def list_files(
-        self, market_type: str, partition: str, data_type: str, symbol: str, interval: str | None = None
+        self,
+        market_type: str,
+        partition: str,
+        data_type: str,
+        symbol: str,
+        interval: str | None = None,
     ) -> list[FileMetadata]:
         """Return files available for one symbol.
 
@@ -65,6 +72,6 @@ class DataSourceAdapter(Protocol):
 
 __all__ = ["DataSourceAdapter", "FileMetadata", "BinanceAdapter"]
 
-# Import adapters to register them with SourceRegistry
-from binance_datatool.adapter.binance import BinanceAdapter  # noqa: F401
-from binance_datatool.adapter.registry import *  # noqa: F401,F403
+# Register adapters on import
+from binance_datatool.adapter.binance import BinanceAdapter  # noqa: F401, E402
+from binance_datatool.adapter.registry import *  # noqa: F401, F403, E402

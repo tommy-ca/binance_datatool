@@ -36,7 +36,7 @@ Example:
             lambda row: row["close"] > 0,
         ]
     )
-    
+
     # Validate a dataframe
     result = contract.validate(df)
     if result.passed:
@@ -49,19 +49,21 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from decimal import Decimal
-from enum import Enum
-from typing import Any, Callable, Optional
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
-class DataSource(str, Enum):
+class DataSource(StrEnum):
     BINANCE = "binance"
     BYBIT = "bybit"
     OKX = "okx"
 
 
-class MarketType(str, Enum):
+class MarketType(StrEnum):
     """Market segment for a trading pair."""
 
     SPOT = "spot"
@@ -70,7 +72,7 @@ class MarketType(str, Enum):
     OPTIONS = "options"
 
 
-class DataType(str, Enum):
+class DataType(StrEnum):
     """Specific dataset type within a market."""
 
     KLINES = "klines"  # OHLCV candlesticks
@@ -81,7 +83,7 @@ class DataType(str, Enum):
     FUNDING_RATE = "fundingRate"  # Perpetual funding
 
 
-class PartitionFreq(str, Enum):
+class PartitionFreq(StrEnum):
     """Temporal partitioning frequency."""
 
     DAILY = "daily"
@@ -143,9 +145,7 @@ class DataContract:
     partition_cols: list[str] = field(default_factory=list)
     key_cols: list[str] = field(default_factory=list)
     nullable_cols: set[str] = field(default_factory=set)
-    validators: list[Callable[[dict[str, Any]], bool]] = field(
-        default_factory=list
-    )
+    validators: list[Callable[[dict[str, Any]], bool]] = field(default_factory=list)
     description: str = ""
 
     def __post_init__(self) -> None:
@@ -158,16 +158,12 @@ class DataContract:
         # Ensure key_cols are in schema
         for col in self.key_cols:
             if col not in self.schema:
-                raise ValueError(
-                    f"Key column '{col}' not found in schema"
-                )
+                raise ValueError(f"Key column '{col}' not found in schema")
 
         # Note: partition_cols may be external to schema (inferred from paths)
         # so we don't validate them against schema
 
-    def validate(
-        self, data: list[dict[str, Any]] | Any
-    ) -> ValidationResult:
+    def validate(self, data: list[dict[str, Any]] | Any) -> ValidationResult:
         """Validate data against this contract.
 
         Supports list of dicts or dataframe-like objects (with .to_dict(),
@@ -200,13 +196,13 @@ class DataContract:
 
         # Check schema on first row
         first_row = rows[0]
-        for col, expected_type in self.schema.items():
+        for col, expected_type in self.schema.items():  # noqa: B007
             if col not in first_row:
                 errors.append(
                     ValidationError(
                         row_index=None,
                         column=col,
-                        reason=f"Missing column in schema",
+                        reason="Missing column in schema",
                     )
                 )
 
@@ -262,8 +258,7 @@ class DataContract:
                         errors.append(
                             ValidationError(
                                 row_index=idx,
-                                reason=f"Validator failed: "
-                                f"{validator_func.__name__}",
+                                reason=f"Validator failed: {validator_func.__name__}",
                                 value=row,
                             )
                         )
@@ -285,9 +280,7 @@ class DataContract:
             duration_seconds=duration,
         )
 
-    def _normalize_input(
-        self, data: list[dict[str, Any]] | Any
-    ) -> list[dict[str, Any]]:
+    def _normalize_input(self, data: list[dict[str, Any]] | Any) -> list[dict[str, Any]]:
         """Convert various input formats to list[dict].
 
         Supports:
@@ -400,8 +393,7 @@ BINANCE_UM_KLINES_CONTRACT = DataContract(
         lambda row: row["volume"] >= 0,
     ],
     description=(
-        "Binance USD-M futures daily OHLCV (klines) with basic "
-        "price and volume validation"
+        "Binance USD-M futures daily OHLCV (klines) with basic price and volume validation"
     ),
 )
 
@@ -409,9 +401,7 @@ BINANCE_UM_KLINES_CONTRACT = DataContract(
 class ContractRegistry:
     """Registry for looking up data contracts by (source, market, data_type)."""
 
-    _contracts: dict[
-        tuple[DataSource, MarketType, DataType], DataContract
-    ] = {
+    _contracts: dict[tuple[DataSource, MarketType, DataType], DataContract] = {
         (
             DataSource.BINANCE,
             MarketType.SPOT,

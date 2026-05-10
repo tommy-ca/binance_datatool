@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-08.zip",
+      "sha256": "0cef4d20388635c1cac914a52a012bc07cc83d7dfe4d7ec1d30cb15edf28ab53",
+      "size": 1613,
+      "checksum_path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-08.zip.CHECKSUM"
+    },
+    {
+      "path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-08.zip.CHECKSUM",
+      "sha256": "0cef4d20388635c1cac914a52a012bc07cc83d7dfe4d7ec1d30cb15edf28ab53",
+      "size": 91
+    },
+    {
+      "path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-09.zip",
+      "sha256": "a951bfeeef4d6ce46689650ac9bbe06c92359836836df8246bb7806a51c964d2",
+      "size": 1560,
+      "checksum_path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-09.zip.CHECKSUM"
+    },
+    {
+      "path": "data/spot/daily/klines/BTCUSDT/1h/BTCUSDT-1h-2026-05-09.zip.CHECKSUM",
+      "sha256": "a951bfeeef4d6ce46689650ac9bbe06c92359836836df8246bb7806a51c964d2",
+      "size": 91
+    },
+    {
+      "path": "data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-08.zip",
+      "sha256": "b11e9c263d68e5cc1c1cdc3638a2d4cccb9a918ff42646c7d3f1ac20c40a8e65",
+      "size": 9906455,
+      "checksum_path": "data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-08.zip.CHECKSUM"
+    },
+    {
+      "path": "data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-2026-05-08.zip.CHECKSUM",
+      "sha256": "b11e9c263d68e5cc1c1cdc3638a2d4cccb9a918ff42646c7d3f1ac20c40a8e65",
+      "size": 98
+    },
+    {
+      "path": "data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2026-05-08.zip",
+      "sha256": "0cf46264c93962803ca8ea5033b289c43f993262602fdd1946fb8ab78ed14a06",
+      "size": 16915101,
+      "checksum_path": "data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2026-05-08.zip.CHECKSUM"
+    },
+    {
+      "path": "data/spot/daily/trades/BTCUSDT/BTCUSDT-trades-2026-05-08.zip.CHECKSUM",
+      "sha256": "0cf46264c93962803ca8ea5033b289c43f993262602fdd1946fb8ab78ed14a06",
+      "size": 95
+    },
+    {
+      "path": "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-04.zip",
+      "sha256": "51cdeb4de7d5ef1d4eece80b6115e391bdf7a2d0803bf9ad8371ab23340b22d3",
+      "size": 960,
+      "checksum_path": "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-04.zip.CHECKSUM"
+    },
+    {
+      "path": "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-04.zip.CHECKSUM",
+      "sha256": "51cdeb4de7d5ef1d4eece80b6115e391bdf7a2d0803bf9ad8371ab23340b22d3",
+      "size": 98
+    },
+    {
+      "path": "data/futures/cm/daily/aggTrades/BTCUSD_PERP/BTCUSD_PERP-aggTrades-2026-05-08.zip",
+      "sha256": "8bfbaa4cd0dfd49cc9e6cdede78e0b2851f42f1dbb7d917bc0847ce1eac4afbe",
+      "size": 1327162,
+      "checksum_path": "data/futures/cm/daily/aggTrades/BTCUSD_PERP/BTCUSD_PERP-aggTrades-2026-05-08.zip.CHECKSUM"
+    },
+    {
+      "path": "data/futures/cm/daily/aggTrades/BTCUSD_PERP/BTCUSD_PERP-aggTrades-2026-05-08.zip.CHECKSUM",
+      "sha256": "8bfbaa4cd0dfd49cc9e6cdede78e0b2851f42f1dbb7d917bc0847ce1eac4afbe",
+      "size": 103
+    }
+  ]
+}

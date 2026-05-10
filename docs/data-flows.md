@@ -125,7 +125,7 @@ User / CLI
   └─→ [CLI] print table:
            symbol | file_count | total_bytes | error?
            ─────────────────────────────────────────────
-           BTCUSDT | 365 | 1.2GB | 
+           BTCUSDT | 365 | 1.2GB |
            ETHUSDT | 240 | 800MB |
 ```
 
@@ -246,14 +246,14 @@ User / CLI
 ```
 FOR each remote_file:
   local_path = archive_home / symbol_dir / remote_file.name
-  
+
   IF local_path NOT EXISTS:
     → Classify as NEW
-  
+
   ELSE:
     local_mtime = os.path.getmtime(local_path)
     remote_mtime = remote_file.last_modified
-    
+
     IF remote_mtime > local_mtime:
       → Classify as UPDATED
     ELSE:
@@ -549,7 +549,7 @@ END
         │                      │                     │
         ▼                      ▼                      ▼
    BinanceAdapter        CoinbaseAdapter        KrakenAdapter
-   
+
    • Wraps S3/HTTP   • REST API            • REST API
    • XML parsing     • JSON parsing        • JSON parsing
    • Prefix-based    • Product IDs         • Pair symbols
@@ -598,9 +598,9 @@ User CLI
 @runtime_checkable
 class DataSourceAdapter(Protocol):
     """Adapter for a data source (exchange, provider)."""
-    
+
     source: str  # "binance", "coinbase", "kraken", etc.
-    
+
     async def list_symbols(
         self,
         market_type: str,  # "spot" | "um" | "cm" | etc.
@@ -608,16 +608,16 @@ class DataSourceAdapter(Protocol):
         data_type: str     # "klines" | "trades" | etc.
     ) -> list[str]:
         """List all available symbols.
-        
+
         Returns:
             Sorted list of symbol strings (e.g., ["BTCUSDT", "ETHUSDT"]).
-            
+
         Raises:
             NetworkError: Connection issue.
             TimeoutError: Request timeout.
         """
         ...
-    
+
     async def list_files(
         self,
         symbol: str,
@@ -627,13 +627,13 @@ class DataSourceAdapter(Protocol):
         interval: str | None = None
     ) -> list[FileMetadata]:
         """List available data files for a symbol.
-        
+
         Returns:
             Sorted list of files (by last_modified ASC).
             Empty list if symbol not found or no data.
         """
         ...
-    
+
     async def fetch_file(
         self,
         symbol: str,
@@ -641,21 +641,21 @@ class DataSourceAdapter(Protocol):
         output_path: str
     ) -> FileResult:
         """Download a specific file.
-        
+
         Returns:
             FileResult(success, bytes_written, checksum).
         """
         ...
-    
+
     def parse_symbol(self, symbol_str: str) -> SymbolMetadata:
         """Parse a symbol string into components.
-        
+
         Example: "BTCUSDT" → SymbolMetadata(
             base="BTC", quote="USDT", source=DataSource.BINANCE, ...
         )
         """
         ...
-    
+
     async def get_metadata(self) -> dict:
         """Get metadata about this source (rate limits, capabilities, etc.)."""
         ...
@@ -674,7 +674,7 @@ binance_spot_klines_contract = DataContract(
     market_type=MarketType.SPOT,
     data_type=DataType.KLINES,
     partition_freq=PartitionFreq.DAILY,
-    
+
     # Schema: column_name → type
     schema={
         "open_time": int,
@@ -689,13 +689,13 @@ binance_spot_klines_contract = DataContract(
         "taker_buy_volume": Decimal,
         "taker_buy_quote_volume": Decimal,
     },
-    
+
     # Required: data must be partitioned by (date, symbol)
     partition_cols=["date", "symbol"],
-    
+
     # Primary key must be unique across partition
     key_cols=["open_time"],
-    
+
     # Validation rules
     validators=[
         lambda row: row["open"] > 0,
@@ -857,6 +857,6 @@ All commands follow the same principles:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
 **Status**: Active (foundation documented; adapter pattern in progress)
