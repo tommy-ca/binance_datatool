@@ -129,7 +129,7 @@ def download_archive(
         lookback_days=lookback_days,
     )
     result = asyncio.run(wf.run())
-    return result.downloaded  # type: ignore[union-attr]
+    return result.downloaded  # ty: ignore[unresolved-attribute]
 
 
 @task(**_RETRY_CONFIG)
@@ -155,7 +155,7 @@ def verify_archive(
         interval=interval,
     )
     result = wf.run()
-    return result.verified if hasattr(result, "verified") else 0
+    return result.verified if hasattr(result, "verified") else 0  # type: ignore[return-value]
 
 
 @task(**_RETRY_LIGHT)
