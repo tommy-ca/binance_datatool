@@ -587,7 +587,7 @@ class SinkWorkflow:
         No manual Hive paths — DuckDB handles file placement.
         """
         table_name = data_type.replace("-", "_")
-        # trades and aggTrades share the same Silver schema (aggTrades table)
+        # trades and aggTrades share the same table + Silver schema
         if table_name == "trades":
             table_name = "aggTrades"
         catalog = DuckLakeCatalog(

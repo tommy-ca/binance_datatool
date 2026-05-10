@@ -253,6 +253,7 @@ def check_ducklake_anomalies(
     symbol: str,
     interval: str | None = None,
     outlier_std: float = 3.0,
+    rtype: str | None = None,
 ) -> AnomalyReport:
     """Query DuckLake native table for data quality anomalies.
 
@@ -262,9 +263,19 @@ def check_ducklake_anomalies(
     - Duplicate ts_event values
     - Missing dates within range
     - Price outliers (values beyond mean +/- N standard deviations)
+
+    When ``rtype`` is provided (e.g. ``"agg"`` or ``"trade"``), filters
+    all queries to that rtype. This allows per-type health stats when
+    aggTrades and trades share the same DuckDB table.
     """
     report = AnomalyReport(symbol=symbol)
     tn = _sanitize_identifier(table_name)
+
+    def _where() -> str:
+        return "WHERE symbol = ? AND rtype = ?" if rtype else "WHERE symbol = ?"
+
+    def _params() -> list:
+        return [symbol, rtype] if rtype else [symbol]
 
     if not _table_exists(con, tn):
         return report
@@ -281,30 +292,30 @@ def check_ducklake_anomalies(
         if col not in schema_cols:
             continue
         nulls = con.execute(
-            f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND ({col} IS NULL OR {col} = 0)",
-            [symbol],
+            f"SELECT COUNT(*) FROM {tn} {_where()} AND ({col} IS NULL OR {col} = 0)",
+            _params(),
         ).fetchone()[0]
         report.null_prices += nulls
 
     # Zero volume check
     if "volume" in schema_cols:
         zeros = con.execute(
-            f"SELECT COUNT(*) FROM {tn} WHERE symbol = ? AND (volume IS NULL OR volume = 0)",
-            [symbol],
+            f"SELECT COUNT(*) FROM {tn} {_where()} AND (volume IS NULL OR volume = 0)",
+            _params(),
         ).fetchone()[0]
         report.zero_volumes = zeros
 
     # Duplicate timestamps
     dups = con.execute(
-        f"SELECT COUNT(*) FROM (SELECT ts_event FROM {tn} WHERE symbol = ? GROUP BY ts_event HAVING COUNT(*) > 1)",
-        [symbol],
+        f"SELECT COUNT(*) FROM (SELECT ts_event FROM {tn} {_where()} GROUP BY ts_event HAVING COUNT(*) > 1)",
+        _params(),
     ).fetchone()[0]
     report.duplicate_timestamps = dups
 
     # Date gaps
     dates = con.execute(
-        f"SELECT DISTINCT ts_date FROM {tn} WHERE symbol = ? AND ts_date IS NOT NULL ORDER BY ts_date",
-        [symbol],
+        f"SELECT DISTINCT ts_date FROM {tn} {_where()} AND ts_date IS NOT NULL ORDER BY ts_date",
+        _params(),
     ).fetchall()
     if len(dates) > 1:
         date_strs = [str(d[0]) for d in dates]
@@ -319,8 +330,8 @@ def check_ducklake_anomalies(
     # Price outliers (Z-score > threshold)
     try:
         outliers = con.execute(
-            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {tn} WHERE symbol = ?) WHERE ABS(z) > ?",
-            [symbol, outlier_std],
+            f"SELECT COUNT(*) FROM (SELECT close, (close - AVG(close) OVER()) / STDDEV(close) OVER() AS z FROM {tn} {_where()}) WHERE ABS(z) > ?",
+            _params() + [outlier_std],
         ).fetchone()[0]
         report.outlier_rows = outliers
     except Exception:

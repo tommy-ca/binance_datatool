@@ -507,7 +507,10 @@ def health_flow(
                 f"(DATA_PATH '{catalog}/data', AUTOMATIC_MIGRATION true)"
             )
             con.execute("USE dl")
-            anomalies = check_ducklake_anomalies(con, data_type.replace("-", "_"), symbol)
+            rtype = {"aggTrades": "agg", "trades": "trade"}.get(data_type)
+            anomalies = check_ducklake_anomalies(
+                con, data_type.replace("-", "_"), symbol, rtype=rtype
+            )
             anomalies_clean = anomalies.is_clean
             null_prices = anomalies.null_prices
             missing_dates = len(anomalies.date_gaps)
