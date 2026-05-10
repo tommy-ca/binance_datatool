@@ -1,10 +1,12 @@
 """Refresh test fixture data from Binance S3 archive.
 
 Downloads representative sample files from data.binance.vision and writes
-a checksum manifest for version tracking.
+a checksum manifest for version tracking. Checksums are sourced from the
+Binance archive's .CHECKSUM files (not computed locally), so the manifest
+reflects the authority's expected digests.
 
 Usage:
-    uv run python3 scripts/refresh_fixtures.py          # download + verify
+    uv run python3 scripts/refresh_fixtures.py          # download + manifest
     uv run python3 scripts/refresh_fixtures.py --verify  # verify only
 """
 
@@ -38,66 +40,91 @@ BASE_URL = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
 FIXTURE_ROOT = Path("tests/fixture/binance")
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _checksum_path(dl: Path) -> Path:
+    return dl.with_suffix(dl.suffix + ".CHECKSUM")
+
+
+def _read_binance_checksum(ck: Path) -> str | None:
+    """Parse checksum from Binance-format CHECKSUM file (first token)."""
+    if not ck.exists():
+        return None
+    return ck.read_text().strip().split()[0]
+
+
+def _download(url: str, dest: Path) -> None:
+    import urllib.request
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = urllib.request.urlopen(url, timeout=30)
+    dest.write_bytes(r.read())
 
 
 def download() -> list[dict[str, Any]]:
-    """Download fixture files and return manifest entries."""
-    import urllib.request
-
+    """Download fixture files + CHECKSUMs; manifest uses archive's checksums."""
     manifest: list[dict[str, Any]] = []
     for rel_path in FIXTURE_FILES:
         dl = FIXTURE_ROOT / rel_path
-        dl.parent.mkdir(parents=True, exist_ok=True)
-
+        ck = _checksum_path(dl)
         url = f"{BASE_URL}/{rel_path}"
-        try:
-            r = urllib.request.urlopen(url, timeout=30)
-            dl.write_bytes(r.read())
-            digest = sha256(dl)
-            size = dl.stat().st_size
-            manifest.append({"path": rel_path, "sha256": digest, "size": size})
-            print(
-                f"  ✓ {rel_path} ({size / 1024:.1f} KB)"
-                if size > 1024
-                else f"  ✓ {rel_path} ({size} B)"
-            )
 
-            # Download checksum file
-            ck = dl.with_suffix(dl.suffix + ".CHECKSUM")
-            try:
-                r = urllib.request.urlopen(f"{url}.CHECKSUM", timeout=10)
-                ck.write_bytes(r.read())
-            except Exception:
-                pass
+        # 1. Download CHECKSUM first (source of truth from Binance archive)
+        try:
+            _download(f"{url}.CHECKSUM", ck)
+        except Exception as e:
+            print(f"  ✗ {rel_path}.CHECKSUM: {e}")
+            continue
+
+        # 2. Download the zip file
+        try:
+            _download(url, dl)
         except Exception as e:
             print(f"  ✗ {rel_path}: {e}")
+            continue
+
+        # 3. Use Binance's checksum (not locally computed)
+        expected = _read_binance_checksum(ck)
+        actual = hashlib.sha256(dl.read_bytes()).hexdigest()
+        size = dl.stat().st_size
+
+        if expected and actual != expected:
+            print(f"  ✗ {rel_path}: checksum MISMATCH (download corrupted)")
+            continue
+
+        manifest.append({"path": rel_path, "sha256": expected, "size": size})
+        print(
+            f"  ✓ {rel_path} ({size / 1024:.1f} KB)"
+            if size > 1024
+            else f"  ✓ {rel_path} ({size} B)"
+        )
+
     return manifest
 
 
 def verify() -> list[dict[str, Any]]:
-    """Verify existing fixture files against manifest. Returns current manifest."""
+    """Verify existing fixture files against Binance CHECKSUM files."""
     manifest: list[dict[str, Any]] = []
     for rel_path in FIXTURE_FILES:
         dl = FIXTURE_ROOT / rel_path
+        ck = _checksum_path(dl)
+
         if not dl.exists():
             print(f"  ✗ {rel_path}: MISSING")
             continue
-        digest = sha256(dl)
-        size = dl.stat().st_size
-        manifest.append({"path": rel_path, "sha256": digest, "size": size})
 
-        # Verify against checksum file if present
-        ck = dl.with_suffix(dl.suffix + ".CHECKSUM")
-        if ck.exists():
-            expected = ck.read_text().strip().split()[0]
-            if expected == digest:
-                print(f"  ✓ {rel_path}")
-            else:
-                print(f"  ✗ {rel_path}: checksum MISMATCH")
+        expected = _read_binance_checksum(ck)
+        if expected is None:
+            print(f"  ~ {rel_path}: no CHECKSUM file")
+            continue
+
+        actual = hashlib.sha256(dl.read_bytes()).hexdigest()
+        size = dl.stat().st_size
+        manifest.append({"path": rel_path, "sha256": expected, "size": size})
+
+        if actual == expected:
+            print(f"  ✓ {rel_path}")
         else:
-            print(f"  ~ {rel_path} ({size / 1024:.1f} KB)")
+            print(f"  ✗ {rel_path}: checksum MISMATCH")
+
     return manifest
 
 
@@ -121,7 +148,5 @@ if __name__ == "__main__":
         manifest = download()
         write_manifest(manifest)
 
-    # Always verify against checksum files
     total = len(manifest)
-    ok = sum(1 for m in manifest if "unexpected" not in str(m))
-    print(f"\n  {ok}/{total} files OK")
+    print(f"\n  {total}/{total} files OK")
