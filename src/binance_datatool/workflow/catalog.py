@@ -289,11 +289,19 @@ class DuckLakeCatalog:
                     select_parts.append(c)
                 else:
                     select_parts.append(f"NULL AS {c}")
+            # Dedup: delete existing rows for symbol/date before re-inserting
+            if "symbol" in df.columns and "ts_date" in df.columns:
+                for sym, dt in df.select(["symbol", "ts_date"]).unique().rows():
+                    con.execute(
+                        f"DELETE FROM {table_name} WHERE symbol = ? AND ts_date = ?",
+                        [sym, str(dt)],
+                    )
             df = df.with_columns(pl.lit(None).alias("_null_placeholder"))
             con.execute(f"INSERT INTO {table_name} SELECT {', '.join(select_parts)} FROM df")
             ingested = len(df)
         except Exception as e:
-            logger.warning("DuckLake: failed to ingest DataFrame: {}", e)
+            logger.error("DuckLake: failed to ingest DataFrame: {}", e)
+            raise
         logger.info("DuckLake: ingested {} rows into native table {}", ingested, table_name)
         return ingested
 

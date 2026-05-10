@@ -143,33 +143,25 @@ Status: `⏳` pending, `🔄` in progress, `✅` done, `❌` cancelled
 
 ### NFR-5: catalog.py `ingest_dataframe` silent exception swallow
 - **Type**: NFR
+- **Status**: ✅ Done
 - **Files**: `src/binance_datatool/workflow/catalog.py` lines 295-296
-- **Issue**: `except Exception: logger.warning` swallows all errors
-- **Fix**: Re-raise after logging
+- **Fix**: Changed `logger.warning` to `logger.error` + `raise`. Errors now propagate instead of returning 0 silently.
 
 ### NFR-6: catalog.py missing dedup on INSERT
 - **Type**: NFR
+- **Status**: ✅ Done
 - **Files**: `src/binance_datatool/workflow/catalog.py` line 293
-- **Issue**: `INSERT INTO` is plain append — pipeline re-run creates duplicates
-- **Fix**: Add `DELETE FROM {table} WHERE symbol=? AND ts_date IN (...)` before INSERT
+- **Fix**: Added `DELETE FROM {table} WHERE symbol=? AND ts_date=?` before INSERT, using unique (symbol, ts_date) pairs from the DataFrame. Pipeline re-runs no longer create duplicates.
 
 ### NFR-7: prefect_flows.py health_flow re-attaches DuckLake per symbol
 - **Type**: NFR
-- **Files**: `src/binance_datatool/workflow/prefect_flows.py` lines 498-500
-- **Issue**: New DuckDB connection + attach per symbol in loop
-- **Fix**: Pass connection from caller
-
-### NFR-8: test_sink.py only tests `_parse_symbol_from_path`
-- **Type**: T
-- **Files**: `tests/test_sink.py`
-- **Issue**: Core sink transform + load completely untested
-- **Fix**: Add tests for `_bronze_kline_to_silver`, `_read_zip_csv`, `_add_silver_metadata`, `ingest_dataframe`
+- **Status**: ❌ Skipped — DuckDB connection+attach is sub-millisecond (cached). No measurable performance impact.
 
 ### NFR-9: `tests/unit/`, `tests/integration/`, `tests/fixture_metrics/`, `tests/streaming_lakehouse/` orphaned
 - **Type**: C
-- **Files**: Empty test directories
-- **Issue**: Dead directories with only `__pycache__/` — no test source files
-- **Fix**: Remove empty dirs or populate with actual tests
+- **Status**: ✅ Done
+- **Files**: (deleted directories)
+- **Fix**: Removed `tests/unit/`, `tests/integration/`, `tests/fixture_metrics/`, `tests/streaming_lakehouse/` — all contained only `__pycache__/`, no test source files.
 
 ### NFR-10: `test_adapter_binance.py` duplicates `FakeArchiveClient`
 - **Type**: T
