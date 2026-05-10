@@ -23,6 +23,7 @@ from prefect.task_runners import ThreadPoolTaskRunner
 
 from binance_datatool.archive.client import ArchiveClient
 from binance_datatool.common import DataFrequency, DataType, TradeType
+from binance_datatool.common.settings import settings
 from binance_datatool.exchange import (
     BinanceCmRestClient,
     BinanceSpotRestClient,
@@ -39,7 +40,7 @@ from binance_datatool.workflow import (
 )
 from binance_datatool.workflow.health_check import check_ducklake_anomalies
 
-_DEFAULT_ARCHIVE_HOME = Path.home() / ".binance-datatool" / "archive"
+_DEFAULT_ARCHIVE_HOME = settings.archive_home
 
 # Retry with exponential backoff and jitter
 # Prefect 3.x: retry_delay_seconds + retry_jitter_factor
