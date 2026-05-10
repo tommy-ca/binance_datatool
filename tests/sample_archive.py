@@ -94,9 +94,13 @@ def _make_csv(header: list[str] | None, rows: list[list[str]]) -> str:
 
 
 def _write_zip(path: Path, csv_name: str, content: str) -> None:
+    import hashlib
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as z:
         z.writestr(csv_name, content)
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    path.with_suffix(path.suffix + ".CHECKSUM").write_text(f"{sha}  {path.name}\n")
 
 
 # ── Data type descriptors ─────────────────────────────────────
