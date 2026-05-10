@@ -264,8 +264,8 @@ Standalone flows:
 
 | Issue | File:Line | Impact | Workaround |
 |-------|-----------|--------|------------|
-| Sink retry inserts duplicate DuckDB rows | `prefect_flows.py:186` | Duplicate timestamps on retry | Health check detects duplicates; rerun with `--lookback 0` to skip fill |
-| `DataType` fallback to `klines` on unknown value | `prefect_flows.py:118-121` | Silent type mismatch | Ensure data_type is one of: klines, aggTrades, trades, fundingRate |
+| Sink retry inserts duplicate DuckDB rows | `prefect_flows.py:186` | Fixed — sink_silver no longer has retries | (resolved) |
+| `DataType` fallback to `klines` on unknown value | `prefect_flows.py:118-121` | Fixed — now raises ValueError | (resolved) |
 | `verify_flow` data_freq hardcoded to daily | prefect_flows.py:151 | Fixed — now uses monthly for fundingRate | (resolved) |
 | `prepare_symbol` calls sub-tasks inline (not via `.submit()`) | `prefect_flows.py:243-245` | No per-sub-task parallelism within a symbol | By design — download→verify→fill is sequential per symbol. Cross-symbol parallelism via `.map()` |
 
