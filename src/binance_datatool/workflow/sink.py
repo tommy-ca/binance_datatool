@@ -253,7 +253,9 @@ def _normalize_to_microseconds(df: pl.DataFrame) -> pl.DataFrame:
         return df
     max_ts = df.select(pl.col("ts_event").cast(pl.Int64, strict=False).max()).item()
     if max_ts is not None and max_ts < 1_000_000_000_000_000:
-        df = df.with_columns((pl.col("ts_event").cast(pl.Int64, strict=False) * 1000).alias("ts_event"))
+        df = df.with_columns(
+            (pl.col("ts_event").cast(pl.Int64, strict=False) * 1000).alias("ts_event")
+        )
     elif max_ts is not None:
         df = df.with_columns(pl.col("ts_event").cast(pl.Int64, strict=False).alias("ts_event"))
     return df
@@ -401,7 +403,11 @@ class SinkWorkflow:
         for path in files:
             try:
                 source = "api_filled" if "_filled" in str(path.parent) else "archive"
-                df = _read_zip_csv(path, bronze_cols=_BRONZE_COLS_BY_TYPE.get(data_type_str)) if path.suffix == ".zip" else _read_filled_csv(path)
+                df = (
+                    _read_zip_csv(path, bronze_cols=_BRONZE_COLS_BY_TYPE.get(data_type_str))
+                    if path.suffix == ".zip"
+                    else _read_filled_csv(path)
+                )
                 if df.is_empty():
                     continue
 

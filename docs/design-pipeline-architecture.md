@@ -189,7 +189,31 @@ This cleanly pairs each symbol with its corresponding PrefectFuture. Even when
 a task raises, the symbol is still known — no need to extract it from the
 failed task's return value.
 
-## Nested Flows
+## Lookback Scoping
+
+The `lookback_days` parameter scopes ALL pipeline stages:
+
+| Step | Behavior with `lookback_days=N` |
+|------|-------------------------------|
+| `download_archive` | Only download files with dates within last N days (regex `YYYY-MM-DD` from filename) |
+| `verify_archive` | Only verifies what was downloaded (already scoped) |
+| `fill_gaps` | Gap detection constrained to last N days |
+| `sink_silver` | Processes all locally available data (already scoped by download) |
+
+The filename date filter is in `ArchiveDownloadWorkflow._build_diff_result()`:
+
+```python
+date_cutoff = datetime.now(UTC) - timedelta(days=self.lookback_days)
+m = re.search(r"(\d{4}-\d{2}-\d{2})", remote_file.key)
+if m:
+    fdate = datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
+    if fdate < date_cutoff:
+        skipped += 1
+        continue
+```
+
+This ensures a fresh pipeline with `lookback_days=1` downloads 1-3 zip files
+instead of 6000+ files from the full history.
 
 `bulk_backfill` does NOT declare a task runner — it delegates entirely to
 `historical_pipeline` which owns the `ThreadPoolTaskRunner`. This avoids

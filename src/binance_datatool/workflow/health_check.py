@@ -309,7 +309,9 @@ def check_ducklake_anomalies(
             expected = _date_range(date_strs[0], date_strs[-1])
             report.date_gaps = [d for d in expected if d not in date_strs]
         except ValueError:
-            logger.warning("Date range computation failed for {}/{} — bad timestamps in data", tn, symbol)
+            logger.warning(
+                "Date range computation failed for {}/{} — bad timestamps in data", tn, symbol
+            )
 
     # Price outliers (Z-score > threshold)
     try:

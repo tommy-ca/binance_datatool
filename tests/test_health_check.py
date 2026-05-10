@@ -117,10 +117,13 @@ def test_check_empty_table_returns_clean_report(mem_con: duckdb.DuckDBPyConnecti
 
 
 def test_check_clean_data_no_anomalies(mem_con: duckdb.DuckDBPyConnection) -> None:
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 1, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
-        ("BTCUSDT", 2, "2026-01-01", 101.0, 102.0, 100.0, 101.5, 1100.0),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 1, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
+            ("BTCUSDT", 2, "2026-01-01", 101.0, 102.0, 100.0, 101.5, 1100.0),
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert report.is_clean
     assert report.null_prices == 0
@@ -129,32 +132,41 @@ def test_check_clean_data_no_anomalies(mem_con: duckdb.DuckDBPyConnection) -> No
 
 
 def test_check_detects_null_prices(mem_con: duckdb.DuckDBPyConnection) -> None:
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 1, "2026-01-01", None, 101.0, 99.0, 100.5, 1000.0),
-        ("BTCUSDT", 2, "2026-01-01", 0.0, None, 100.0, 101.5, 1100.0),
-        ("BTCUSDT", 3, "2026-01-01", 102.0, 103.0, None, 0.0, 1200.0),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 1, "2026-01-01", None, 101.0, 99.0, 100.5, 1000.0),
+            ("BTCUSDT", 2, "2026-01-01", 0.0, None, 100.0, 101.5, 1100.0),
+            ("BTCUSDT", 3, "2026-01-01", 102.0, 103.0, None, 0.0, 1200.0),
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert not report.is_clean
     assert report.null_prices > 0
 
 
 def test_check_detects_zero_volumes(mem_con: duckdb.DuckDBPyConnection) -> None:
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 1, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 0.0),
-        ("BTCUSDT", 2, "2026-01-01", 101.0, 102.0, 100.0, 101.5, None),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 1, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 0.0),
+            ("BTCUSDT", 2, "2026-01-01", 101.0, 102.0, 100.0, 101.5, None),
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert not report.is_clean
     assert report.zero_volumes > 0
 
 
 def test_check_detects_duplicate_timestamps(mem_con: duckdb.DuckDBPyConnection) -> None:
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 100, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
-        ("BTCUSDT", 100, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
-        ("BTCUSDT", 200, "2026-01-01", 101.0, 102.0, 100.0, 101.5, 1100.0),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 100, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
+            ("BTCUSDT", 100, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
+            ("BTCUSDT", 200, "2026-01-01", 101.0, 102.0, 100.0, 101.5, 1100.0),
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert not report.is_clean
     assert report.duplicate_timestamps >= 1
@@ -162,10 +174,13 @@ def test_check_detects_duplicate_timestamps(mem_con: duckdb.DuckDBPyConnection) 
 
 def test_check_skips_other_symbol_data(mem_con: duckdb.DuckDBPyConnection) -> None:
     """Anomaly detection filters by symbol — other symbols' data is ignored."""
-    _create_kline_table(mem_con, [
-        ("ETHUSDT", 1, "2026-01-01", None, None, None, None, 0.0),
-        ("BTCUSDT", 2, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("ETHUSDT", 1, "2026-01-01", None, None, None, None, 0.0),
+            ("BTCUSDT", 2, "2026-01-01", 100.0, 101.0, 99.0, 100.5, 1000.0),
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert report.is_clean
 
@@ -184,18 +199,23 @@ def test_check_handles_special_chars_in_symbol(mem_con: duckdb.DuckDBPyConnectio
         "open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume DOUBLE"
         ")"
     )
-    mem_con.execute("INSERT INTO klines VALUES ('BTC-USD/T', 1, '2026-01-01', 100.0, 101.0, 99.0, 100.5, 1000.0)")
+    mem_con.execute(
+        "INSERT INTO klines VALUES ('BTC-USD/T', 1, '2026-01-01', 100.0, 101.0, 99.0, 100.5, 1000.0)"
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTC-USD/T")
     assert report is not None
 
 
 def test_check_outlier_detection_with_stddev_zero(mem_con: duckdb.DuckDBPyConnection) -> None:
     """STDDEV=0 (all prices identical) does not crash — outlier query may report NaN rows."""
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 1, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
-        ("BTCUSDT", 2, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
-        ("BTCUSDT", 3, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 1, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
+            ("BTCUSDT", 2, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
+            ("BTCUSDT", 3, "2026-01-01", 100.0, 100.0, 100.0, 100.0, 1000.0),
+        ],
+    )
     # Should not raise — outlier query catches and logs instead of crashing
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert report.symbol == "BTCUSDT"
@@ -203,11 +223,14 @@ def test_check_outlier_detection_with_stddev_zero(mem_con: duckdb.DuckDBPyConnec
 
 def test_check_anomaly_count_correct(mem_con: duckdb.DuckDBPyConnection) -> None:
     """Validate that anomaly counts are accurate (not just zero/non-zero)."""
-    _create_kline_table(mem_con, [
-        ("BTCUSDT", 1, "2026-01-01", 0.0, 1.0, 1.0, 1.0, 100.0),  # null_price: open=0
-        ("BTCUSDT", 2, "2026-01-01", 2.0, 0.0, 2.0, 2.0, 0.0),   # null_price: high=0, volume=0
-        ("BTCUSDT", 3, "2026-01-01", 3.0, 3.0, 3.0, 3.0, 300.0),  # clean
-    ])
+    _create_kline_table(
+        mem_con,
+        [
+            ("BTCUSDT", 1, "2026-01-01", 0.0, 1.0, 1.0, 1.0, 100.0),  # null_price: open=0
+            ("BTCUSDT", 2, "2026-01-01", 2.0, 0.0, 2.0, 2.0, 0.0),  # null_price: high=0, volume=0
+            ("BTCUSDT", 3, "2026-01-01", 3.0, 3.0, 3.0, 3.0, 300.0),  # clean
+        ],
+    )
     report = check_ducklake_anomalies(mem_con, "klines", "BTCUSDT")
     assert report.null_prices == 2  # open=0 in row1, high=0 in row2
     assert report.zero_volumes == 1  # volume=0 in row2

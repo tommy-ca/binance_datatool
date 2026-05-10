@@ -117,12 +117,19 @@ uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
 uv run python3 -c "
 from binance_datatool.workflow.prefect_flows import historical_pipeline, bulk_backfill
 
-# Single symbol
-result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'])
+# Single symbol (last 3 days of 1h klines)
+result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT'],
+                             data_type='klines', interval='1h', lookback_days=3)
 print(result)
 
 # Multi-symbol (parallel via .map(), DuckDB serialized via concurrency guard)
-result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT'])
+result = historical_pipeline(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT'],
+                             data_type='klines', interval='1h', lookback_days=3)
+print(result)
+
+# Bulk backfill with explicit symbols
+result = bulk_backfill(trade_type='spot', symbols=['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+                       data_type='klines', interval='1h', lookback_days=3)
 print(result)
 
 # Bulk backfill with auto-discovered symbols (max 10 by default, configurable)
