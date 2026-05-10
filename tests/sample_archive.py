@@ -81,7 +81,7 @@ def _funding_rate_row(i: int, _time_us: int) -> list[str]:
     return [str(calc_time), "8", "0.00001000"]
 
 
-# ── CSV writers (headerless data for zips, header for filled) ──
+# ── CSV writers (headerless data for zips) ──
 
 
 def _make_csv(header: list[str] | None, rows: list[list[str]]) -> str:
@@ -97,11 +97,6 @@ def _write_zip(path: Path, csv_name: str, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w") as z:
         z.writestr(csv_name, content)
-
-
-def _write_filled_csv(path: Path, header: list[str], rows: list[list[str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(_make_csv(header, rows))
 
 
 # ── Data type descriptors ─────────────────────────────────────
@@ -246,8 +241,6 @@ class SampleArchive:
                 path_parts.append("1h")
             base = Path(*path_parts)
             self._write_zip_files(base, symbol, data_type, freq, has_header)
-            if data_type == "klines":
-                self._write_filled_csv(base, symbol, data_type)
 
     def _write_zip_files(
         self,
@@ -267,12 +260,6 @@ class SampleArchive:
         rows = [row_fn(i, 1778198400000000 + i * 3600000000) for i in range(3)]
         content = _make_csv(header, rows)
         _write_zip(base / zip_name, csv_name, content)
-
-    def _write_filled_csv(self, base: Path, symbol: str, data_type: str) -> None:
-        row_fn, cols, _ = self._type_info(data_type)
-        filled = base / "_filled"
-        rows = [row_fn(i, 1778371200000000 + i * 3600000000) for i in range(2)]
-        _write_filled_csv(filled / f"{symbol}-{data_type}-filled.csv", cols, rows)
 
     @staticmethod
     def _type_info(data_type: str) -> tuple[Any, list[str], str]:
