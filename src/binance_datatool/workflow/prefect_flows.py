@@ -148,7 +148,7 @@ def verify_archive(
         dt = DataType.klines
     wf = ArchiveVerifyWorkflow(
         trade_type=TradeType(trade_type),
-        data_freq=DataFrequency.daily,
+        data_freq=DataFrequency.monthly if data_type == "fundingRate" else DataFrequency.daily,
         data_type=dt,
         symbols=[symbol],
         archive_home=home,

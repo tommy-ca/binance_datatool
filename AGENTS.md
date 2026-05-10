@@ -225,6 +225,50 @@ serve(
 )
 ```
 
+### Task Dependency Graph
+
+```
+historical_pipeline (ThreadPoolTaskRunner, max_workers=4)
+  │
+  ├── refresh_metadata_flow (subflow, sequential)
+  │     └── MetadataWorkflow.save_venues() + save_symbols()
+  │           (ducklake-writer concurrency guard)
+  │
+  ├── prepare_symbol.map() ←── parallel fan-out (download→verify→fill_gaps)
+  │     ├── BTCUSDT  ── download → verify → fill_gaps
+  │     ├── ETHUSDT  ── download → verify → fill_gaps
+  │     └── SOLUSDT  ── download → verify → fill_gaps
+  │
+  ├── sink_silver() ←── sequential (concurrency guard: ducklake-writer)
+  │     ├── BTCUSDT → DuckLake  (concurrency slot acquired)
+  │     ├── ETHUSDT → DuckLake  (waits for slot)
+  │     └── SOLUSDT → DuckLake  (waits for slot)
+  │
+  └── health_flow() ←── per-symbol health check (skips errored symbols)
+        ├── BTCUSDT → anomaly detection (null prices, date gaps, outliers)
+        ├── ETHUSDT → anomaly detection
+        └── SOLUSDT → anomaly detection
+
+bulk_backfill (no task runner — delegates to historical_pipeline)
+  └── historical_pipeline (subflow)
+
+Standalone flows:
+  download_flow  → download_archive.map()  (ThreadPoolTaskRunner=4)
+  verify_flow    → verify_archive.map()    (ThreadPoolTaskRunner=4)
+  gap_fill_flow  → fill_gaps()             (single symbol)
+  sink_flow      → sink_silver()           (sequential loop)
+  health_flow    → check_ducklake_anomalies()
+```
+
+### Known Issues & Edge Cases
+
+| Issue | File:Line | Impact | Workaround |
+|-------|-----------|--------|------------|
+| Sink retry inserts duplicate DuckDB rows | `prefect_flows.py:186` | Duplicate timestamps on retry | Health check detects duplicates; rerun with `--lookback 0` to skip fill |
+| `DataType` fallback to `klines` on unknown value | `prefect_flows.py:118-121` | Silent type mismatch | Ensure data_type is one of: klines, aggTrades, trades, fundingRate |
+| `verify_flow` data_freq hardcoded to daily | prefect_flows.py:151 | Fixed — now uses monthly for fundingRate | (resolved) |
+| `prepare_symbol` calls sub-tasks inline (not via `.submit()`) | `prefect_flows.py:243-245` | No per-sub-task parallelism within a symbol | By design — download→verify→fill is sequential per symbol. Cross-symbol parallelism via `.map()` |
+
 ## Data Sources
 
 The pipeline ingests from three source layers. See `docs/data-sources.md` for
