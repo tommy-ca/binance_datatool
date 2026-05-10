@@ -118,6 +118,38 @@ _FULL_SILVER_KLINE_SCHEMA = {
     "ingested_at": pl.Int64,
 }
 
+_FULL_SILVER_AGGT_SCHEMA = {
+    "ts_event": pl.Int64,
+    "ts_recv": pl.Int64,
+    "price": pl.Float64,
+    "size": pl.Float64,
+    "side": pl.Utf8,
+    "trade_id": pl.Int64,
+    "is_buyer_maker": pl.Int64,
+    "agg_trade_id": pl.Int64,
+    "rtype": pl.Utf8,
+    "source": pl.Utf8,
+    "exchange": pl.Utf8,
+    "trade_type": pl.Utf8,
+    "symbol": pl.Utf8,
+    "data_type": pl.Utf8,
+    "ingested_at": pl.Int64,
+}
+
+_FULL_SILVER_FUNDING_SCHEMA = {
+    "ts_event": pl.Int64,
+    "ts_recv": pl.Int64,
+    "funding_rate": pl.Float64,
+    "mark_price": pl.Float64,
+    "funding_timestamp": pl.Int64,
+    "source": pl.Utf8,
+    "exchange": pl.Utf8,
+    "trade_type": pl.Utf8,
+    "symbol": pl.Utf8,
+    "data_type": pl.Utf8,
+    "ingested_at": pl.Int64,
+}
+
 
 @dataclass
 class SinkStats:
@@ -309,7 +341,9 @@ def _bronze_agg_trades_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
     )
     # preserve original agg_trade_id (archive has it; renamed to trade_id above)
     df = df.with_columns(pl.col("trade_id").alias("agg_trade_id"))
-    return df.with_columns(pl.lit("agg").alias("rtype"))
+    df = df.with_columns(pl.lit("agg").alias("rtype"))
+    df = _cast_columns(df, _FULL_SILVER_AGGT_SCHEMA)
+    return df
 
 
 def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFrame:
@@ -337,6 +371,7 @@ def _bronze_funding_rate_to_silver(df: pl.DataFrame, source: str) -> pl.DataFram
     # Binance archive: funding_time is the funding event timestamp
     if "ts_event" in df.columns:
         df = df.with_columns(pl.col("ts_event").alias("funding_timestamp"))
+    df = _cast_columns(df, _FULL_SILVER_FUNDING_SCHEMA)
     return df
 
 

@@ -276,11 +276,8 @@ class DuckLakeCatalog:
         try:
             cols = self.TABLE_DEFS.get(table_name, "")
             table_cols = [c.split()[0] for c in cols.split(",") if c.split()[0] != "ts_date"]
-            select_expr = ", ".join(
-                f"CAST({c} AS BIGINT)" if c == "ts_event" else c
-                for c in table_cols
-                if c in df.columns or c in {c.split()[0] for c in cols.split(",")}
-            )
+            select_cols = [c for c in table_cols if c in df.columns]
+            select_expr = ", ".join(select_cols)
             has_event = "ts_event" in table_cols and "ts_event" in df.columns
             if has_event:
                 con.execute(
