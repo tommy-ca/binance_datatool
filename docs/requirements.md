@@ -2,9 +2,9 @@
 
 ## 1. Project Overview
 
-**Project**: `binance-datatool` — A multi-source cryptocurrency market data ingestion toolkit  
-**Current Scope**: Binance public archive (data.binance.vision) with support for spot, USD-M futures, and COIN-M futures  
-**Target Scope**: Multi-exchange support (Coinbase, Kraken, Bybit, etc.) with explicit DataOps and MLOps concerns  
+**Project**: `binance-datatool` — A multi-source cryptocurrency market data ingestion toolkit
+**Current Scope**: Binance public archive (data.binance.vision) with support for spot, USD-M futures, and COIN-M futures
+**Target Scope**: Multi-exchange support (Coinbase, Kraken, Bybit, etc.) with explicit DataOps and MLOps concerns
 **Principles**: SOLID, KISS, DRY, YAGNI with specification-driven development and TDD
 
 ---
@@ -41,9 +41,9 @@
 
 ### 3.1 User Personas
 
-1. **Quant Researcher**: Downloads historical OHLCV data for backtesting  
-2. **MLOps Engineer**: Ingests data into a lakehouse for feature engineering  
-3. **Data Platform Owner**: Orchestrates multi-source data pipelines; monitors quality  
+1. **Quant Researcher**: Downloads historical OHLCV data for backtesting
+2. **MLOps Engineer**: Ingests data into a lakehouse for feature engineering
+3. **Data Platform Owner**: Orchestrates multi-source data pipelines; monitors quality
 4. **AI Agent / Subagent**: Programmatically discovers, downloads, and verifies data
 
 ### 3.2 Key Use Cases
@@ -119,14 +119,14 @@ Foundation Layer (enums, types, filters, progress)
 
 ### 4.3 Design Principles
 
-**Single Responsibility**: Each module/class owns ONE clear concern  
-**Open/Closed**: Open to extension (new adapters) via plugins; closed to modification (core workflows stay stable)  
-**Liskov Substitution**: All adapters implement the same protocol; workflows don't know the concrete type  
-**Interface Segregation**: Thin protocols (DataSourceAdapter, StorageBackend) not monolithic interfaces  
+**Single Responsibility**: Each module/class owns ONE clear concern
+**Open/Closed**: Open to extension (new adapters) via plugins; closed to modification (core workflows stay stable)
+**Liskov Substitution**: All adapters implement the same protocol; workflows don't know the concrete type
+**Interface Segregation**: Thin protocols (DataSourceAdapter, StorageBackend) not monolithic interfaces
 **Dependency Inversion**: Core depends on abstractions (protocols), not concrete implementations
 
-**KISS**: Keep it simple and focused. No unnecessary abstraction or premature generalization.  
-**DRY**: Reuse shared logic via base classes, mixins, or utility functions. Don't duplicate patterns.  
+**KISS**: Keep it simple and focused. No unnecessary abstraction or premature generalization.
+**DRY**: Reuse shared logic via base classes, mixins, or utility functions. Don't duplicate patterns.
 **YAGNI**: Only implement features when explicitly requested. No speculative hooks or "future-proofing".
 
 ---
@@ -201,24 +201,24 @@ class SymbolMetadata:
 @dataclass
 class DataContract:
     """Explicit schema and validation rules for a dataset."""
-    
+
     source: DataSource
     market_type: MarketType
     data_type: DataType
     partition_freq: PartitionFreq
-    
+
     # Schema: columns, types, nullability
     schema: dict[str, type]
-    
+
     # Partition keys for organization
     partition_cols: list[str]
-    
+
     # Primary/unique key columns
     key_cols: list[str]
-    
+
     # Validation rules (e.g., "price > 0", "volume >= 0")
     validators: list[Callable[[Any], bool]]
-    
+
     def validate(self, dataframe) -> ValidationResult:
         """Validate a dataframe against this contract."""
         # Check schema, nullability, constraints
@@ -241,24 +241,24 @@ Flow:
     ↓ builds SymbolFilter(quote_assets=frozenset(["USDT"]), exclude_stables=True)
     ↓ constructs ArchiveListSymbolsWorkflow(client, filter)
     ↓ calls asyncio.run(workflow.run())
-    
+
   Workflow (workflow/list_symbols.py)
     ↓ calls client.list_symbols(trade_type, data_freq, data_type)
-    
+
   Archive Client (archive/client.py)
     ↓ builds S3 prefix: "data/spot/daily/klines/"
     ↓ creates async HTTP session
     ↓ calls list_dir(session, prefix) → paginated S3 listing
     ↓ parses XML responses → list of symbol prefixes
     ↓ returns sorted list: ["BTCUSDT", "ETHUSDT", ...]
-    
+
   Workflow (continued)
     ↓ infers symbol metadata: infer_spot_info("BTCUSDT")
       → SpotSymbolInfo(symbol, base, quote, is_leverage, is_stable_pair)
     ↓ applies filter.matches(info) → True/False
     ↓ splits into matched, filtered_out, unmatched buckets
     ↓ returns ListSymbolsResult(matched=[...], filtered_out=[...], unmatched=[...])
-    
+
   CLI (continued)
     ↓ prints matched symbols one per line to stdout
     ↓ exit code 0
@@ -276,33 +276,33 @@ Flow:
     ↓ parses args → trade_type, data_type, interval, symbols (from stdin or args)
     ↓ resolves archive_home from --archive-home or BINANCE_DATATOOL_ARCHIVE_HOME
     ↓ constructs ArchiveDownloadWorkflow(
-        trade_type, data_type, symbols, archive_home, 
+        trade_type, data_type, symbols, archive_home,
         interval, dry_run=True
       )
     ↓ calls asyncio.run(workflow.run())
-    
+
   Workflow (workflow/download.py)
     ↓ Step 1: List remote files
       - constructs ArchiveListFilesWorkflow(symbols=...)
       - calls client.list_symbol_files_batch(symbols) concurrently
       - collects files and per-symbol errors
-      
+
     ↓ Step 2: Compute diff (local vs remote)
       - scans local archive_home/data/spot/.../symbol/ for existing files
       - compares last_modified timestamps
       - classifies each remote file as: new, updated, or skipped
-      
+
     ↓ Step 3a (dry_run=True): Return diff
       - returns DiffResult(to_download=[...], skipped=N, listing_errors=[...])
       - CLI prints each entry: "new\tSize\tpath"
-      
+
     ↓ Step 3b (dry_run=False): Download
       - invalidates stale verify markers for updated files
       - deletes local copies of files marked "updated"
       - calls downloader.download(DownloadRequest list)
         - aria2c fetches files in batches with retry logic
       - returns DownloadResult(downloaded=N, failed=M, ...)
-      
+
   CLI (continued)
     ↓ prints results
     ↓ if dry_run: prints diff; exit 0
@@ -319,7 +319,7 @@ Flow:
     ↓ resolves archive_home
     ↓ constructs ArchiveVerifyWorkflow(symbols, archive_home, dry_run=False)
     ↓ calls workflow.run()  (note: sync, not async)
-    
+
   Workflow (workflow/verify.py)
     ↓ Step 1: Scan local directory
       - uses ThreadPoolExecutor to scan symbol directories in parallel
@@ -327,10 +327,10 @@ Flow:
         - scans .zip files and .zip.CHECKSUM files
         - checks for .verified marker files (timestamped)
         - classifies: to_verify, already_verified (skipped), orphaned
-        
+
     ↓ Step 2a (dry_run=True): Return scan results
       - returns VerifyDiffResult(to_verify=[...], skipped=N, orphan_zips=[...])
-      
+
     ↓ Step 2b (dry_run=False): Verify
       - cleans orphaned files (deletes orphan .zip and .CHECKSUM)
       - uses ProcessPoolExecutor to verify files in parallel
@@ -341,7 +341,7 @@ Flow:
       - for passed verifications: writes .zip.TIMESTAMP.verified marker
       - for failed verifications: optionally deletes both .zip and .CHECKSUM
       - returns VerifyResult(verified=N, failed=M, orphan_zips=P, ...)
-      
+
   CLI (continued)
     ↓ prints summary
     ↓ exit 0 if no failures; exit 2 if failures
@@ -551,17 +551,17 @@ Example subagent structure:
 ```python
 class DiscoverSymbolsSubagent:
     """Discover symbols from a source."""
-    
+
     def __init__(self, source_registry, logger):
         self.registry = source_registry
         self.logger = logger
-    
-    async def run(self, 
-                  source: str, 
-                  market_type: str, 
+
+    async def run(self,
+                  source: str,
+                  market_type: str,
                   filters: dict) -> dict:
         """Run the subagent.
-        
+
         Returns:
             {
                 "success": bool,
@@ -653,10 +653,10 @@ def test_list_files_returns_sorted_results():
         FileMetadata(key="...2026-02.zip", ...),
     ])
     workflow = ArchiveListFilesWorkflow(adapter=fake_adapter, symbols=["BTCUSDT"])
-    
+
     # Act
     result = asyncio.run(workflow.run())
-    
+
     # Assert
     assert [f.key for f in result.per_symbol[0].files] == [
         "...2026-01.zip",
@@ -819,7 +819,7 @@ All future work should reference this document and follow the TDD + audit checkl
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
-**Maintainer**: Team  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
+**Maintainer**: Team
 **Status**: Active (Phase 2 in progress)

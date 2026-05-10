@@ -111,7 +111,7 @@ For agent-driven flows, keep the following in mind:
 def test_list_files_preserves_order(fake_adapter):
     # Arrange
     fake_adapter.list_symbols_return = ["AAA", "BBB"]
-    workflow = ArchiveListFilesWorkflow(client=fake_adapter, symbols=["AAA", "BBB"]) 
+    workflow = ArchiveListFilesWorkflow(client=fake_adapter, symbols=["AAA", "BBB"])
 
     # Act
     result = asyncio.run(workflow.run())

@@ -42,18 +42,18 @@ The protocol defines the minimal interface all adapters must implement:
 class DataSourceAdapter(Protocol):
     @property
     def source_name(self) -> str: ...
-    
+
     async def list_symbols(
         self, market_type: str, partition: str, data_type: str
     ) -> list[str]: ...
-    
+
     async def list_files(
         self, market_type: str, partition: str, data_type: str,
         symbol: str, interval: str | None = None,
     ) -> list[FileMetadata]: ...
-    
+
     async def fetch_file(self, url: str, destination_path: str) -> None: ...
-    
+
     def parse_symbol(self, raw_symbol: str) -> dict | None: ...
 ```
 
@@ -87,28 +87,28 @@ from binance_datatool.models.archive import FileMetadata
 class KrakenAdapter(DataSourceAdapter):
     def __init__(self, api_key: str | None = None) -> None:
         self.api_key = api_key
-    
+
     @property
     def source_name(self) -> str:
         return "kraken"
-    
+
     async def list_symbols(
         self, market_type: str, partition: str, data_type: str
     ) -> list[str]:
         # Implementation
         pass
-    
+
     async def list_files(
         self, market_type: str, partition: str, data_type: str,
         symbol: str, interval: str | None = None,
     ) -> list[FileMetadata]:
         # Implementation
         pass
-    
+
     async def fetch_file(self, url: str, destination_path: str) -> None:
         # Implementation
         pass
-    
+
     def parse_symbol(self, raw_symbol: str) -> dict | None:
         # Implementation
         pass
@@ -252,20 +252,20 @@ from binance_datatool.adapter.protocol import DataSourceAdapter
 
 class MockAdapter(DataSourceAdapter):
     """Test double for DataSourceAdapter."""
-    
+
     @property
     def source_name(self) -> str:
         return "mock"
-    
+
     async def list_symbols(self, market_type, partition, data_type):
         return ["BTCUSDT", "ETHUSDT"]
-    
+
     async def list_files(self, market_type, partition, data_type, symbol, interval=None):
         return []
-    
+
     async def fetch_file(self, url, destination_path):
         pass
-    
+
     def parse_symbol(self, raw_symbol):
         return {"symbol": raw_symbol, "base_asset": "BTC", "quote_asset": "USDT"}
 

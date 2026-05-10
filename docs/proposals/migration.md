@@ -256,7 +256,7 @@ async def migrate_symbol(symbol: str, catalog: IcebergCatalog):
     """Migrate all daily klines for a symbol."""
     bronze_dir = Path(f"/data/lakehouse/bronze/binance/spot/klines/{symbol}/1d")
     zip_files = sorted(bronze_dir.glob("*.zip"))
-    
+
     return migrate_files(
         zip_paths=zip_files,
         catalog=catalog,

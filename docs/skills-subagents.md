@@ -307,7 +307,7 @@ test_download_partition_resumable():
     # First download: 100 files
     result1 = await download_partition(symbols=["BTCUSDT"], ...)
     assert result1["summary"]["downloaded"] == 100
-    
+
     # Second call: skips already downloaded, only new files
     result2 = await download_partition(symbols=["BTCUSDT"], ...)
     assert result2["summary"]["downloaded"] == 0  # All skipped
@@ -405,7 +405,7 @@ test_verify_partition_skip_verified():
     # First verify
     result1 = await verify_partition(symbols=["BTCUSDT"], ...)
     verified1 = result1["summary"]["verified"]
-    
+
     # Second verify: should skip (via .verified marker)
     result2 = await verify_partition(symbols=["BTCUSDT"], ...)
     assert result2["summary"]["skipped"] == verified1
@@ -415,7 +415,7 @@ test_verify_partition_skip_verified():
 test_verify_partition_corrupted_file():
     # Corrupt a file by modifying bytes
     corrupt_file("/tmp/archive/.../BTCUSDT_2026-01-01_1d.zip")
-    
+
     result = await verify_partition(symbols=["BTCUSDT"], ...)
     assert result["success"] is False
     assert result["summary"]["failed"] == 1
@@ -535,7 +535,7 @@ Subagents are stateful actors coordinating multi-step workflows. They differ fro
 ```python
 class DownloadPartitionSubagent:
     """Coordinates symbol download pipeline for a partition."""
-    
+
     async def run(self,
         symbols: list[str],
         source: str,
@@ -556,11 +556,11 @@ class DownloadPartitionSubagent:
         → return aggregated result
         """
         ...
-    
+
     def on_progress(self, callback: Callable[[ProgressEvent], None]) -> None:
         """Register callback for progress updates."""
         ...
-    
+
     async def cancel(self) -> None:
         """Cancel in-flight downloads."""
         ...
@@ -598,7 +598,7 @@ from binance_datatool.skills.discover_symbols import discover_symbols
 
 class TestDiscoverSymbolsUnit:
     """Unit tests with fakes (no I/O)."""
-    
+
     @pytest.fixture
     def fake_adapter(self):
         """Fake adapter for testing."""
@@ -607,7 +607,7 @@ class TestDiscoverSymbolsUnit:
             return_value=["BTCUSDT", "ETHUSDT", "BNBUSDT", ...]
         )
         return adapter
-    
+
     async def test_discover_symbols_happy_path(self, fake_adapter):
         """All symbols returned when no filters applied."""
         result = await discover_symbols(
@@ -622,7 +622,7 @@ class TestDiscoverSymbolsUnit:
 @pytest.mark.integration
 class TestDiscoverSymbolsIntegration:
     """Integration tests with real I/O."""
-    
+
     async def test_discover_symbols_real_binance_api(self):
         """Call real Binance API (slow, may be skipped in CI)."""
         result = await discover_symbols(
@@ -675,6 +675,6 @@ class TestDiscoverSymbolsIntegration:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
 **Status**: Skills specification in progress; implementation to follow

@@ -290,9 +290,7 @@ class DuckLakeCatalog:
                 else:
                     select_parts.append(f"NULL AS {c}")
             df = df.with_columns(pl.lit(None).alias("_null_placeholder"))
-            con.execute(
-                f"INSERT INTO {table_name} SELECT {', '.join(select_parts)} FROM df"
-            )
+            con.execute(f"INSERT INTO {table_name} SELECT {', '.join(select_parts)} FROM df")
             ingested = len(df)
         except Exception as e:
             logger.warning("DuckLake: failed to ingest DataFrame: {}", e)

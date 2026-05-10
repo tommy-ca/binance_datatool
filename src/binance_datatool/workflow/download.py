@@ -108,6 +108,7 @@ class ArchiveDownloadWorkflow:
                             # Monthly files: keep if any part of the month is in range
                             from calendar import monthrange
                             from datetime import timedelta
+
                             month_end = fdate.replace(day=monthrange(fdate.year, fdate.month)[1])
                             if month_end < date_cutoff:
                                 skipped += 1

@@ -242,14 +242,14 @@ uv run pytest -m integration
 - Example agent code:
   ```python
   from binance_datatool.skills import discover_symbols
-  
+
   result = await discover_symbols(
       source="binance",
       market_type="spot",
       data_type="klines",
       quote_asset="USDT"
   )
-  
+
   if result["success"]:
       print(f"Found {len(result['symbols'])} symbols")
   else:
@@ -425,7 +425,7 @@ If unclear on:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-05-07  
-**Maintainer**: Team  
+**Document Version**: 1.0
+**Last Updated**: 2026-05-07
+**Maintainer**: Team
 **Status**: Active; implementation ready

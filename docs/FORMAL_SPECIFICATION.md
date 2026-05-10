@@ -1,8 +1,8 @@
 # Formal Specification: Data Pipeline Framework for Multi-Source Crypto Market Data
 
-**Version**: 2.0 (Generalized & DataOps-Ready)  
-**Date**: 2026-05-07  
-**Status**: Foundation Complete, Implementation Ready  
+**Version**: 2.0 (Generalized & DataOps-Ready)
+**Date**: 2026-05-07
+**Status**: Foundation Complete, Implementation Ready
 **Audience**: Architects, Implementers, DataOps Engineers, AI Agents
 
 ---
@@ -53,8 +53,8 @@ This specification formalizes the binance-datatool project into a **generalized,
 ### 1.3 Use Cases
 
 #### UC-1: Quant Researcher Backtesting Data
-**Actor**: Data Scientist  
-**Goal**: Download 10 years of daily OHLCV data for 100 symbols  
+**Actor**: Data Scientist
+**Goal**: Download 10 years of daily OHLCV data for 100 symbols
 **Steps**:
 1. Discover symbols: `list-symbols spot --quote USDT`
 2. Pipe to download: `| download spot --type klines --interval 1d --archive /data/archive`
@@ -62,8 +62,8 @@ This specification formalizes the binance-datatool project into a **generalized,
 4. Export to Parquet: Custom script reads from archive
 
 #### UC-2: MLOps Data Lake Ingestion
-**Actor**: MLOps Engineer  
-**Goal**: Automated daily ingest of new klines into Delta Lake  
+**Actor**: MLOps Engineer
+**Goal**: Automated daily ingest of new klines into Delta Lake
 **Steps**:
 1. Discover symbols daily (programmatic)
 2. Download new partition (diff-based, resumable)
@@ -73,8 +73,8 @@ This specification formalizes the binance-datatool project into a **generalized,
 6. Alert on validation failures
 
 #### UC-3: Multi-CEX Unified Interface (via CCXT)
-**Actor**: Data Platform Owner  
-**Goal**: Single interface for Binance, OKX, Bybit via CCXT  
+**Actor**: Data Platform Owner
+**Goal**: Single interface for Binance, OKX, Bybit via CCXT
 **Steps**:
 1. Configure adapters (source_registry.get("okx") / ccxt.okx)
 2. List symbols from each (CCXT unified API)
@@ -85,8 +85,8 @@ This specification formalizes the binance-datatool project into a **generalized,
 **Note**: Coinbase removed. Focus on Tier-1 CEXs with CCXT support.
 
 #### UC-4: Agent-Driven Workflow
-**Actor**: AI Agent / Subagent  
-**Goal**: Autonomously discover, download, validate, publish data  
+**Actor**: AI Agent / Subagent
+**Goal**: Autonomously discover, download, validate, publish data
 **Steps**:
 1. Call skill: `discover_symbols(source="binance", market_type="spot")`
 2. Call skill: `download_partition(symbols=[...], partition_key="2026-01-01")`
@@ -298,7 +298,7 @@ class ArchiveFile:
     key: str              # S3 key
     size: int             # bytes
     last_modified: datetime
-    
+
 # Download Request
 @dataclass
 class DownloadRequest:
@@ -312,7 +312,7 @@ class DiffEntry:
     remote: ArchiveFile
     local_path: Path
     reason: Literal["new", "updated"]
-    
+
 @dataclass
 class ListSymbolsResult:
     matched: list[str]
@@ -388,9 +388,9 @@ class ListSymbolsResult:
 ```python
 class DataSourceAdapter(Protocol):
     """Unified interface for data sources."""
-    
+
     source: str  # "binance", "okx", "bybit", etc. (via CCXT)
-    
+
     async def list_symbols(
         self,
         market_type: str,
@@ -400,7 +400,7 @@ class DataSourceAdapter(Protocol):
     ) -> list[str]:
         """List all available symbols."""
         ...
-    
+
     async def list_files(
         self,
         symbol: str,
@@ -411,7 +411,7 @@ class DataSourceAdapter(Protocol):
     ) -> list[FileMetadata]:
         """List files for a symbol."""
         ...
-    
+
     async def fetch_file(
         self,
         symbol: str,
@@ -420,11 +420,11 @@ class DataSourceAdapter(Protocol):
     ) -> FileResult:
         """Download a specific file."""
         ...
-    
+
     def parse_symbol(self, symbol_str: str) -> SymbolMetadata:
         """Parse symbol string to components."""
         ...
-    
+
     async def get_metadata(self) -> dict:
         """Return source metadata (rate limits, capabilities)."""
         ...
@@ -435,7 +435,7 @@ class DataSourceAdapter(Protocol):
 ```python
 class StorageBackend(Protocol):
     """Unified interface for storage systems."""
-    
+
     async def put(
         self,
         path: str,
@@ -444,11 +444,11 @@ class StorageBackend(Protocol):
     ) -> PutResult:
         """Write file to storage."""
         ...
-    
+
     async def get(self, path: str) -> bytes:
         """Read file from storage."""
         ...
-    
+
     async def list(
         self,
         prefix: str,
@@ -456,15 +456,15 @@ class StorageBackend(Protocol):
     ) -> list[FileMetadata]:
         """List files under prefix."""
         ...
-    
+
     async def delete(self, path: str) -> None:
         """Delete file from storage."""
         ...
-    
+
     async def exists(self, path: str) -> bool:
         """Check if file exists."""
         ...
-    
+
     async def merge_partition(
         self,
         source_dir: str,
@@ -482,22 +482,22 @@ class StorageBackend(Protocol):
 @dataclass
 class DataContract:
     """Schema + validation rules for datasets."""
-    
+
     source: str
     market_type: str
     data_type: str
     partition_freq: str
-    
+
     schema: dict[str, type]
     key_cols: list[str]
     partition_cols: list[str]
     nullable_cols: set[str]
     validators: list[Callable[[dict], bool]]
-    
+
     def validate(self, data: list[dict] | Any) -> ValidationResult:
         """Validate data against contract."""
         ...
-    
+
     def to_dict(self) -> dict:
         """Serialize for config."""
         ...
@@ -509,7 +509,7 @@ class DataContract:
 @dataclass
 class LineageEvent:
     """Single provenance record."""
-    
+
     source: str
     symbol: str
     partition_key: str
@@ -523,11 +523,11 @@ class LineageEvent:
 
 class LineageTracker:
     """Accumulate and query lineage."""
-    
+
     def record(self, event: LineageEvent) -> None:
         """Record a lineage event."""
         ...
-    
+
     def query(
         self,
         source: str | None = None,
@@ -536,7 +536,7 @@ class LineageTracker:
     ) -> list[LineageEvent]:
         """Query lineage."""
         ...
-    
+
     def export(self, format: str = "json") -> str:
         """Export lineage (JSON, CSV, Parquet)."""
         ...
@@ -547,7 +547,7 @@ class LineageTracker:
 ```python
 class PipelineWorkflow:
     """Generic multi-step pipeline."""
-    
+
     def __init__(
         self,
         source_adapter: DataSourceAdapter,
@@ -561,7 +561,7 @@ class PipelineWorkflow:
         self.contract = contract
         self.lineage = lineage_tracker
         self.metrics = metrics_collector
-    
+
     async def run(
         self,
         symbols: list[str],
@@ -569,17 +569,17 @@ class PipelineWorkflow:
         dry_run: bool = False
     ) -> PipelineResult:
         """Execute pipeline."""
-        
+
         # Phase 1: Discover
         start = time.time()
         remote_files = await self.adapter.list_files(symbols[0], ...)
         self.metrics.add_counter("discover_files", len(remote_files))
-        
+
         # Phase 2: Diff
         local_files = await self.storage.list(f"archive/{symbols[0]}/")
         diff = self._compute_diff(remote_files, local_files)
         self.metrics.add_counter("to_download", len(diff.to_download))
-        
+
         # Phase 3: Download
         if not dry_run:
             for file_entry in diff.to_download:
@@ -589,7 +589,7 @@ class PipelineWorkflow:
                     output_path=...
                 )
                 await self.storage.put(file_entry.local_path, result.data)
-        
+
         # Phase 4: Validate
         if self.contract and not dry_run:
             data = await self._extract_and_load(...)
@@ -601,7 +601,7 @@ class PipelineWorkflow:
                 status="success" if validation.passed else "failed",
                 errors=validation.errors
             ))
-        
+
         # Phase 5: Publish
         if self.contract and validation.passed and not dry_run:
             result = await self.storage.merge_partition(
@@ -610,7 +610,7 @@ class PipelineWorkflow:
                 partition_cols=self.contract.partition_cols,
                 format="delta"
             )
-        
+
         return PipelineResult(
             dry_run=dry_run,
             downloaded=len(diff.to_download),
@@ -703,7 +703,7 @@ BINANCE_SPOT_KLINES_CONTRACT = DataContract(
     market_type="spot",
     data_type="klines",
     partition_freq="daily",
-    
+
     schema={
         "open_time": int,
         "open": Decimal,
@@ -717,10 +717,10 @@ BINANCE_SPOT_KLINES_CONTRACT = DataContract(
         "taker_buy_volume": Decimal,
         "taker_buy_quote_volume": Decimal,
     },
-    
+
     key_cols=["open_time"],
     partition_cols=["date", "symbol"],
-    
+
     validators=[
         lambda r: r["open"] > 0,
         lambda r: r["high"] >= r["low"],
@@ -955,7 +955,7 @@ class IcebergStorageBackend(StorageBackend):
     def __init__(self, catalog_uri, warehouse):
         self.catalog = load_catalog(catalog_uri)
         self.warehouse = warehouse
-    
+
     async def merge_partition(self, source_dir, target_table, partition_cols, format):
         # Read data from source_dir
         # Insert into Iceberg table with MERGE INTO or INSERT OVERWRITE
@@ -1038,7 +1038,7 @@ def fake_archive_client():
 async def test_binance_adapter_list_symbols(fake_archive_client):
     adapter = BinanceAdapter(client=fake_archive_client)
     symbols = await adapter.list_symbols("spot", "daily", "klines")
-    
+
     assert symbols == ["BTCUSDT", "ETHUSDT"]
     fake_archive_client.list_symbols.assert_called_once()
 ```
@@ -1091,8 +1091,8 @@ This specification formalizes binance-datatool into a **generalized, production-
 
 ---
 
-**Document Version**: 2.0  
-**Status**: Ready for implementation  
-**Last Updated**: 2026-05-07  
-**Maintainers**: Team  
+**Document Version**: 2.0
+**Status**: Ready for implementation
+**Last Updated**: 2026-05-07
+**Maintainers**: Team
 **Contact**: See docs/INDEX.md

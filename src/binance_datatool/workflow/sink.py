@@ -205,7 +205,9 @@ def _parse_csv_line(line: str) -> list[str]:
     return next(csv.reader([line]))
 
 
-def _read_zip_csv(path: Path, bronze_cols: list[str] | None = None, skip_header: bool = False) -> pl.DataFrame:
+def _read_zip_csv(
+    path: Path, bronze_cols: list[str] | None = None, skip_header: bool = False
+) -> pl.DataFrame:
     """Read CSV from a Binance archive ZIP file.
 
     Most Binance archive CSVs have no header row — the first line is data.
@@ -293,9 +295,7 @@ def _add_silver_metadata(
     # Compute ts_date from ts_event (μs → date) — all transforms produce ts_event
     if "ts_event" in df.columns:
         df = df.with_columns(
-            pl.from_epoch(pl.col("ts_event") // 1_000_000, time_unit="s")
-            .dt.date()
-            .alias("ts_date")
+            pl.from_epoch(pl.col("ts_event") // 1_000_000, time_unit="s").dt.date().alias("ts_date")
         )
     return df
 
