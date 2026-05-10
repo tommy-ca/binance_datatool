@@ -235,3 +235,89 @@ binance-datatool -v verify um \
   from stdin. This enables `list-symbols | download` pipelines or file-based workflows.
 - **`--type` values are camelCase.** Use the exact values from the Data Types table above (e.g.
   `fundingRate`, `aggTrades`, `bookDepth`), not snake_case variants like `funding_rate`.
+
+## Prefect Workflows
+
+The project includes Prefect 3.x orchestration for automated data pipelines. Workflows are
+in ``src/binance_datatool/workflow/prefect_flows.py`` and run via the Python API — no
+Prefect server is required.
+
+### Available Flows
+
+| Flow | Description | Parallelism |
+|------|-------------|-------------|
+| ``historical_pipeline`` | Full pipeline: metadata → download → verify → gap-fill → sink → health | ``prepare_symbol.map()`` (configurable via ``PREFECT_MAX_WORKERS`` env var) |
+| ``bulk_backfill`` | Auto-discovers symbols and runs ``historical_pipeline`` | Delegates to ``historical_pipeline`` |
+| ``download_flow`` | Multi-symbol archive download | ``download_archive.map()`` |
+| ``verify_flow`` | Multi-symbol checksum verification | ``verify_archive.map()`` |
+| ``gap_fill_flow`` | Single-symbol REST API gap-fill | Sequential |
+| ``sink_flow`` | Single-symbol Bronze→Silver→DuckDB | Sequential (DuckDB constraints) |
+| ``health_flow`` | Single-symbol DuckLake anomaly detection | Sequential |
+| ``refresh_metadata_flow`` | Refresh venue/symbol metadata tables | Sequential (with ``ducklake-writer`` guard) |
+
+### Task Graph
+
+```
+historical_pipeline
+  ├── refresh_metadata_flow        (subflow, sequential)
+  ├── prepare_symbol.map()         (parallel fan-out per symbol)
+  │     └── download → verify → fill_gaps
+  ├── sink_silver()                (sequential, ducklake-writer guard)
+  └── health_flow()                (sequential, per-symbol)
+```
+
+### Running Workflows
+
+Use the Python API directly — all flows accept the same parameters as the CLI:
+
+```python
+from binance_datatool.workflow.prefect_flows import historical_pipeline, bulk_backfill
+
+# Single symbol, last 3 days of 1h klines
+result = historical_pipeline(
+    trade_type="spot", symbols=["BTCUSDT"],
+    data_type="klines", interval="1h", lookback_days=3,
+)
+
+# Multi-symbol (parallel via .map(), configurable PREFECT_MAX_WORKERS)
+result = historical_pipeline(
+    trade_type="spot", symbols=["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    data_type="klines", interval="1h", lookback_days=3,
+)
+
+# Bulk backfill with auto-discovered symbols
+result = bulk_backfill(
+    trade_type="um", max_symbols=5,
+    data_type="klines", interval="1h", lookback_days=3,
+)
+
+# Each symbol result: {"rows_sunk": 70, "gaps_filled": 2, "healthy": True}
+```
+
+### Serving Deployments
+
+```bash
+# No server/worker needed — serve directly
+uv run python -m binance_datatool.workflow.prefect_flows serve
+```
+
+Registers two cron deployments:
+- ``daily-backfill`` at 06:00 UTC (``historical_pipeline``)
+- ``hourly-metadata`` at every hour (``refresh_metadata_flow``)
+
+Trigger a run:
+```bash
+uv run prefect deployment run 'Historical Data Pipeline/historical_pipeline'
+```
+
+### Data Quality
+
+All pipelines include a health check step that detects:
+- Null/zero prices
+- Duplicate timestamps
+- Date gaps
+- Price outliers (Z-score > 3.0)
+- Per-rtype filtering for shared aggTrades/trades table
+
+Failed records are routed to a DuckDB DLQ (dead letter queue) table.
+Concurrent DuckDB writes are serialized via a Prefect concurrency guard.`
