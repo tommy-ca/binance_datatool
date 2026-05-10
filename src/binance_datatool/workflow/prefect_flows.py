@@ -90,7 +90,7 @@ def _route_to_dlq(catalog: Path, symbol: str, data_type: str, errors: list[str])
                 "INSERT INTO dlq VALUES (?, ?, ?, ?, ?)",
                 [symbol, data_type, err, now, "sink_silver"],
             )
-        cnt = con.execute("SELECT COUNT(*) FROM dlq").fetchone()[0]
+        cnt = (con.execute("SELECT COUNT(*) FROM dlq").fetchone() or [0])[0]
         _log.info("DLQ: %d total failures for %s/%s", cnt, symbol, data_type)
     except Exception as e:
         _log.warning("DLQ route failed: %s", e)
@@ -129,7 +129,7 @@ def download_archive(
         lookback_days=lookback_days,
     )
     result = asyncio.run(wf.run())
-    return result.downloaded
+    return result.downloaded  # type: ignore[union-attr]
 
 
 @task(**_RETRY_CONFIG)

@@ -156,7 +156,7 @@ def _scan_existing_dates(symbol_dir: Path) -> set[str]:
 
 def _detect_date_gaps(
     existing_dates: set[str],
-    trade_type: TradeType,
+    trade_type: TradeType | None = None,
     lookback_days: int = 30,
 ) -> list[tuple[int, int]]:
     """Detect date gaps in the last N days.

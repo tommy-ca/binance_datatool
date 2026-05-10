@@ -107,11 +107,13 @@ class MetadataWorkflow:
                 fetched_at=now,
             )
             if hasattr(info, "contract_type") and info.contract_type:
-                symbol.contract_type = info.contract_type.value
+                ct = getattr(info.contract_type, "value", None)
+                if ct:
+                    symbol.contract_type = ct
             if hasattr(info, "is_leverage"):
-                symbol.is_leverage = info.is_leverage
+                symbol.is_leverage = bool(info.is_leverage)
             if hasattr(info, "is_stable_pair"):
-                symbol.is_stable_pair = info.is_stable_pair
+                symbol.is_stable_pair = bool(info.is_stable_pair)
             symbols.append(symbol)
         return symbols
 
@@ -139,7 +141,13 @@ class MetadataWorkflow:
                 client = BinanceCmRestClient()
 
         api = client._client.rest_api
-        resp = api.exchange_info() if hasattr(api, "exchange_info") else api.exchange_information()
+        exchange_info = getattr(api, "exchange_info", None) or getattr(
+            api, "exchange_information", None
+        )
+        if not exchange_info:
+            logger.error("No exchange_info method available for {}", trade_type)
+            return result
+        resp = exchange_info()
         data = resp.data()
 
         # Binance SDK returns exchange_info with list of symbols

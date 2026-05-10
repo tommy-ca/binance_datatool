@@ -20,8 +20,9 @@ repos:
     hooks:
       - id: ty-check
         name: ty type check
-        entry: uvx ty check
+        entry: uv run python3 scripts/ty_check.py
         language: system
         types: [python]
         pass_filenames: false
-        args: [src]
+        always_run: true
+        verbose: true

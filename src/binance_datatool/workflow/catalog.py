@@ -352,6 +352,6 @@ class DuckLakeCatalog:
         """Run a SQL query against the DuckLake catalog."""
         con = self.connect()
         try:
-            return pl.from_arrow(con.execute(query).fetch_arrow_table())
+            return pl.from_arrow(con.execute(query).fetch_arrow_table())  # type: ignore[return-value]
         finally:
             con.close()
