@@ -285,18 +285,26 @@ class DuckLakeCatalog:
         table_name: str,
         df: pl.DataFrame,
     ) -> int:
-        """Ingest a Polars DataFrame into a DuckLake native table.
-
-        DuckLake handles partitioning, file management, and ACID tracking
-        through its metadata catalog. No manual Hive paths needed.
-        """
+        """Ingest a Polars DataFrame into a DuckLake native table."""
         self.ensure_table(con, table_name)
         ingested = 0
         try:
-            con.execute(
-                f"INSERT INTO {table_name} SELECT *, CAST(epoch_ms(ts_event) AS DATE) AS ts_date "
-                f"FROM df"
+            cols = self.TABLE_DEFS.get(table_name, "")
+            table_cols = [c.split()[0] for c in cols.split(",") if c.split()[0] != "ts_date"]
+            select_expr = ", ".join(
+                f"CAST({c} AS BIGINT)" if c == "ts_event" else c
+                for c in table_cols
+                if c in df.columns or c in {c.split()[0] for c in cols.split(",")}
             )
+            has_event = "ts_event" in table_cols and "ts_event" in df.columns
+            if has_event:
+                con.execute(
+                    f"INSERT INTO {table_name} SELECT {select_expr}, "
+                    f"CAST(epoch_ms(CAST(ts_event AS BIGINT)) AS DATE) AS ts_date "
+                    f"FROM df"
+                )
+            else:
+                con.execute(f"INSERT INTO {table_name} SELECT * FROM df")
             ingested = len(df)
         except Exception as e:
             logger.warning("DuckLake: failed to ingest DataFrame: {}", e)
