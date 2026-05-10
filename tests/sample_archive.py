@@ -183,6 +183,12 @@ class SampleArchive:
                 ("bookTicker", False, False),
             ],
         },
+        "cm": {
+            # CM archive directories exist but all are empty (no data files).
+            # CM data is available via REST API gap-fill only.
+            "daily": [],
+            "monthly": [],
+        },
     }
 
     def __init__(self, root: Path) -> None:
